@@ -13,6 +13,23 @@ OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop 
 
 ---
 
+## 🆕 What's New in v1.0.0.7
+
+### Bug Fixes
+- **Fixed multi-instance game crash** - Running multiple instances of the same game no longer causes dictionary collision
+- **Thread-safe process monitoring** - Switched to ConcurrentDictionary for reliable game detection
+- **Resource cleanup** - Proper disposal of monitoring services on exit
+
+### Visual Polish
+- **20+ vector icons** - Crisp, scalable icons replace emoji throughout the UI
+- **Refined window controls** - Professional minimize/maximize/close buttons with red hover on close
+- **Auto-hide update banner** - "Latest version" message now fades after 3 seconds
+- **Improved sidebar** - Colored icons for all action buttons
+
+See [CHANGELOG.md](CHANGELOG.md) for full version history.
+
+---
+
 ## ✨ Features
 
 ### 🌡️ **Thermal & Fan Management**
@@ -122,13 +139,13 @@ OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop 
 ## 🚀 Installation
 
 ### Option 1: Installer (Recommended)
-1. Download `OmenCoreSetup-1.0.0.6.exe` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
+1. Download `OmenCoreSetup-1.0.0.7.exe` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
 2. Run installer as Administrator
 3. Select "Install WinRing0 driver" task (recommended)
 4. Launch OmenCore from Start Menu or Desktop
 
 ### Option 2: Portable ZIP
-1. Download `OmenCore-1.0.0.6-win-x64.zip` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
+1. Download `OmenCore-1.0.0.7-win-x64.zip` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
 2. Extract to `C:\OmenCore` (or preferred location)
 3. Right-click `OmenCore.exe` → Run as Administrator
 4. Manually install [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases) for WinRing0 driver
