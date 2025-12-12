@@ -90,6 +90,7 @@
 ## � Performance & Quality Improvements
 
 ### Startup Performance
+- **Lazy Loading ViewModels**: FanControl, SystemControl, Dashboard, Settings now load on-demand
 - **Batched CMSL Queries**: HP CMSL device info now fetched in single PowerShell call (5-10s → 1-2s)
 - **Optimistic OGH Detection**: OGH proxy validates interface without speculative commands
 - **Capability-Based Factory**: Fan controller uses pre-detected capabilities instead of re-probing
@@ -111,7 +112,11 @@
 ---
 
 ## �🐛 Bug Fixes
-
+### Critical Fixes (December 2025)
+- **Fixed**: Process handle leak in `ProcessMonitoringService` - was leaking ~200 handles every 2 seconds
+- **Fixed**: OGH Error Code 2 spam - proxy now validates commands before claiming availability
+- **Fixed**: Slow startup - ViewModels now lazy-load on first tab access instead of all at once
+- **Hidden**: RGB & Peripherals tab when no Corsair/Logitech devices found (stub SDK cleanup)
 ### AMD Ryzen Support Improvements
 - **Fixed**: AMD CPU temperature detection (Tctl/Tdie sensors)
 - **Fixed**: AMD CPU power reporting (Package Power sensor)
@@ -151,9 +156,12 @@
 
 ### New Files (UI)
 - `HotkeyOsdWindow.xaml/cs` - On-screen display for hotkey mode changes
+- `NullToVisibilityConverter.cs` - Converter to hide UI elements when data is null
 
 ### Files Modified
-- `MainViewModel.cs` - Event unsubscription, WMI integration, Dispatcher fixes
+- `MainViewModel.cs` - Lazy loading ViewModels, event unsubscription, WMI integration, Dispatcher fixes
+- `ProcessMonitoringService.cs` - Fixed Process handle leak (disposing untracked processes)
+- `OghServiceProxy.cs` - Fixed OGH command validation to prevent error spam
 - `FanService.cs` - Updated to use IFanController interface
 - `PerformanceModeService.cs` - Updated to use IFanController interface  
 - `SystemControlViewModel.cs` - Added GPU Power Boost UI support
@@ -196,10 +204,10 @@
 | Category | Changes |
 |----------|---------|
 | New Features | 9 |
-| Performance | 3 |
-| Bug Fixes | 8 |
+| Performance | 4 |
+| Bug Fixes | 12 |
 | UI Polish | 6 |
-| New Files | 17 |
+| New Files | 18 |
 
 ---
 
