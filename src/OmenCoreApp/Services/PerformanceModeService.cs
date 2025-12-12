@@ -7,13 +7,13 @@ namespace OmenCore.Services
 {
     public class PerformanceModeService
     {
-        private readonly FanController _fanController;
+        private readonly IFanController _fanController;
         private readonly PowerPlanService _powerPlanService;
         private readonly PowerLimitController? _powerLimitController;
         private readonly LoggingService _logging;
 
         public PerformanceModeService(
-            FanController fanController, 
+            IFanController fanController, 
             PowerPlanService powerPlanService, 
             PowerLimitController? powerLimitController,
             LoggingService logging)
@@ -55,18 +55,27 @@ namespace OmenCore.Services
             }
             
             // Step 3: Adjust fan curve based on power profile
-            if (_fanController.IsEcReady)
+            if (_fanController.IsAvailable)
             {
-                var fanPercent = Math.Max(20, mode.CpuPowerLimitWatts / 2);
-                _fanController.ApplyCustomCurve(new[]
+                // Try to set performance mode via WMI BIOS first
+                if (_fanController.SetPerformanceMode(mode.Name))
                 {
-                    new FanCurvePoint { TemperatureC = 0, FanPercent = fanPercent }
-                });
-                _logging.Info($"🌀 Fan speed set to {fanPercent}% for '{mode.Name}' mode");
+                    _logging.Info($"🌀 Fan mode set to '{mode.Name}' via {_fanController.Backend}");
+                }
+                else
+                {
+                    // Fallback to custom curve
+                    var fanPercent = Math.Max(20, mode.CpuPowerLimitWatts / 2);
+                    _fanController.ApplyCustomCurve(new[]
+                    {
+                        new FanCurvePoint { TemperatureC = 0, FanPercent = fanPercent }
+                    });
+                    _logging.Info($"🌀 Fan speed set to {fanPercent}% for '{mode.Name}' mode");
+                }
             }
             else
             {
-                _logging.Warn("⚠️ Skipping EC fan override; WinRing0 driver unavailable");
+                _logging.Warn("⚠️ Fan control unavailable");
             }
             
             _logging.Info($"✓ Performance mode '{mode.Name}' applied successfully");

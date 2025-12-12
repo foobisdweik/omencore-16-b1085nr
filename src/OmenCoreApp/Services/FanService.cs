@@ -11,7 +11,7 @@ namespace OmenCore.Services
 {
     public class FanService : IDisposable
     {
-        private readonly FanController _fanController;
+        private readonly IFanController _fanController;
         private readonly ThermalSensorProvider _thermalProvider;
         private readonly LoggingService _logging;
         private readonly TimeSpan _pollPeriod;
@@ -21,8 +21,16 @@ namespace OmenCore.Services
 
         public ReadOnlyObservableCollection<ThermalSample> ThermalSamples { get; }
         public ReadOnlyObservableCollection<FanTelemetry> FanTelemetry { get; }
+        
+        /// <summary>
+        /// The backend being used for fan control (WMI BIOS, EC, or None).
+        /// </summary>
+        public string Backend => _fanController.Backend;
 
-        public FanService(FanController controller, ThermalSensorProvider thermalProvider, LoggingService logging, int pollMs)
+        /// <summary>
+        /// Create FanService with the new IFanController interface.
+        /// </summary>
+        public FanService(IFanController controller, ThermalSensorProvider thermalProvider, LoggingService logging, int pollMs)
         {
             _fanController = controller;
             _thermalProvider = thermalProvider;
@@ -30,6 +38,16 @@ namespace OmenCore.Services
             _pollPeriod = TimeSpan.FromMilliseconds(Math.Max(250, pollMs));
             ThermalSamples = new ReadOnlyObservableCollection<ThermalSample>(_thermalSamples);
             FanTelemetry = new ReadOnlyObservableCollection<FanTelemetry>(_fanTelemetry);
+            
+            _logging.Info($"FanService initialized with backend: {Backend}");
+        }
+
+        /// <summary>
+        /// Legacy constructor for compatibility with existing FanController.
+        /// </summary>
+        public FanService(FanController controller, ThermalSensorProvider thermalProvider, LoggingService logging, int pollMs)
+            : this(new EcFanControllerWrapper(controller, null!, logging), thermalProvider, logging, pollMs)
+        {
         }
 
         public void Start()
@@ -54,25 +72,37 @@ namespace OmenCore.Services
         {
             if (!FanWritesAvailable)
             {
-                _logging.Warn($"Fan preset '{preset.Name}' skipped; EC bridge unavailable");
+                _logging.Warn($"Fan preset '{preset.Name}' skipped; fan control unavailable ({_fanController.Status})");
                 return;
             }
-            _fanController.ApplyPreset(preset);
-            _logging.Info($"Fan preset '{preset.Name}' pushed to EC");
+            if (_fanController.ApplyPreset(preset))
+            {
+                _logging.Info($"Fan preset '{preset.Name}' applied via {Backend}");
+            }
+            else
+            {
+                _logging.Warn($"Fan preset '{preset.Name}' failed to apply via {Backend}");
+            }
         }
 
         public void ApplyCustomCurve(IEnumerable<FanCurvePoint> curve)
         {
             if (!FanWritesAvailable)
             {
-                _logging.Warn("Custom fan curve skipped; EC bridge unavailable");
+                _logging.Warn($"Custom fan curve skipped; fan control unavailable ({_fanController.Status})");
                 return;
             }
-            _fanController.ApplyCustomCurve(curve);
-            _logging.Info("Custom fan curve pushed to EC");
+            if (_fanController.ApplyCustomCurve(curve))
+            {
+                _logging.Info($"Custom fan curve applied via {Backend}");
+            }
+            else
+            {
+                _logging.Warn($"Custom fan curve failed to apply via {Backend}");
+            }
         }
 
-        public bool FanWritesAvailable => _fanController.IsEcReady;
+        public bool FanWritesAvailable => _fanController.IsAvailable;
 
         private async Task MonitorLoop(CancellationToken token)
         {
@@ -109,12 +139,28 @@ namespace OmenCore.Services
                         }
                     });
                 }
+                catch (ObjectDisposedException)
+                {
+                    // Gracefully exit on app shutdown
+                    break;
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
                 catch (Exception ex)
                 {
                     _logging.Error("Fan monitor loop error", ex);
                 }
 
-                await Task.Delay(_pollPeriod, token);
+                try
+                {
+                    await Task.Delay(_pollPeriod, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
 
             _logging.Info("Fan monitor loop stopped");

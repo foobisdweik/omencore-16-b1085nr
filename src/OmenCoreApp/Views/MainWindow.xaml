@@ -93,6 +93,43 @@
                                                        Foreground="{StaticResource TextPrimaryBrush}"/>
                                         </StackPanel>
                                     </Grid>
+                                    
+                                    <Rectangle Height="1" Fill="{StaticResource BorderBrush}" Margin="0,4"/>
+                                    
+                                    <!-- Fan Backend Status -->
+                                    <Grid Margin="0,6,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Grid.Column="0" Width="8" Height="8" Fill="#4CAF50" Margin="3,0,9,0" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="BACKEND" FontSize="8" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                            <TextBlock Text="{Binding FanBackend, FallbackValue=Detecting...}" 
+                                                       FontSize="10" FontWeight="SemiBold" 
+                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                            
+                            <!-- Secure Boot Warning Banner -->
+                            <Border Background="#2D1F1F"
+                                    BorderBrush="#F44336"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="8,6"
+                                    Margin="0,6,0,0"
+                                    Visibility="{Binding SecureBootEnabled, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <TextBlock Text="⚠" FontSize="12" Foreground="#F44336" Margin="0,0,6,0"/>
+                                        <TextBlock Text="SECURE BOOT" FontSize="8" FontWeight="Bold" Foreground="#F44336"/>
+                                    </StackPanel>
+                                    <TextBlock Text="Some features limited" 
+                                               FontSize="9" 
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -383,7 +420,7 @@
                 </TabItem>
                 
                 <!-- Peripherals Tab with Lighting View -->
-                <TabItem Header="RGB &amp; Peripherals">
+                <TabItem Header="RGB &amp; Peripherals" Visibility="{Binding Lighting, Converter={StaticResource NullToVisibilityConverter}}">
                     <views:LightingView DataContext="{Binding Lighting}" />
                 </TabItem>
                 

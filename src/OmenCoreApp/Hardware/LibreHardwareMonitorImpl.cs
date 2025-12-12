@@ -117,16 +117,34 @@ namespace OmenCore.Hardware
                     switch (hardware.HardwareType)
                     {
                         case HardwareType.Cpu:
-                            var cpuTempSensor = GetSensor(hardware, SensorType.Temperature, "CPU Package");
-                            _cachedCpuTemp = cpuTempSensor?.Value ?? 0;
-                            if (_cachedCpuTemp == 0 && cpuTempSensor == null)
-                            {
-                                _logger?.Invoke($"CPU Package temp sensor not found in {hardware.Name}");
-                            }
-                            _cachedCpuLoad = GetSensor(hardware, SensorType.Load, "CPU Total")?.Value ?? 0;
+                            // AMD Ryzen uses "Core (Tctl/Tdie)" or "Tdie", Intel uses "CPU Package"
+                            // Try multiple sensor patterns for broad compatibility
+                            var cpuTempSensor = GetSensorExact(hardware, SensorType.Temperature, "CPU Package")  // Intel
+                                ?? GetSensorExact(hardware, SensorType.Temperature, "Core (Tctl/Tdie)")           // AMD Ryzen primary
+                                ?? GetSensor(hardware, SensorType.Temperature, "Tctl/Tdie")                       // AMD Ryzen (partial match)
+                                ?? GetSensor(hardware, SensorType.Temperature, "Tctl")                            // AMD older
+                                ?? GetSensor(hardware, SensorType.Temperature, "Tdie")                            // AMD Ryzen alt
+                                ?? GetSensor(hardware, SensorType.Temperature, "CCD1")                            // AMD CCD fallback
+                                ?? GetSensor(hardware, SensorType.Temperature, "CCDs Max")                        // AMD multi-CCD
+                                ?? hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Temperature && s.Value > 0);
                             
-                            // CPU Power (package power consumption)
-                            var cpuPowerSensor = GetSensor(hardware, SensorType.Power, "CPU Package")
+                            _cachedCpuTemp = cpuTempSensor?.Value ?? 0;
+                            if (_cachedCpuTemp == 0)
+                            {
+                                // Log all available temp sensors for debugging
+                                var availableTempSensors = hardware.Sensors
+                                    .Where(s => s.SensorType == SensorType.Temperature)
+                                    .Select(s => $"{s.Name}={s.Value}")
+                                    .ToList();
+                                _logger?.Invoke($"CPU temp sensor issue in {hardware.Name}. Available: [{string.Join(", ", availableTempSensors)}]");
+                            }
+                            
+                            var cpuLoadRaw = GetSensor(hardware, SensorType.Load, "CPU Total")?.Value ?? 0;
+                            _cachedCpuLoad = Math.Clamp(cpuLoadRaw, 0, 100);
+                            
+                            // CPU Power - AMD uses "Package Power", Intel uses "CPU Package"
+                            var cpuPowerSensor = GetSensor(hardware, SensorType.Power, "CPU Package")    // Intel
+                                ?? GetSensor(hardware, SensorType.Power, "Package Power")                 // AMD
                                 ?? GetSensor(hardware, SensorType.Power, "Package")
                                 ?? hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Power);
                             _cachedCpuPower = cpuPowerSensor?.Value ?? 0;
@@ -172,7 +190,7 @@ namespace OmenCore.Hardware
                             var loadValue = gpuLoadSensor?.Value ?? 0;
                             if (loadValue > 0 || _cachedGpuLoad == 0)
                             {
-                                _cachedGpuLoad = loadValue;
+                                _cachedGpuLoad = Math.Clamp(loadValue, 0, 100);
                             }
                             
                             // Try different sensor names for VRAM
@@ -377,18 +395,18 @@ namespace OmenCore.Hardware
             return new MonitoringSample
             {
                 CpuTemperatureC = Math.Round(_cachedCpuTemp, 1),
-                CpuLoadPercent = Math.Round(_cachedCpuLoad, 1),
+                CpuLoadPercent = Math.Round(Math.Clamp(_cachedCpuLoad, 0, 100), 1),  // Clamp to valid range
                 CpuPowerWatts = Math.Round(_cachedCpuPower, 1),
                 CpuCoreClocksMhz = new List<double>(_cachedCoreClocks),
                 GpuTemperatureC = Math.Round(_cachedGpuTemp, 1),
-                GpuLoadPercent = Math.Round(_cachedGpuLoad, 1),
+                GpuLoadPercent = Math.Round(Math.Clamp(_cachedGpuLoad, 0, 100), 1),  // Clamp to valid range
                 GpuVramUsageMb = Math.Round(_cachedVramUsage, 0),
                 RamUsageGb = Math.Round(_cachedRamUsage, 1),
                 RamTotalGb = Math.Round(_cachedRamTotal, 0),
                 FanRpm = Math.Round(_cachedFanRpm, 0),
                 SsdTemperatureC = Math.Round(_cachedSsdTemp, 1),
-                DiskUsagePercent = Math.Round(_cachedDiskUsage, 1),
-                BatteryChargePercent = Math.Round(_cachedBatteryCharge, 0),
+                DiskUsagePercent = Math.Round(Math.Clamp(_cachedDiskUsage, 0, 100), 1),  // Clamp to valid range
+                BatteryChargePercent = Math.Round(Math.Clamp(_cachedBatteryCharge, 0, 100), 0),  // Clamp to valid range
                 IsOnAcPower = _cachedIsOnAc,
                 BatteryDischargeRateW = Math.Round(_cachedDischargeRate, 1),
                 BatteryTimeRemaining = _cachedBatteryTimeRemaining,
@@ -398,7 +416,7 @@ namespace OmenCore.Hardware
                 GpuClockMhz = Math.Round(_cachedGpuClock, 0),
                 GpuMemoryClockMhz = Math.Round(_cachedGpuMemoryClock, 0),
                 GpuVramTotalMb = Math.Round(_cachedVramTotal, 0),
-                GpuFanPercent = Math.Round(_cachedGpuFan, 0),
+                GpuFanPercent = Math.Round(Math.Clamp(_cachedGpuFan, 0, 100), 0),  // Clamp to valid range
                 GpuHotspotTemperatureC = Math.Round(_cachedGpuHotspot, 1),
                 GpuName = _lastGpuName
             };
@@ -412,6 +430,17 @@ namespace OmenCore.Hardware
                 sensors = sensors.Where(s => s.Name.Contains(namePattern, StringComparison.OrdinalIgnoreCase));
             }
             return sensors.FirstOrDefault();
+        }
+        
+        /// <summary>
+        /// Get sensor with exact name match (case-insensitive).
+        /// Use this for AMD sensors with special characters like "Core (Tctl/Tdie)".
+        /// </summary>
+        private ISensor? GetSensorExact(IHardware hardware, SensorType type, string exactName)
+        {
+            return hardware.Sensors.FirstOrDefault(s => 
+                s.SensorType == type && 
+                s.Name.Equals(exactName, StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>
@@ -441,49 +470,69 @@ namespace OmenCore.Hardware
         /// </summary>
         public IEnumerable<(string Name, double Rpm)> GetFanSpeeds()
         {
-            if (!_initialized)
+            if (!_initialized || _disposed)
             {
-                yield break;
+                return Array.Empty<(string, double)>();
             }
+
+            var results = new List<(string Name, double Rpm)>();
 
             lock (_lock)
             {
-                // Update hardware readings to get fresh fan data
-                _computer?.Accept(new UpdateVisitor());
-
-                foreach (var hardware in _computer?.Hardware ?? Array.Empty<IHardware>())
+                if (_disposed) return results;
+                
+                try
                 {
-                    hardware.Update();
+                    // Update hardware readings to get fresh fan data
+                    _computer?.Accept(new UpdateVisitor());
 
-                    // Check main hardware for fan sensors
-                    var fanSensors = hardware.Sensors
-                        .Where(s => s.SensorType == SensorType.Fan && s.Value.HasValue)
-                        .ToList();
-
-                    foreach (var sensor in fanSensors)
+                    foreach (var hardware in _computer?.Hardware ?? Array.Empty<IHardware>())
                     {
-                        yield return (sensor.Name, sensor.Value!.Value);
-                    }
+                        if (_disposed) return results;
+                        
+                        hardware.Update();
 
-                    // Check subhardware (e.g., motherboard sensors)
-                    foreach (var subHardware in hardware.SubHardware)
-                    {
-                        subHardware.Update();
-                        var subFanSensors = subHardware.Sensors
+                        // Check main hardware for fan sensors
+                        var fanSensors = hardware.Sensors
                             .Where(s => s.SensorType == SensorType.Fan && s.Value.HasValue)
                             .ToList();
 
-                        foreach (var sensor in subFanSensors)
+                        foreach (var sensor in fanSensors)
                         {
-                            yield return (sensor.Name, sensor.Value!.Value);
+                            results.Add((sensor.Name, sensor.Value!.Value));
+                        }
+
+                        // Check subhardware (e.g., motherboard sensors)
+                        foreach (var subHardware in hardware.SubHardware)
+                        {
+                            if (_disposed) return results;
+                            
+                            subHardware.Update();
+                            var subFanSensors = subHardware.Sensors
+                                .Where(s => s.SensorType == SensorType.Fan && s.Value.HasValue)
+                                .ToList();
+
+                            foreach (var sensor in subFanSensors)
+                            {
+                                results.Add((sensor.Name, sensor.Value!.Value));
+                            }
                         }
                     }
                 }
+                catch (ObjectDisposedException)
+                {
+                    // Gracefully handle disposal during iteration (e.g., app shutdown)
+                }
             }
+            
+            return results;
         }
+
+        private bool _disposed;
 
         public void Dispose()
         {
+            _disposed = true;
             if (_initialized && _computer != null)
             {
                 _computer.Close();

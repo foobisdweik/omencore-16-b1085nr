@@ -23,7 +23,7 @@ namespace OmenCoreApp.Tests.Services
         }
 
         [Fact]
-        public async Task DiscoverAsync_WithStubProvider_ReturnsStubDevices()
+        public async Task DiscoverAsync_WithStubProvider_ReturnsEmptyList()
         {
             // Arrange
             var logging = new LoggingService();
@@ -32,9 +32,8 @@ namespace OmenCoreApp.Tests.Services
             // Act
             await service.DiscoverAsync();
             
-            // Assert
-            service.Devices.Should().NotBeEmpty("stub provider should return fake devices for testing");
-            service.Devices.Should().Contain(d => d.Name.Contains("Stub"), "stub devices should be identifiable");
+            // Assert - Stub should return empty list (no fake devices)
+            service.Devices.Should().BeEmpty("stub provider should not return fake devices");
         }
 
         [Fact]

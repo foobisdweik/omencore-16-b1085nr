@@ -1,10 +1,10 @@
 # OmenCore
 
-**A modern, lightweight control center for HP OMEN gaming laptops.**
+**A modern, lightweight control center for HP OMEN & Victus gaming laptops.**
 
 OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop application for managing thermals, performance, RGB lighting, and peripherals. Built with WPF on .NET 8, it provides professional-grade hardware control without bloat, telemetry, or mandatory sign-ins.
 
-[![Version](https://img.shields.io/badge/version-1.0.0.8-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v1.0.0.8)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v1.1.0)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Website](https://img.shields.io/badge/website-omencore.info-brightgreen.svg)](https://omencore.info)
@@ -13,7 +13,24 @@ OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop 
 
 ---
 
-## 🆕 What's New in v1.0.0.8
+## 🆕 What's New in v1.1.0
+
+### � OGH Service Proxy (2023+ Model Support)
+- **Secure Boot compatible** - Fan control works on 2023+ OMEN laptops with Secure Boot enabled
+- **OGH service detection** - Automatically uses OMEN Gaming Hub's WMI interface when available
+- **Seamless fallback** - OGH Proxy → WMI BIOS → EC Access → Monitoring-only
+- **No conflicts** - Coexists peacefully with OMEN Gaming Hub if installed
+
+### 🧠 Capability-Based Provider Architecture
+- **Universal OMEN support** - Runtime detection adapts to your specific laptop model
+- **10-phase detection** - Identifies available backends at startup
+- **Future-proof** - Architecture ready for new HP models without code changes
+
+### 🔥 WMI-Based Fan Control (No Driver Required!)
+- **HP WMI BIOS interface** - Fan control without WinRing0 driver installation
+- **Automatic backend selection** - OGH → WMI BIOS → EC (WinRing0) → Monitoring-only fallback
+- **AMD Ryzen support** - Better compatibility for AMD laptops without driver hassles
+- **Fan modes via BIOS** - Default, Performance, Cool modes
 
 ### 🎮 Game Profile System
 - **Auto-switching profiles** - Automatically apply fan curves, performance, undervolt, GPU mode, and lighting when games launch
@@ -21,28 +38,33 @@ OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop 
 - **Profile analytics** - Track launch count and playtime per game
 - **Import/Export** - Share profiles or backup your settings
 
-### ⚙️ Settings View
-- **Fan Dust Cleaning** - Maintenance mode runs fans at max RPM
-- **Hotkey Configuration** - Customize shortcuts for fan mode, performance, window toggle
-- **Notification Preferences** - Control alerts for temps, fan changes, updates
-- **Export/Import Config** - Full settings backup and restore
+### ⚡ GPU Power Boost Control
+- **+15W Dynamic Boost** - Control GPU TGP and PPAB directly
+- **Three power levels** - Minimum (base TGP), Medium (Custom), Maximum (+15W boost)
+- **Same as Gaming Hub** - Omen Gaming Hub's "GPU Power" slider feature
 
-### 🎨 UI Improvements
-- **Quick Fan Control Buttons** - One-click Silent, Balanced, Performance, Max modes
-- **Temperature Warning Colors** - Green/yellow/red indicators based on thresholds
-- **RGB Color Picker** - Visual color selector with hex input
-- **Per-Zone RGB Control** - Independent color settings per keyboard zone
-- **Battery Status Panel** - Charge level, health, power source display
-- **CPU Wattage Display** - Real-time power consumption on dashboard
-- **Tooltips** - Hover hints throughout the UI
+### 🔧 Additional Features
+- **HP CMSL BIOS Updates** - Safe BIOS updates via HP Client Management Script Library (SoftPaq)
+- **BIOS Update Checker** - Check for HP BIOS updates from OmenCore
+- **Fan Profile Import/Export** - Share custom fan curves as JSON files
+- **Enhanced GPU Monitoring** - Power draw, core/memory clocks, hotspot temp
+- **Advanced Thermal Alerts** - Configurable warning thresholds with notifications
+- **HP Victus Support** - Full feature support for Victus gaming laptops
 
 ### 🐛 Bug Fixes
-- Fixed ThermalChart binding (temperature history now displays correctly)
-- Fixed system tray submenu styling (dark mode compatible)
-- Thread-safe process monitoring with ConcurrentDictionary
-- Proper resource cleanup on exit
+- Fixed AMD CPU temperature detection (Tctl/Tdie sensors)
+- Fixed AMD CPU power reporting (Package Power sensor)
+- Fixed UI deadlocks with Dispatcher.BeginInvoke
+- Fixed memory leaks in event handlers
 
-See [CHANGELOG.md](CHANGELOG.md) for full version history.
+### ⚡ Performance & Quality
+- **Faster startup** - Batched CMSL queries (5-10s → 1-2s)
+- **Backend indicator** - Sidebar shows active fan control method
+- **Secure Boot warning** - Clear notification when features are limited
+- **Hotkey OSD** - On-screen popup shows current mode when switching via shortcuts
+- **Profile validation** - Real-time validation in Game Profile Manager
+
+See [CHANGELOG_v1.1.0.md](docs/CHANGELOG_v1.1.0.md) for full details.
 
 ---
 
@@ -50,14 +72,16 @@ See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 ### 🌡️ **Thermal & Fan Management**
 - **Custom fan curves** with temperature breakpoints (e.g., 40°C→30%, 60°C→55%, 80°C→85%)
-- **Real-time monitoring** with live CPU/GPU temperature charts featuring gridlines and temperature labels
+- **WMI BIOS control** - No driver required! Works on AMD and Intel laptops
 - **EC-backed presets** (Max, Auto, Manual) for instant fan control
+- **Real-time monitoring** with live CPU/GPU temperature charts
 - **Per-fan telemetry** displays RPM and duty cycle for each cooling zone
-- **System tray badge** overlays live CPU temperature on the notification icon (updates every 2s)
+- **System tray badge** overlays live CPU temperature on the notification icon
 
 ### ⚡ **Performance Control**
 - **CPU undervolting** via Intel MSR with separate core/cache offset sliders (typical: -100mV to -150mV)
 - **Performance modes** (Balanced, Performance, Turbo) manage CPU/GPU wattage envelopes
+- **GPU Power Boost** - +15W Dynamic Boost control like Omen Gaming Hub
 - **GPU mux switching** between Hybrid, Discrete (dGPU), and Integrated (iGPU) modes
 - **External tool detection** - respects ThrottleStop/Intel XTU and defers control when detected
 
@@ -101,10 +125,11 @@ See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 | HP Gaming Hub Feature | OmenCore Status | Notes |
 |----------------------|----------------|-------|
-| **Fan Control** | ✅ Full support | Custom curves + EC presets |
+| **Fan Control** | ✅ Full support | Custom curves + WMI/EC presets |
 | **Performance Modes** | ✅ Full support | CPU/GPU power limits |
 | **CPU Undervolting** | ✅ Full support | Intel MSR access with safety |
-| **Keyboard RGB** | ✅ Profiles | Per-key editor planned for v1.1 |
+| **GPU Power Boost** | ✅ Full support | +15W Dynamic Boost (PPAB) |
+| **Keyboard RGB** | ✅ Profiles | Per-zone control with effects |
 | **Hardware Monitoring** | ✅ Full support | LibreHardwareMonitor integration |
 | **Gaming Mode** | ✅ Service toggles | One-click optimization |
 | **Peripheral Control** | ⚠️ Beta (stub) | Hardware detection ready |
@@ -112,10 +137,10 @@ See [CHANGELOG.md](CHANGELOG.md) for full version history.
 | **Network Booster** | ❌ Out of scope | Use router/Windows QoS |
 | **Game Library** | ❌ Out of scope | Use Steam/Epic/Xbox app |
 | **Omen Oasis** | ❌ Out of scope | Cloud gaming elsewhere |
-| **Per-Game Profiles** | ✅ Available | Auto-switch on game detect |
+| **Per-Game Profiles** | ✅ Full support | Auto-switch on game detect |
 | **Overlay (FPS/Temps)** | 🔜 Planned v1.2 | In-game OSD |
 
-**Verdict**: OmenCore covers **90% of daily Gaming Hub usage** with better performance, no telemetry, and full offline operation.
+**Verdict**: OmenCore covers **95% of daily Gaming Hub usage** with better performance, no telemetry, and full offline operation.
 
 ---
 
@@ -128,20 +153,22 @@ See [CHANGELOG.md](CHANGELOG.md) for full version history.
 - **Disk**: 100 MB for app + 50 MB for logs/config
 
 ### Hardware
-- **CPU**: Intel 6th-gen+ (Skylake or newer) for undervolting support
-- **Laptop**: HP OMEN 15/16/17 series (2019-2024 models)
-  - ✅ Tested: OMEN 15-dh, 16-b, 16-k, 17-ck
+- **CPU**: Intel 6th-gen+ (Skylake or newer) for undervolting support; AMD Ryzen supported for monitoring/fan control
+- **Laptop**: HP OMEN 15/16/17 series and HP Victus (2019-2024 models)
+  - ✅ Tested: OMEN 15-dh, 16-b, 16-k, 17-ck (2023), Victus 15/16
+  - ✅ **2023+ models**: OGH Service Proxy enables fan control with Secure Boot enabled
   - ⚠️ May work: OMEN 25L/30L/40L/45L desktops (limited fan control)
 - **EC Layout**: Standard HP OMEN Embedded Controller
   - Fan registers: `0x44` (Fan1 duty), `0x45` (Fan2 duty), `0x46` (mode)
   - Performance register: `0xCE` (mode selector)
   - Keyboard RGB: `0xBA`, `0xBB` (zone control)
 
-### Driver (Recommended)
-- **WinRing0 v1.2** - kernel driver for hardware access
+### Driver (Optional with OGH/WMI)
+- **WinRing0 v1.2** - kernel driver for EC-based hardware access
   - Auto-installed via OmenCore installer ("Install WinRing0" task)
   - OR install [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases) separately
-  - **Without driver**: Monitoring works, fan/RGB control disabled
+  - **NEW in v1.1.0**: OGH Proxy and WMI BIOS support means driver is optional for fan control!
+  - **Secure Boot users**: OGH Proxy works without disabling Secure Boot
 
 **⚠️ Windows Defender False Positive**: WinRing0 is flagged as `HackTool:Win64/WinRing0` by antivirus. This is a **known false positive** for kernel hardware drivers. Add exclusion for `C:\Windows\System32\drivers\WinRing0x64.sys` and verify signature. See [WINRING0_SETUP.md](docs/WINRING0_SETUP.md).
 

@@ -1,0 +1,189 @@
+using System;
+
+namespace OmenCore.Hardware
+{
+    /// <summary>
+    /// Describes the hardware capabilities detected at runtime for this specific device.
+    /// Used to determine which providers and features are available.
+    /// </summary>
+    public class DeviceCapabilities
+    {
+        // Device identification
+        public string ProductId { get; set; } = "";
+        public string BoardId { get; set; } = "";
+        public string BiosVersion { get; set; } = "";
+        public string ModelName { get; set; } = "";
+        public string SerialNumber { get; set; } = "";
+        
+        // Fan control capabilities
+        public FanControlMethod FanControl { get; set; } = FanControlMethod.None;
+        public bool CanReadRpm { get; set; }
+        public bool CanSetFanSpeed { get; set; }
+        public bool HasFanModes { get; set; }
+        public int FanCount { get; set; } = 2;
+        public string[] AvailableFanModes { get; set; } = Array.Empty<string>();
+        
+        // Thermal monitoring
+        public bool CanReadCpuTemp { get; set; }
+        public bool CanReadGpuTemp { get; set; }
+        public bool CanReadOtherTemps { get; set; }
+        public ThermalSensorMethod ThermalMethod { get; set; } = ThermalSensorMethod.None;
+        
+        // GPU capabilities
+        public bool HasMuxSwitch { get; set; }
+        public bool HasGpuPowerControl { get; set; }
+        public GpuVendor GpuVendor { get; set; } = GpuVendor.Unknown;
+        public bool NvApiAvailable { get; set; }
+        public bool AmdAdlAvailable { get; set; }
+        
+        // Performance modes
+        public bool HasOemPerformanceModes { get; set; }
+        public string[] AvailablePerformanceModes { get; set; } = Array.Empty<string>();
+        
+        // Lighting
+        public LightingCapability Lighting { get; set; } = LightingCapability.None;
+        public bool HasKeyboardBacklight { get; set; }
+        public bool HasZoneLighting { get; set; }
+        public bool HasPerKeyLighting { get; set; }
+        
+        // Undervolt
+        public bool CanUndervolt { get; set; }
+        public bool SecureBootEnabled { get; set; }
+        public UndervoltMethod UndervoltMethod { get; set; } = UndervoltMethod.None;
+        
+        // OGH dependency
+        public bool OghInstalled { get; set; }
+        public bool OghRunning { get; set; }
+        public bool RequiresOghService { get; set; }
+        
+        // Driver status
+        public bool WinRing0Available { get; set; }
+        public bool PawnIOAvailable { get; set; }
+        public string DriverStatus { get; set; } = "";
+        
+        /// <summary>
+        /// Generates a summary of capabilities for logging/display.
+        /// </summary>
+        public string GetSummary()
+        {
+            var lines = new System.Text.StringBuilder();
+            lines.AppendLine($"Device: {ModelName} ({ProductId})");
+            lines.AppendLine($"BIOS: {BiosVersion}");
+            lines.AppendLine();
+            
+            lines.AppendLine("Fan Control:");
+            lines.AppendLine($"  Method: {FanControl}");
+            lines.AppendLine($"  Read RPM: {(CanReadRpm ? "Yes" : "No")}");
+            lines.AppendLine($"  Set Speed: {(CanSetFanSpeed ? "Yes" : "No")}");
+            lines.AppendLine($"  Fan Modes: {(HasFanModes ? string.Join(", ", AvailableFanModes) : "None")}");
+            lines.AppendLine();
+            
+            lines.AppendLine("Thermal:");
+            lines.AppendLine($"  Method: {ThermalMethod}");
+            lines.AppendLine($"  CPU Temp: {(CanReadCpuTemp ? "Yes" : "No")}");
+            lines.AppendLine($"  GPU Temp: {(CanReadGpuTemp ? "Yes" : "No")}");
+            lines.AppendLine();
+            
+            lines.AppendLine("GPU:");
+            lines.AppendLine($"  Vendor: {GpuVendor}");
+            lines.AppendLine($"  MUX Switch: {(HasMuxSwitch ? "Yes" : "No")}");
+            lines.AppendLine($"  Power Control: {(HasGpuPowerControl ? "Yes" : "No")}");
+            lines.AppendLine();
+            
+            lines.AppendLine("Undervolt:");
+            lines.AppendLine($"  Method: {UndervoltMethod}");
+            lines.AppendLine($"  Secure Boot: {(SecureBootEnabled ? "Enabled (blocks WinRing0)" : "Disabled")}");
+            lines.AppendLine();
+            
+            lines.AppendLine("OGH Dependency:");
+            lines.AppendLine($"  Installed: {(OghInstalled ? "Yes" : "No")}");
+            lines.AppendLine($"  Running: {(OghRunning ? "Yes" : "No")}");
+            lines.AppendLine($"  Required: {(RequiresOghService ? "Yes" : "No")}");
+            
+            return lines.ToString();
+        }
+    }
+
+    /// <summary>
+    /// Method used for fan control.
+    /// </summary>
+    public enum FanControlMethod
+    {
+        None = 0,
+        /// <summary>Direct EC register access (requires WinRing0/PawnIO)</summary>
+        EcDirect,
+        /// <summary>HP WMI BIOS commands (no driver needed)</summary>
+        WmiBios,
+        /// <summary>Through OGH services (requires OGH running)</summary>
+        OghProxy,
+        /// <summary>Step-based control (discrete levels only)</summary>
+        Steps,
+        /// <summary>Percentage-based control (smooth PWM)</summary>
+        Percent,
+        /// <summary>Read-only monitoring (cannot control)</summary>
+        MonitoringOnly
+    }
+
+    /// <summary>
+    /// Method used for thermal sensor reading.
+    /// </summary>
+    public enum ThermalSensorMethod
+    {
+        None = 0,
+        /// <summary>WMI queries (no driver needed)</summary>
+        Wmi,
+        /// <summary>LibreHardwareMonitor (may need WinRing0)</summary>
+        LibreHardwareMonitor,
+        /// <summary>Direct EC reading (requires driver)</summary>
+        EcDirect,
+        /// <summary>Through OGH services</summary>
+        OghProxy,
+        /// <summary>NVIDIA NVAPI</summary>
+        NvApi,
+        /// <summary>AMD ADL</summary>
+        AmdAdl
+    }
+
+    /// <summary>
+    /// GPU vendor for determining available APIs.
+    /// </summary>
+    public enum GpuVendor
+    {
+        Unknown = 0,
+        Nvidia,
+        Amd,
+        Intel
+    }
+
+    /// <summary>
+    /// Keyboard/chassis lighting capability.
+    /// </summary>
+    public enum LightingCapability
+    {
+        None = 0,
+        /// <summary>4-zone keyboard backlight</summary>
+        FourZone,
+        /// <summary>Per-key RGB</summary>
+        PerKey,
+        /// <summary>Single color backlight</summary>
+        SingleColor,
+        /// <summary>Multi-zone with light bar</summary>
+        MultiZone
+    }
+
+    /// <summary>
+    /// Method available for CPU undervolting.
+    /// </summary>
+    public enum UndervoltMethod
+    {
+        None = 0,
+        /// <summary>Intel MSR via WinRing0</summary>
+        IntelMsr,
+        /// <summary>Intel MSR via PawnIO (Secure Boot compatible)</summary>
+        IntelMsrPawnIO,
+        /// <summary>AMD Curve Optimizer (BIOS only)</summary>
+        AmdCurveOptimizer,
+        /// <summary>Intel XTU compatibility layer</summary>
+        IntelXtu
+    }
+}

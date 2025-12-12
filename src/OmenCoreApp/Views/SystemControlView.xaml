@@ -307,6 +307,74 @@
                 </Border>
 
                 <!-- GPU Switching (Advanced Optimus) -->
+                <!-- GPU Power Boost Section -->
+                <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="GPU Power Boost (TGP/Dynamic Boost)" FontSize="20" FontWeight="SemiBold" 
+                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+                        
+                        <TextBlock Text="Control GPU Total Graphics Power (TGP) and Dynamic Boost (+15W PPAB). Higher settings enable more GPU wattage for better gaming performance." 
+                                   FontSize="12" 
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,0,0,16" TextWrapping="Wrap"/>
+
+                        <!-- Current Status -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0" Text="Status:" 
+                                       FontSize="14" 
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       Margin="0,0,12,0"/>
+                            
+                            <TextBlock Grid.Column="1" 
+                                       Text="{Binding GpuPowerBoostStatus}" 
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}"/>
+                        </Grid>
+
+                        <!-- Power Level Selection -->
+                        <Grid Margin="0,0,0,16" IsEnabled="{Binding GpuPowerBoostAvailable}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0" Text="Power Level:" 
+                                       FontSize="14" 
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            
+                            <ComboBox Grid.Column="1" 
+                                      Style="{StaticResource ModernComboBox}"
+                                      ItemsSource="{Binding GpuPowerBoostLevels}"
+                                      SelectedItem="{Binding GpuPowerBoostLevel}"
+                                      Margin="0,0,12,0"/>
+                            
+                            <Button Grid.Column="2" 
+                                    Content="Apply" 
+                                    Style="{StaticResource ModernButton}"
+                                    Command="{Binding ApplyGpuPowerBoostCommand}"
+                                    Padding="16,8"/>
+                        </Grid>
+
+                        <TextBlock Text="{Binding GpuPowerBoostDescription}" 
+                                   FontSize="12" 
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap" Margin="0,0,0,8"/>
+                        
+                        <TextBlock Text="Note: This feature requires HP WMI BIOS interface. Changes take effect immediately and persist until system restart." 
+                                   FontSize="11" 
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- GPU Switching Section (Advanced Optimus) -->
                 <Border Style="{StaticResource SurfaceCard}" Padding="24">
                     <StackPanel>
                         <TextBlock Text="GPU Switching (Advanced Optimus)" FontSize="20" FontWeight="SemiBold" 

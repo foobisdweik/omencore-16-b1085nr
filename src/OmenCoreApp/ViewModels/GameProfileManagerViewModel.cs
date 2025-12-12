@@ -22,6 +22,7 @@ namespace OmenCore.ViewModels
         private readonly LoggingService _logging;
         private GameProfile? _selectedProfile;
         private string _searchText = string.Empty;
+        private string? _validationError;
 
         public ObservableCollection<GameProfile> FilteredProfiles { get; } = new();
         
@@ -34,6 +35,7 @@ namespace OmenCore.ViewModels
                 {
                     _selectedProfile = value;
                     OnPropertyChanged();
+                    ValidateSelectedProfile();
                 }
             }
         }
@@ -51,6 +53,34 @@ namespace OmenCore.ViewModels
                 }
             }
         }
+        
+        /// <summary>
+        /// Current validation error message (null if valid).
+        /// </summary>
+        public string? ValidationError
+        {
+            get => _validationError;
+            private set
+            {
+                if (_validationError != value)
+                {
+                    _validationError = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(HasValidationError));
+                    OnPropertyChanged(nameof(IsProfileValid));
+                }
+            }
+        }
+        
+        /// <summary>
+        /// True if there's a validation error.
+        /// </summary>
+        public bool HasValidationError => !string.IsNullOrEmpty(ValidationError);
+        
+        /// <summary>
+        /// True if selected profile passes validation.
+        /// </summary>
+        public bool IsProfileValid => string.IsNullOrEmpty(ValidationError);
 
         // Dropdown options
         public ObservableCollection<string> FanPresets { get; } = new() { "Default", "Silent", "Balanced", "Performance", "Extreme" };
@@ -107,6 +137,61 @@ namespace OmenCore.ViewModels
             {
                 SelectedProfile = FilteredProfiles.First();
             }
+        }
+        
+        /// <summary>
+        /// Validates the selected profile and sets ValidationError.
+        /// </summary>
+        private void ValidateSelectedProfile()
+        {
+            if (SelectedProfile == null)
+            {
+                ValidationError = null;
+                return;
+            }
+            
+            // Validate profile name
+            if (string.IsNullOrWhiteSpace(SelectedProfile.Name))
+            {
+                ValidationError = "Profile name is required";
+                return;
+            }
+            
+            if (SelectedProfile.Name.Length > 100)
+            {
+                ValidationError = "Profile name must be 100 characters or less";
+                return;
+            }
+            
+            // Validate executable name
+            if (string.IsNullOrWhiteSpace(SelectedProfile.ExecutableName))
+            {
+                ValidationError = "Executable name is required";
+                return;
+            }
+            
+            if (!SelectedProfile.ExecutableName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                ValidationError = "Executable must end with .exe";
+                return;
+            }
+            
+            // Validate undervolt offset (if set)
+            if (SelectedProfile.CpuCoreOffsetMv < -200 || SelectedProfile.CpuCoreOffsetMv > 0)
+            {
+                ValidationError = "CPU undervolt must be between -200 and 0 mV";
+                return;
+            }
+            
+            // Validate priority
+            if (SelectedProfile.Priority < 0 || SelectedProfile.Priority > 100)
+            {
+                ValidationError = "Priority must be between 0 and 100";
+                return;
+            }
+            
+            // All validations passed
+            ValidationError = null;
         }
 
         private void FilterProfiles()

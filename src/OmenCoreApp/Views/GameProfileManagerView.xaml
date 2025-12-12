@@ -5,13 +5,15 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="Game Profile Manager"
-        Width="900" Height="650"
-        Background="#1E1E1E"
+        Width="950" Height="700"
+        Background="{StaticResource BackgroundDarkBrush}"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="CanResize">
+        WindowStyle="None"
+        AllowsTransparency="True"
+        ResizeMode="CanResizeWithGrip">
 
     <Window.Resources>
-        <!-- Modern Dark Theme -->
+        <!-- Use app-wide styles with local overrides for this window -->
         <Style TargetType="Button">
             <Setter Property="Background" Value="#2D2D30"/>
             <Setter Property="Foreground" Value="#FFFFFF"/>
@@ -105,27 +107,40 @@
         </Style>
     </Window.Resources>
 
-    <Grid Margin="16">
+    <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="10">
+    <Grid Margin="0">
         <Grid.RowDefinitions>
+            <RowDefinition Height="40"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
+        <!-- Custom Title Bar -->
+        <Border Grid.Row="0" Background="{StaticResource SurfaceDarkBrush}" CornerRadius="10,10,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0">
+                    <Path Data="{StaticResource IconGamepad}" Width="18" Height="18" Fill="{StaticResource AccentBrush}" Stretch="Uniform" Margin="0,0,10,0"/>
+                    <TextBlock Text="Game Profile Manager" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <Button Content="✕" HorizontalAlignment="Right" Margin="0,0,8,0" Click="CloseButton_Click" Style="{StaticResource WindowCloseButton}" Width="32" Height="32" FontSize="12"/>
+            </Grid>
+        </Border>
+
         <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+        <StackPanel Grid.Row="1" Margin="20,16,20,16">
             <TextBlock Text="Game Profile Manager"
                        FontSize="24"
                        FontWeight="SemiBold"
                        Foreground="White"
                        Margin="0,0,0,8"/>
             <TextBlock Text="Automatically switch settings when games launch"
-                       FontSize="14"
-                       Foreground="#999999"/>
+                       FontSize="13"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
         </StackPanel>
 
         <!-- Main Content -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2" Margin="20,0,20,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="300"/>
                 <ColumnDefinition Width="16"/>
@@ -134,11 +149,11 @@
 
             <!-- Profile List -->
             <Border Grid.Column="0"
-                    Background="#252526"
-                    BorderBrush="#3F3F46"
+                    Background="{StaticResource SurfaceMediumBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
                     BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="8">
+                    CornerRadius="8"
+                    Padding="12">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -221,11 +236,11 @@
 
             <!-- Profile Editor -->
             <Border Grid.Column="2"
-                    Background="#252526"
-                    BorderBrush="#3F3F46"
+                    Background="{StaticResource SurfaceMediumBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
                     BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="16">
+                    CornerRadius="8"
+                    Padding="20">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <TextBlock Text="Profile Settings"
@@ -233,6 +248,24 @@
                                    FontWeight="SemiBold"
                                    Foreground="White"
                                    Margin="0,0,0,16"/>
+                        
+                        <!-- Validation Error Banner -->
+                        <Border Background="#2D1F1F"
+                                BorderBrush="#F44336"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="10,8"
+                                Margin="0,0,0,12"
+                                Visibility="{Binding HasValidationError, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⚠" FontSize="14" Foreground="#F44336" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding ValidationError}" 
+                                           Foreground="#F44336" 
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
 
                         <!-- Profile Name -->
                         <Label Content="Profile Name"/>
@@ -365,17 +398,19 @@
         </Grid>
 
         <!-- Footer -->
-        <StackPanel Grid.Row="2"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Margin="0,16,0,0">
-            <Button Content="Save and Close"
-                    Command="{Binding SaveCommand}"
-                    Margin="0,0,8,0"
-                    Padding="16,8"/>
-            <Button Content="Cancel"
-                    Command="{Binding CancelCommand}"
-                    Padding="16,8"/>
-        </StackPanel>
+        <Border Grid.Row="3" Background="{StaticResource SurfaceDarkBrush}" CornerRadius="0,0,10,10" Padding="20,12">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Save &amp; Close"
+                        Command="{Binding SaveCommand}"
+                        Style="{StaticResource ModernButton}"
+                        Width="140" Height="38"
+                        Margin="0,0,10,0"/>
+                <Button Content="Cancel"
+                        Command="{Binding CancelCommand}"
+                        Style="{StaticResource SecondaryButton}"
+                        Width="100" Height="38"/>
+            </StackPanel>
+        </Border>
     </Grid>
+    </Border>
 </Window>

@@ -129,9 +129,28 @@ namespace OmenCore.Services
                     trackedCopy = new HashSet<string>(_trackedProcesses);
                 }
 
-                var runningProcesses = Process.GetProcesses()
-                    .Where(p => trackedCopy.Contains(p.ProcessName.ToLowerInvariant()))
-                    .ToDictionary(p => p.Id, p => p);
+                var allProcesses = Process.GetProcesses();
+                var runningProcesses = new Dictionary<int, Process>();
+
+                foreach (var p in allProcesses)
+                {
+                    try
+                    {
+                        if (trackedCopy.Contains(p.ProcessName.ToLowerInvariant()))
+                        {
+                            runningProcesses[p.Id] = p;
+                        }
+                        else
+                        {
+                            p.Dispose();
+                        }
+                    }
+                    catch
+                    {
+                        // Handle potential access denied or race conditions
+                        p.Dispose();
+                    }
+                }
 
                 // Detect new processes (launches) - keyed by Process ID to support multiple instances
                 foreach (var kvp in runningProcesses)

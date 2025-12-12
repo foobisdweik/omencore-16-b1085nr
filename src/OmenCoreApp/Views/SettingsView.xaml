@@ -455,6 +455,101 @@
                     </StackPanel>
                 </Border>
 
+                <!-- BIOS Update Check -->
+                <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <Path Data="M9,2V7H12V10H9A3,3 0 0,0 6,13V15A3,3 0 0,0 9,18H12V22H14V18H15A3,3 0 0,0 18,15V13A3,3 0 0,0 15,10H14V7H17V2H15V5H12V2H9M9,12H15A1,1 0 0,1 16,13V15A1,1 0 0,1 15,16H9A1,1 0 0,1 8,15V13A1,1 0 0,1 9,12Z" 
+                                  Fill="#4DD0E1" 
+                                  Width="24" Height="24" Stretch="Uniform" 
+                                  VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <TextBlock Text="BIOS Information" FontSize="20" FontWeight="SemiBold" 
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                        </StackPanel>
+
+                        <!-- System Model -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="HP Model:" FontSize="13" 
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding SystemModel}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                        </Grid>
+
+                        <!-- Current BIOS -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Current BIOS:" FontSize="13" 
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding CurrentBiosVersion}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                        </Grid>
+
+                        <!-- Latest BIOS (only show when we have a version) -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Latest BIOS:" FontSize="13" 
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       Visibility="{Binding BiosUpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding LatestBiosVersion}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       Visibility="{Binding BiosUpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        </Grid>
+
+                        <!-- BIOS Status -->
+                        <Border Background="{StaticResource SurfaceDarkBrush}" 
+                                CornerRadius="8" Padding="12" Margin="0,8,0,16">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Ellipse Grid.Column="0" 
+                                         Width="12" Height="12" 
+                                         Fill="{Binding BiosStatusColor}"
+                                         VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <TextBlock Grid.Column="1" Text="{Binding BiosCheckStatus}" 
+                                           FontSize="13" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           TextWrapping="Wrap"/>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock TextWrapping="Wrap" FontSize="12" 
+                                   Foreground="{StaticResource TextSecondaryBrush}" 
+                                   Margin="0,0,0,12">
+                            Check HP's website for BIOS updates. Always read the release notes before updating BIOS.
+                            BIOS updates can improve stability, security, and compatibility.
+                        </TextBlock>
+
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="🔍 Check for Updates" 
+                                    Style="{StaticResource ModernButton}"
+                                    Background="#4DD0E1"
+                                    Command="{Binding CheckBiosUpdatesCommand}"
+                                    HorizontalAlignment="Left"
+                                    Padding="20,10"
+                                    Margin="0,0,12,0"/>
+                            <Button Content="⬇️ Download Update" 
+                                    Style="{StaticResource ModernButton}"
+                                    Background="#66BB6A"
+                                    Command="{Binding DownloadBiosUpdateCommand}"
+                                    Visibility="{Binding BiosUpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    HorizontalAlignment="Left"
+                                    Padding="20,10"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
                 <!-- Fan Boost / Maintenance -->
                 <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16">
                     <StackPanel>

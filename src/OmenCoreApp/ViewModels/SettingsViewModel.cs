@@ -23,6 +23,7 @@ namespace OmenCore.ViewModels
         private readonly AppConfig _config;
         private readonly SystemInfoService _systemInfoService;
         private readonly FanCleaningService _fanCleaningService;
+        private readonly BiosUpdateService _biosUpdateService;
         
         private bool _startWithWindows;
         private bool _startMinimized;
@@ -51,15 +52,27 @@ namespace OmenCore.ViewModels
         private string _driverStatusText = "Checking...";
         private string _driverStatusDetail = "";
         private Brush _driverStatusColor = Brushes.Gray;
+        
+        // BIOS update fields
+        private string _systemModel = "";
+        private string _currentBiosVersion = "";
+        private string _latestBiosVersion = "";
+        private bool _biosUpdateAvailable;
+        private string _biosDownloadUrl = "";
+        private string _biosCheckStatus = "Not checked";
+        private bool _isBiosCheckInProgress;
+        private Brush _biosStatusColor = Brushes.Gray;
 
         public SettingsViewModel(LoggingService logging, ConfigurationService configService, 
-            SystemInfoService systemInfoService, FanCleaningService fanCleaningService)
+            SystemInfoService systemInfoService, FanCleaningService fanCleaningService,
+            BiosUpdateService biosUpdateService)
         {
             _logging = logging;
             _configService = configService;
             _config = configService.Config;
             _systemInfoService = systemInfoService;
             _fanCleaningService = fanCleaningService;
+            _biosUpdateService = biosUpdateService;
 
             // Load saved settings
             LoadSettings();
@@ -74,12 +87,17 @@ namespace OmenCore.ViewModels
             ResetToDefaultsCommand = new RelayCommand(_ => ResetToDefaults());
             InstallDriverCommand = new RelayCommand(_ => InstallDriver());
             RefreshDriverStatusCommand = new RelayCommand(_ => CheckDriverStatus());
+            CheckBiosUpdatesCommand = new AsyncRelayCommand(async _ => await CheckBiosUpdatesAsync(), _ => !IsBiosCheckInProgress);
+            DownloadBiosUpdateCommand = new RelayCommand(_ => DownloadBiosUpdate(), _ => BiosUpdateAvailable && !string.IsNullOrEmpty(BiosDownloadUrl));
 
             // Check fan cleaning availability
             CheckFanCleaningAvailability();
             
             // Check driver status
             CheckDriverStatus();
+            
+            // Load system info for BIOS
+            LoadSystemInfo();
         }
 
         #region General Settings
@@ -375,6 +393,8 @@ namespace OmenCore.ViewModels
         public ICommand ResetToDefaultsCommand { get; }
         public ICommand InstallDriverCommand { get; }
         public ICommand RefreshDriverStatusCommand { get; }
+        public ICommand CheckBiosUpdatesCommand { get; }
+        public ICommand DownloadBiosUpdateCommand { get; }
 
         #endregion
         
@@ -396,6 +416,73 @@ namespace OmenCore.ViewModels
         {
             get => _driverStatusColor;
             set { _driverStatusColor = value; OnPropertyChanged(); }
+        }
+        
+        #endregion
+        
+        #region BIOS Update Properties
+        
+        public string SystemModel
+        {
+            get => _systemModel;
+            set { _systemModel = value; OnPropertyChanged(); }
+        }
+        
+        public string CurrentBiosVersion
+        {
+            get => _currentBiosVersion;
+            set { _currentBiosVersion = value; OnPropertyChanged(); }
+        }
+        
+        public string LatestBiosVersion
+        {
+            get => _latestBiosVersion;
+            set { _latestBiosVersion = value; OnPropertyChanged(); }
+        }
+        
+        public bool BiosUpdateAvailable
+        {
+            get => _biosUpdateAvailable;
+            set 
+            { 
+                _biosUpdateAvailable = value; 
+                OnPropertyChanged();
+                (DownloadBiosUpdateCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+        
+        public string BiosDownloadUrl
+        {
+            get => _biosDownloadUrl;
+            set 
+            { 
+                _biosDownloadUrl = value; 
+                OnPropertyChanged();
+                (DownloadBiosUpdateCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+        
+        public string BiosCheckStatus
+        {
+            get => _biosCheckStatus;
+            set { _biosCheckStatus = value; OnPropertyChanged(); }
+        }
+        
+        public bool IsBiosCheckInProgress
+        {
+            get => _isBiosCheckInProgress;
+            set 
+            { 
+                _isBiosCheckInProgress = value; 
+                OnPropertyChanged();
+                (CheckBiosUpdatesCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+        
+        public Brush BiosStatusColor
+        {
+            get => _biosStatusColor;
+            set { _biosStatusColor = value; OnPropertyChanged(); }
         }
         
         #endregion
@@ -690,6 +777,99 @@ namespace OmenCore.ViewModels
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/latest",
+                    UseShellExecute = true
+                });
+            }
+        }
+        
+        private void LoadSystemInfo()
+        {
+            try
+            {
+                var sysInfo = _systemInfoService.GetSystemInfo();
+                // Use Model for display (full name like "HP OMEN by HP Laptop 17-ck2xxx")
+                SystemModel = !string.IsNullOrEmpty(sysInfo.Model) ? sysInfo.Model : sysInfo.ProductName ?? "Unknown HP Product";
+                CurrentBiosVersion = sysInfo.BiosVersion ?? "Unknown";
+                BiosCheckStatus = "Click 'Check for Updates' to check HP for BIOS updates";
+                BiosStatusColor = Brushes.Gray;
+            }
+            catch (Exception ex)
+            {
+                _logging.Error("Failed to load system info for BIOS display", ex);
+                SystemModel = "Unable to detect";
+                CurrentBiosVersion = "Unable to detect";
+                BiosCheckStatus = "Could not read system information";
+                BiosStatusColor = new SolidColorBrush(Color.FromRgb(255, 183, 77)); // Orange
+            }
+        }
+        
+        private async Task CheckBiosUpdatesAsync()
+        {
+            if (IsBiosCheckInProgress)
+                return;
+                
+            IsBiosCheckInProgress = true;
+            BiosCheckStatus = "Checking HP for BIOS updates...";
+            BiosStatusColor = Brushes.Gray;
+            
+            try
+            {
+                var sysInfo = _systemInfoService.GetSystemInfo();
+                var result = await _biosUpdateService.CheckForUpdatesAsync(sysInfo);
+                
+                LatestBiosVersion = result.LatestBiosVersion ?? "Unknown";
+                BiosDownloadUrl = result.DownloadUrl ?? "";
+                BiosUpdateAvailable = result.UpdateAvailable;
+                
+                if (result.UpdateAvailable)
+                {
+                    BiosCheckStatus = $"⬆️ Update available: {result.LatestBiosVersion}";
+                    BiosStatusColor = new SolidColorBrush(Color.FromRgb(102, 187, 106)); // Green
+                }
+                else if (!string.IsNullOrEmpty(result.LatestBiosVersion))
+                {
+                    BiosCheckStatus = "✓ Your BIOS is up to date";
+                    BiosStatusColor = new SolidColorBrush(Color.FromRgb(102, 187, 106)); // Green
+                }
+                else
+                {
+                    BiosCheckStatus = result.Message;
+                    BiosStatusColor = new SolidColorBrush(Color.FromRgb(255, 183, 77)); // Orange
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Error("Failed to check for BIOS updates", ex);
+                BiosCheckStatus = $"Error: {ex.Message}";
+                BiosStatusColor = new SolidColorBrush(Color.FromRgb(239, 83, 80)); // Red
+            }
+            finally
+            {
+                IsBiosCheckInProgress = false;
+            }
+        }
+        
+        private void DownloadBiosUpdate()
+        {
+            if (string.IsNullOrEmpty(BiosDownloadUrl))
+                return;
+                
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = BiosDownloadUrl,
+                    UseShellExecute = true
+                });
+                _logging.Info($"Opened BIOS download URL: {BiosDownloadUrl}");
+            }
+            catch (Exception ex)
+            {
+                _logging.Error("Failed to open BIOS download URL", ex);
+                // Fallback to HP support page
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "https://support.hp.com/drivers",
                     UseShellExecute = true
                 });
             }

@@ -43,13 +43,93 @@ namespace OmenCore.ViewModels
         private readonly FanCleaningService _fanCleaningService;
         private readonly HotkeyService _hotkeyService;
         private readonly NotificationService _notificationService;
+        private readonly BiosUpdateService _biosUpdateService;
+        private HpWmiBios? _wmiBios;
+        private HotkeyOsdWindow? _hotkeyOsd;
         
-        // Sub-ViewModels for modular UI
-        public FanControlViewModel? FanControl { get; private set; }
+        // Sub-ViewModels for modular UI (Lazy Loaded)
+        private FanControlViewModel? _fanControl;
+        public FanControlViewModel? FanControl
+        {
+            get
+            {
+                if (_fanControl == null)
+                {
+                    _fanControl = new FanControlViewModel(_fanService, _configService, _logging);
+                    _fanControl.PropertyChanged += (s, e) =>
+                    {
+                        if (e.PropertyName == nameof(FanControlViewModel.CurrentFanModeName) && _dashboard != null)
+                        {
+                            _dashboard.CurrentFanMode = _fanControl.CurrentFanModeName;
+                        }
+                    };
+                    OnPropertyChanged(nameof(FanControl));
+                }
+                return _fanControl;
+            }
+        }
+
         public LightingViewModel? Lighting { get; private set; }
-        public SystemControlViewModel? SystemControl { get; private set; }
-        public DashboardViewModel? Dashboard { get; private set; }
-        public SettingsViewModel? Settings { get; private set; }
+
+        private SystemControlViewModel? _systemControl;
+        public SystemControlViewModel? SystemControl
+        {
+            get
+            {
+                if (_systemControl == null)
+                {
+                    _systemControl = new SystemControlViewModel(
+                        _undervoltService,
+                        _performanceModeService,
+                        _hubCleanupService,
+                        _systemRestoreService,
+                        _gpuSwitchService,
+                        _logging,
+                        _wmiBios
+                    );
+                    _systemControl.PropertyChanged += (s, e) =>
+                    {
+                        if (e.PropertyName == nameof(SystemControlViewModel.CurrentPerformanceModeName) && _dashboard != null)
+                        {
+                            _dashboard.CurrentPerformanceMode = _systemControl.CurrentPerformanceModeName;
+                        }
+                    };
+                    OnPropertyChanged(nameof(SystemControl));
+                }
+                return _systemControl;
+            }
+        }
+
+        private DashboardViewModel? _dashboard;
+        public DashboardViewModel? Dashboard
+        {
+            get
+            {
+                if (_dashboard == null)
+                {
+                    _dashboard = new DashboardViewModel(_hardwareMonitoringService);
+                    // Initialize with current values (triggers creation of dependencies if needed)
+                    if (SystemControl != null) _dashboard.CurrentPerformanceMode = SystemControl.CurrentPerformanceModeName;
+                    if (FanControl != null) _dashboard.CurrentFanMode = FanControl.CurrentFanModeName;
+                    OnPropertyChanged(nameof(Dashboard));
+                }
+                return _dashboard;
+            }
+        }
+
+        private SettingsViewModel? _settings;
+        public SettingsViewModel? Settings
+        {
+            get
+            {
+                if (_settings == null)
+                {
+                    _settings = new SettingsViewModel(_logging, _configService, _systemInfoService, _fanCleaningService, _biosUpdateService);
+                    OnPropertyChanged(nameof(Settings));
+                }
+                return _settings;
+            }
+        }
         
         private readonly AsyncRelayCommand _applyUndervoltCommand;
         private readonly AsyncRelayCommand _resetUndervoltCommand;
@@ -128,6 +208,27 @@ namespace OmenCore.ViewModels
         public ReadOnlyObservableCollection<GameProfile> GameProfiles => _gameProfileService.Profiles;
         
         public SystemInfo SystemInfo { get; private set; }
+        
+        /// <summary>
+        /// Device capabilities detected at startup.
+        /// </summary>
+        public Hardware.DeviceCapabilities? DetectedCapabilities { get; private set; }
+        
+        /// <summary>
+        /// The active fan control backend (for UI display).
+        /// </summary>
+        public string FanBackend { get; private set; } = "Detecting...";
+        
+        /// <summary>
+        /// True if Secure Boot is enabled (blocks WinRing0).
+        /// </summary>
+        public bool SecureBootEnabled => DetectedCapabilities?.SecureBootEnabled ?? false;
+        
+        /// <summary>
+        /// Warning message for limited functionality.
+        /// </summary>
+        public string? CapabilityWarning { get; private set; }
+        
         public string AppVersionLabel
         {
             get => _appVersionLabel;
@@ -744,23 +845,48 @@ namespace OmenCore.ViewModels
         public MainViewModel()
         {
             _config = _configService.Load();
+            
+            // Initialize hardware monitor bridge first (needed by ThermalSensorProvider and FanController)
+            LibreHardwareMonitorImpl monitorBridge = new LibreHardwareMonitorImpl(msg => _logging.Info($"[Monitor] {msg}"));
+            
+            // Run capability detection to identify available backends
+            var capabilityService = new CapabilityDetectionService(_logging);
+            var capabilities = capabilityService.DetectCapabilities();
+            DetectedCapabilities = capabilities;
+            
+            // Set capability warning if functionality is limited
+            if (capabilities.SecureBootEnabled && !capabilities.OghRunning)
+            {
+                CapabilityWarning = "Secure Boot enabled - some features may be limited. Install OMEN Gaming Hub for full control.";
+            }
+            else if (capabilities.FanControl == Hardware.FanControlMethod.MonitoringOnly)
+            {
+                CapabilityWarning = "Fan control unavailable - monitoring only mode.";
+            }
+            
+            // Initialize EC access (used as fallback if WMI BIOS not available)
             var ec = new WinRing0EcAccess();
             try
             {
                 if (!ec.Initialize(_config.EcDevicePath))
                 {
-                    _logging.Warn("EC bridge not available; fan writes disabled");
+                    _logging.Info("EC bridge not available; will try WMI BIOS for fan control");
                 }
             }
             catch (Exception ex)
             {
-                _logging.Error("Failed to initialize EC bridge", ex);
+                _logging.Info($"EC bridge initialization skipped: {ex.Message}");
             }
 
-            // Initialize hardware monitor bridge first (needed by ThermalSensorProvider and FanController)
-            LibreHardwareMonitorImpl monitorBridge = new LibreHardwareMonitorImpl(msg => _logging.Info($"[Monitor] {msg}"));
+            // Create fan controller with intelligent backend selection using pre-detected capabilities
+            // Priority: OGH Proxy > WMI BIOS (no driver) > EC (requires WinRing0) > Fallback (monitoring only)
+            var fanControllerFactory = new FanControllerFactory(monitorBridge, ec, _config.EcFanRegisterMap, _logging, capabilities);
+            var fanController = fanControllerFactory.Create();
+            FanBackend = fanControllerFactory.ActiveBackend;
             
-            var fanController = new FanController(ec, _config.EcFanRegisterMap, monitorBridge);
+            // Create HP WMI BIOS instance for GPU Power Boost control
+            _wmiBios = new HpWmiBios(_logging);
+            
             _fanService = new FanService(fanController, new ThermalSensorProvider(monitorBridge), _logging, _config.MonitoringIntervalMs);
             ThermalSamples = _fanService.ThermalSamples;
             FanTelemetry = _fanService.FanTelemetry;
@@ -805,6 +931,7 @@ namespace OmenCore.ViewModels
             _processMonitoringService = new ProcessMonitoringService(_logging);
             _gameProfileService = new GameProfileService(_logging, _processMonitoringService, _configService);
             _fanCleaningService = new FanCleaningService(_logging, ec, _systemInfoService);
+            _biosUpdateService = new BiosUpdateService(_logging);
             _hotkeyService = new HotkeyService(_logging);
             _notificationService = new NotificationService(_logging);
             _autoUpdateService.DownloadProgressChanged += OnUpdateDownloadProgressChanged;
@@ -821,7 +948,7 @@ namespace OmenCore.ViewModels
             _hotkeyService.ToggleWindowRequested += OnHotkeyToggleWindow;
 
             // Initialize sub-ViewModels that don't depend on async services
-            InitializeSubViewModels();
+            // InitializeSubViewModels(); // Removed in favor of lazy loading
             AppVersionLabel = $"v{_autoUpdateService.GetCurrentVersion()}";
 
             ApplyFanPresetCommand = new RelayCommand(_ => 
@@ -1752,9 +1879,17 @@ namespace OmenCore.ViewModels
                 // Initialize Lighting sub-ViewModel after async services are ready
                 if (_corsairDeviceService != null && _logitechDeviceService != null)
                 {
-                    Lighting = new LightingViewModel(_corsairDeviceService, _logitechDeviceService, _logging);
-                    OnPropertyChanged(nameof(Lighting));
-                    _logging.Info("Lighting sub-ViewModel initialized");
+                    // Only show lighting tab if devices are actually found
+                    if (_corsairDeviceService.Devices.Any() || _logitechDeviceService.Devices.Any())
+                    {
+                        Lighting = new LightingViewModel(_corsairDeviceService, _logitechDeviceService, _logging);
+                        OnPropertyChanged(nameof(Lighting));
+                        _logging.Info("Lighting sub-ViewModel initialized (devices found)");
+                    }
+                    else
+                    {
+                        _logging.Info("Lighting sub-ViewModel skipped (no devices found)");
+                    }
                 }
             }
             catch (Exception ex)
@@ -1763,51 +1898,7 @@ namespace OmenCore.ViewModels
             }
         }
         
-        private void InitializeSubViewModels()
-        {
-            // Initialize FanControl sub-ViewModel
-            FanControl = new FanControlViewModel(_fanService, _configService, _logging);
-            OnPropertyChanged(nameof(FanControl));
-            
-            // Initialize SystemControl sub-ViewModel
-            SystemControl = new SystemControlViewModel(
-                _undervoltService,
-                _performanceModeService,
-                _hubCleanupService,
-                _systemRestoreService,
-                _gpuSwitchService,
-                _logging
-            );
-            SystemControl.PropertyChanged += (s, e) =>
-            {
-                if (e.PropertyName == nameof(SystemControl.CurrentPerformanceModeName) && Dashboard != null)
-                {
-                    Dashboard.CurrentPerformanceMode = SystemControl.CurrentPerformanceModeName;
-                }
-            };
-            OnPropertyChanged(nameof(SystemControl));
-            
-            // Initialize Dashboard sub-ViewModel
-            Dashboard = new DashboardViewModel(_hardwareMonitoringService);
-            Dashboard.CurrentPerformanceMode = SystemControl.CurrentPerformanceModeName;
-            OnPropertyChanged(nameof(Dashboard));
-            
-            // Wire up fan mode changes
-            FanControl.PropertyChanged += (s, e) =>
-            {
-                if (e.PropertyName == nameof(FanControl.CurrentFanModeName) && Dashboard != null)
-                {
-                    Dashboard.CurrentFanMode = FanControl.CurrentFanModeName;
-                }
-            };
-            Dashboard.CurrentFanMode = FanControl.CurrentFanModeName;
-            
-            // Initialize Settings sub-ViewModel
-            Settings = new SettingsViewModel(_logging, _configService, _systemInfoService, _fanCleaningService);
-            OnPropertyChanged(nameof(Settings));
-            
-            _logging.Info("Sub-ViewModels initialized successfully");
-        }
+        /* InitializeSubViewModels removed in favor of lazy loading */
 
         private void ReloadRecentBuffer()
         {
@@ -1992,7 +2083,7 @@ namespace OmenCore.ViewModels
                 {
                     FanControl.ApplyFanMode(nextMode);
                     CurrentFanMode = nextMode;
-                    _notificationService.ShowFanModeChanged(nextMode, "Hotkey");
+                    ShowHotkeyOsd("Fan Mode", nextMode, "Ctrl+Shift+F");
                     PushEvent($"🌀 Fan: {nextMode} (hotkey)");
                 }
                 catch (Exception ex)
@@ -2018,7 +2109,7 @@ namespace OmenCore.ViewModels
                 {
                     _performanceModeService.Apply(new PerformanceMode { Name = nextMode });
                     CurrentPerformanceMode = nextMode;
-                    _notificationService.ShowPerformanceModeChanged(nextMode, "Hotkey");
+                    ShowHotkeyOsd("Performance", nextMode, "Ctrl+Shift+P");
                     PushEvent($"⚡ Performance: {nextMode} (hotkey)");
                 }
                 catch (Exception ex)
@@ -2038,7 +2129,7 @@ namespace OmenCore.ViewModels
                     _performanceModeService.Apply(new PerformanceMode { Name = "Performance" });
                     CurrentFanMode = "Performance";
                     CurrentPerformanceMode = "Performance";
-                    _notificationService.ShowFanModeChanged("Boost (Performance)", "Hotkey");
+                    ShowHotkeyOsd("Boost", "Performance", "Ctrl+Shift+B");
                     PushEvent("🔥 Boost mode activated (hotkey)");
                 }
                 catch (Exception ex)
@@ -2058,7 +2149,7 @@ namespace OmenCore.ViewModels
                     _performanceModeService.Apply(new PerformanceMode { Name = "Quiet" });
                     CurrentFanMode = "Quiet";
                     CurrentPerformanceMode = "Quiet";
-                    _notificationService.ShowFanModeChanged("Quiet", "Hotkey");
+                    ShowHotkeyOsd("Quiet Mode", "Quiet", "Ctrl+Shift+Q");
                     PushEvent("🤫 Quiet mode activated (hotkey)");
                 }
                 catch (Exception ex)
@@ -2116,6 +2207,28 @@ namespace OmenCore.ViewModels
         /// </summary>
         public HotkeyService Hotkeys => _hotkeyService;
 
+        /// <summary>
+        /// Show the hotkey OSD popup with mode information
+        /// </summary>
+        private void ShowHotkeyOsd(string category, string modeName, string hotkeyText)
+        {
+            try
+            {
+                // Create OSD window if it doesn't exist
+                if (_hotkeyOsd == null)
+                {
+                    _hotkeyOsd = new HotkeyOsdWindow();
+                    _logging.Info("HotkeyOsdWindow created");
+                }
+                
+                _hotkeyOsd.ShowMode(category, modeName, $"via Hotkey ({hotkeyText})");
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to show hotkey OSD: {ex.Message}");
+            }
+        }
+
         #endregion
 
         public void Dispose()
@@ -2161,6 +2274,9 @@ namespace OmenCore.ViewModels
             // Dispose hotkey and notification services
             _hotkeyService?.Dispose();
             _notificationService?.Dispose();
+
+            // Dispose OSD window
+            _hotkeyOsd?.Close();
 
             // Dispose device services
             _corsairDeviceService?.Dispose();

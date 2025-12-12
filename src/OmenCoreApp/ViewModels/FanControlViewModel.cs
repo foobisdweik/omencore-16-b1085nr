@@ -144,7 +144,7 @@ namespace OmenCore.ViewModels
         private void ApplyPreset(FanPreset preset)
         {
             _fanService.ApplyPreset(preset);
-            _logging.Info($"Applied fan preset: {preset.Name}");
+            // FanService logs success/failure, no need to duplicate
         }
 
         private void ApplyCustomCurve()
@@ -163,7 +163,7 @@ namespace OmenCore.ViewModels
             };
 
             _fanService.ApplyPreset(customPreset);
-            _logging.Info("Applied custom fan curve");
+            // FanService logs success/failure, no need to duplicate
         }
 
         private void SaveCustomPreset()

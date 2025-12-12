@@ -79,7 +79,10 @@ namespace OmenCore.Services
 
             try
             {
-                _logging.Info($"Checking BIOS updates for: {systemInfo.ProductName} (SKU: {systemInfo.SystemSku})");
+                // Use Model for display (full name like "HP OMEN by HP Laptop 17-ck2xxx")
+                // and ProductName for HP API lookup (baseboard ID like "8BAD")
+                var displayName = !string.IsNullOrEmpty(systemInfo.Model) ? systemInfo.Model : systemInfo.ProductName;
+                _logging.Info($"Checking BIOS updates for: {displayName} (SKU: {systemInfo.SystemSku})");
 
                 // Try to get BIOS info from HP's softpaq catalog
                 var biosInfo = await GetLatestBiosInfoAsync(systemInfo);
@@ -204,9 +207,18 @@ namespace OmenCore.Services
         /// </summary>
         private string ConstructSupportUrl(SystemInfo systemInfo)
         {
-            // HP Support page URL format
-            var productName = Uri.EscapeDataString(systemInfo.ProductName ?? systemInfo.Model);
-            return $"https://support.hp.com/drivers/selfservice/{productName}";
+            // HP Support page works best with serial number for product lookup
+            // Format: https://support.hp.com/drivers/selfservice/hp-omen-17-ck2000-laptop-pc-series/2101473526
+            // Or by serial: https://support.hp.com/drivers?serialnumber=XXXX
+            
+            if (!string.IsNullOrEmpty(systemInfo.SerialNumber))
+            {
+                return $"https://support.hp.com/drivers?serialnumber={Uri.EscapeDataString(systemInfo.SerialNumber)}";
+            }
+            
+            // Fallback to model name search
+            var modelName = systemInfo.Model ?? systemInfo.ProductName ?? "hp-omen";
+            return $"https://support.hp.com/drivers/selfservice/{Uri.EscapeDataString(modelName)}";
         }
 
         /// <summary>

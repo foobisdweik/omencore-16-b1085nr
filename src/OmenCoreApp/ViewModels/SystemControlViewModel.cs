@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using OmenCore.Hardware;
 using OmenCore.Models;
 using OmenCore.Services;
 using OmenCore.Utils;
@@ -15,6 +16,7 @@ namespace OmenCore.ViewModels
         private readonly SystemRestoreService _restoreService;
         private readonly GpuSwitchService _gpuSwitchService;
         private readonly LoggingService _logging;
+        private readonly HpWmiBios? _wmiBios;
 
         private PerformanceMode? _selectedPerformanceMode;
         private UndervoltStatus _undervoltStatus = UndervoltStatus.CreateUnknown();
@@ -126,6 +128,60 @@ namespace OmenCore.ViewModels
             }
         }
         
+        // GPU Power Boost settings (TGP/PPAB control)
+        private string _gpuPowerBoostLevel = "Medium";
+        public string GpuPowerBoostLevel
+        {
+            get => _gpuPowerBoostLevel;
+            set
+            {
+                if (_gpuPowerBoostLevel != value)
+                {
+                    _gpuPowerBoostLevel = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(GpuPowerBoostDescription));
+                }
+            }
+        }
+        
+        private bool _gpuPowerBoostAvailable;
+        public bool GpuPowerBoostAvailable
+        {
+            get => _gpuPowerBoostAvailable;
+            private set
+            {
+                if (_gpuPowerBoostAvailable != value)
+                {
+                    _gpuPowerBoostAvailable = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        private string _gpuPowerBoostStatus = "Detecting...";
+        public string GpuPowerBoostStatus
+        {
+            get => _gpuPowerBoostStatus;
+            private set
+            {
+                if (_gpuPowerBoostStatus != value)
+                {
+                    _gpuPowerBoostStatus = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public string GpuPowerBoostDescription => GpuPowerBoostLevel switch
+        {
+            "Minimum" => "Base TGP only - Lower power, quieter operation, better battery life",
+            "Medium" => "Custom TGP enabled - Balanced performance and thermals",
+            "Maximum" => "Custom TGP + Dynamic Boost (PPAB) - Maximum GPU wattage (+15W boost)",
+            _ => "Select GPU power level"
+        };
+        
+        public ObservableCollection<string> GpuPowerBoostLevels { get; } = new() { "Minimum", "Medium", "Maximum" };
+        
         public ObservableCollection<GpuSwitchMode> GpuSwitchModes { get; } = new();
         public GpuSwitchMode? SelectedGpuMode { get; set; }
         public bool CleanupUninstallApp { get; set; } = true;
@@ -139,6 +195,7 @@ namespace OmenCore.ViewModels
         public ICommand CreateRestorePointCommand { get; }
         public ICommand RunCleanupCommand { get; }
         public ICommand ApplyUndervoltPresetCommand { get; }
+        public ICommand ApplyGpuPowerBoostCommand { get; }
 
         public bool CleanupInProgress
         {
@@ -178,7 +235,8 @@ namespace OmenCore.ViewModels
             OmenGamingHubCleanupService cleanupService,
             SystemRestoreService restoreService,
             GpuSwitchService gpuSwitchService,
-            LoggingService logging)
+            LoggingService logging,
+            HpWmiBios? wmiBios = null)
         {
             _undervoltService = undervoltService;
             _performanceModeService = performanceModeService;
@@ -186,6 +244,7 @@ namespace OmenCore.ViewModels
             _restoreService = restoreService;
             _gpuSwitchService = gpuSwitchService;
             _logging = logging;
+            _wmiBios = wmiBios;
 
             _undervoltService.StatusChanged += (s, status) => 
             {
@@ -202,6 +261,7 @@ namespace OmenCore.ViewModels
             RunCleanupCommand = new AsyncRelayCommand(_ => RunCleanupAsync(), _ => !CleanupInProgress);
             CreateRestorePointCommand = new AsyncRelayCommand(_ => CreateRestorePointAsync());
             SwitchGpuModeCommand = new AsyncRelayCommand(_ => SwitchGpuModeAsync());
+            ApplyGpuPowerBoostCommand = new RelayCommand(_ => ApplyGpuPowerBoost(), _ => GpuPowerBoostAvailable);
 
             // Initialize performance modes
             PerformanceModes.Add(new PerformanceMode { Name = "Balanced" });
@@ -217,7 +277,82 @@ namespace OmenCore.ViewModels
             // Detect current GPU mode
             DetectGpuMode();
             
+            // Detect GPU Power Boost availability
+            DetectGpuPowerBoost();
+            
             // Initial undervolt status will be set via StatusChanged event
+        }
+        
+        private void DetectGpuPowerBoost()
+        {
+            if (_wmiBios != null && _wmiBios.IsAvailable)
+            {
+                GpuPowerBoostAvailable = true;
+                var gpuPower = _wmiBios.GetGpuPower();
+                if (gpuPower.HasValue)
+                {
+                    if (gpuPower.Value.customTgp && gpuPower.Value.ppab)
+                    {
+                        GpuPowerBoostLevel = "Maximum";
+                        GpuPowerBoostStatus = "Maximum (Custom TGP + Dynamic Boost)";
+                    }
+                    else if (gpuPower.Value.customTgp)
+                    {
+                        GpuPowerBoostLevel = "Medium";
+                        GpuPowerBoostStatus = "Medium (Custom TGP)";
+                    }
+                    else
+                    {
+                        GpuPowerBoostLevel = "Minimum";
+                        GpuPowerBoostStatus = "Minimum (Base TGP)";
+                    }
+                }
+                else
+                {
+                    GpuPowerBoostStatus = "Could not read current setting";
+                }
+                _logging.Info($"✓ GPU Power Boost available via WMI BIOS. Current: {GpuPowerBoostStatus}");
+            }
+            else
+            {
+                GpuPowerBoostAvailable = false;
+                GpuPowerBoostStatus = "Not available (WMI BIOS interface not detected)";
+                _logging.Info("GPU Power Boost: HP WMI BIOS interface not available");
+            }
+        }
+        
+        private void ApplyGpuPowerBoost()
+        {
+            if (_wmiBios == null || !_wmiBios.IsAvailable)
+            {
+                _logging.Warn("Cannot apply GPU Power Boost: WMI BIOS not available");
+                return;
+            }
+
+            var level = GpuPowerBoostLevel switch
+            {
+                "Minimum" => HpWmiBios.GpuPowerLevel.Minimum,
+                "Medium" => HpWmiBios.GpuPowerLevel.Medium,
+                "Maximum" => HpWmiBios.GpuPowerLevel.Maximum,
+                _ => HpWmiBios.GpuPowerLevel.Medium
+            };
+
+            if (_wmiBios.SetGpuPower(level))
+            {
+                GpuPowerBoostStatus = GpuPowerBoostLevel switch
+                {
+                    "Minimum" => "✓ Minimum (Base TGP only)",
+                    "Medium" => "✓ Medium (Custom TGP enabled)",
+                    "Maximum" => "✓ Maximum (Custom TGP + Dynamic Boost +15W)",
+                    _ => "Applied"
+                };
+                _logging.Info($"✓ GPU Power Boost set to: {GpuPowerBoostLevel}");
+            }
+            else
+            {
+                GpuPowerBoostStatus = "Failed to apply setting";
+                _logging.Warn($"Failed to set GPU Power Boost to: {GpuPowerBoostLevel}");
+            }
         }
         
         private void DetectGpuMode()

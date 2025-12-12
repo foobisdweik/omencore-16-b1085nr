@@ -80,46 +80,9 @@ namespace OmenCore.Services.Corsair
 
         public Task<IEnumerable<CorsairDevice>> DiscoverDevicesAsync()
         {
-            var devices = new List<CorsairDevice>
-            {
-                new CorsairDevice
-                {
-                    DeviceId = Guid.NewGuid().ToString(),
-                    Name = "K95 RGB Platinum (Stub)",
-                    DeviceType = OmenCore.Corsair.CorsairDeviceType.Keyboard,
-                    Zones = new List<string> { "Keys", "Media", "Logo" },
-                    Status = new CorsairDeviceStatus
-                    {
-                        BatteryPercent = 100,
-                        PollingRateHz = 1000,
-                        FirmwareVersion = "5.6.0",
-                        ConnectionType = "USB"
-                    },
-                    DpiStages = new List<CorsairDpiStage>()
-                },
-                new CorsairDevice
-                {
-                    DeviceId = Guid.NewGuid().ToString(),
-                    Name = "Dark Core RGB Pro (Stub)",
-                    DeviceType = OmenCore.Corsair.CorsairDeviceType.Mouse,
-                    Zones = new List<string> { "Logo", "Scroll", "Underglow" },
-                    Status = new CorsairDeviceStatus
-                    {
-                        BatteryPercent = 85,
-                        PollingRateHz = 2000,
-                        FirmwareVersion = "3.0.12",
-                        ConnectionType = "2.4GHz Wireless"
-                    },
-                    DpiStages = new List<CorsairDpiStage>
-                    {
-                        new CorsairDpiStage { Name = "Sniper", Dpi = 800, IsDefault = false, LiftOffDistanceMm = 1.0 },
-                        new CorsairDpiStage { Name = "Default", Dpi = 1600, IsDefault = true, LiftOffDistanceMm = 1.5 },
-                        new CorsairDpiStage { Name = "High", Dpi = 3200, IsDefault = false, LiftOffDistanceMm = 2.0 }
-                    }
-                }
-            };
-
-            return Task.FromResult<IEnumerable<CorsairDevice>>(devices);
+            // Return empty list - no fake devices (iCUE SDK not available)
+            // Users will see "No devices found" which is accurate
+            return Task.FromResult<IEnumerable<CorsairDevice>>(Array.Empty<CorsairDevice>());
         }
 
         public Task ApplyLightingAsync(CorsairDevice device, CorsairLightingPreset preset)
