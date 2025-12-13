@@ -4,6 +4,8 @@ namespace OmenCore.Models
     {
         Max,
         Auto,
-        Manual
+        Manual,
+        Performance,  // Aggressive thermal policy for gaming
+        Quiet         // Silent mode with conservative fan speeds
     }
 }

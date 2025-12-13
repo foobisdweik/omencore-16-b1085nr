@@ -445,9 +445,9 @@
                                    TextWrapping="Wrap" Margin="0,0,0,8"
                                    Visibility="{Binding GpuPowerBoostAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                         
-                        <TextBlock Text="Note: This feature requires HP WMI BIOS interface. Changes take effect immediately and persist until system restart." 
+                        <TextBlock Text="⚠ Note: GPU Power settings are saved but may reset after sleep/reboot on some OMEN models due to BIOS behavior. OmenCore will attempt to restore your last setting on startup." 
                                    FontSize="11" 
-                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Foreground="#FF9800"
                                    TextWrapping="Wrap"
                                    Visibility="{Binding GpuPowerBoostAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                     </StackPanel>
@@ -462,7 +462,22 @@
                         <TextBlock Text="Switch between integrated and discrete GPU for optimal performance or battery life." 
                                    FontSize="12" 
                                    Foreground="{StaticResource TextSecondaryBrush}"
-                                   Margin="0,0,0,16" TextWrapping="Wrap"/>
+                                   Margin="0,0,0,12" TextWrapping="Wrap"/>
+                        
+                        <!-- Hardware Limitation Warning -->
+                        <Border Background="#2D2D1F"
+                                BorderBrush="#FF9800"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="10,8"
+                                Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="⚠ Hardware Limitation" FontSize="11" FontWeight="SemiBold" Foreground="#FF9800" Margin="0,0,0,4"/>
+                                <TextBlock FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap">
+                                    <Run Text="GPU mode switching requires a system reboot. Some OMEN models only support this via BIOS settings (Security → Device Guard). If switching doesn't work here, try changing the setting in BIOS."/>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
 
                         <!-- Current GPU Mode -->
                         <Grid Margin="0,0,0,16">
@@ -508,7 +523,7 @@
                                     Padding="16,8"/>
                         </Grid>
 
-                        <TextBlock Text="Note: GPU mode changes require a system restart to take effect. Advanced Optimus must be supported by your hardware." 
+                        <TextBlock Text="💡 Tip: Hybrid mode saves battery by using integrated GPU for light tasks. Discrete mode provides maximum performance but uses more power." 
                                    FontSize="11" 
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    TextWrapping="Wrap"/>

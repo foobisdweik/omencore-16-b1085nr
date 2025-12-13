@@ -387,22 +387,84 @@ Quick presets for GPU power configuration.
 
 ## 🔵 Future Considerations (v1.3+)
 
-### 12. Fan Program System
+### 12. OmenMon-Style Continuous Fan Programs
 
 **Source:** OmenMon  
 **Effort:** Very High  
 **Impact:** High
 
-Full XML-based fan program system with temperature-triggered curves.
+Implement OmenMon's continuous fan program system that actively monitors temperature and adjusts fan speeds in real-time.
 
-**Features:**
-- Define multiple fan programs in config
-- Temperature levels with corresponding fan speeds
-- Auto-switch based on temperature thresholds
-- Alternative programs for battery mode
-- Fan countdown persistence
+#### How OmenMon Fan Programs Work
 
-**Deferred Reason:** Complex implementation, requires extensive testing
+OmenMon's fan programs are fundamentally different from static presets:
+
+1. **Set Fan Mode** - Apply thermal policy (Performance `0x31`, Default `0x30`, Cool `0x50`) via WMI BIOS
+2. **Continuous Monitoring** - Every `UpdateProgramInterval` seconds (default: 15s):
+   - Read current max temperature from sensors
+   - Find highest temperature level ≤ current temp
+   - Set fan levels (in krpm) via `SetFanLevel` WMI command or EC writes
+3. **Countdown Extension** - Continuously extend the 120-second timeout to prevent BIOS reverting to default mode
+4. **GPU Power Control** - Optionally set GPU power level (Minimum/Medium/Maximum) with the program
+
+#### Fan Level Values
+
+Fan levels are specified in **krpm** (thousands of RPM):
+- `20` = ~2000 RPM (minimum usable)
+- `55` = ~5500 RPM (maximum for CPU fan)
+- `57` = ~5700 RPM (maximum for GPU fan)
+- `00` = Fan off (caution: at least one fan must run)
+
+#### Example OmenMon Configuration
+
+```xml
+<FanPrograms>
+    <Program Name="Power">
+        <FanMode>Performance</FanMode>      <!-- 0x31 -->
+        <GpuPower>Maximum</GpuPower>        <!-- cTGP + PPAB -->
+        <Level Temperature="00"><Cpu>00</Cpu><Gpu>00</Gpu></Level>
+        <Level Temperature="45"><Cpu>24</Cpu><Gpu>26</Gpu></Level>
+        <Level Temperature="55"><Cpu>28</Cpu><Gpu>31</Gpu></Level>
+        <Level Temperature="65"><Cpu>36</Cpu><Gpu>40</Gpu></Level>
+        <Level Temperature="75"><Cpu>44</Cpu><Gpu>49</Gpu></Level>
+        <Level Temperature="85"><Cpu>55</Cpu><Gpu>57</Gpu></Level>
+    </Program>
+    <Program Name="Silent">
+        <FanMode>Default</FanMode>          <!-- 0x30 -->
+        <GpuPower>Minimum</GpuPower>        <!-- Base TGP only -->
+        <Level Temperature="00"><Cpu>00</Cpu><Gpu>00</Gpu></Level>
+        <Level Temperature="60"><Cpu>25</Cpu><Gpu>25</Gpu></Level>
+        <Level Temperature="75"><Cpu>40</Cpu><Gpu>40</Gpu></Level>
+        <Level Temperature="85"><Cpu>55</Cpu><Gpu>57</Gpu></Level>
+    </Program>
+</FanPrograms>
+```
+
+#### Key Implementation Requirements
+
+1. **Background Service** - Timer-based service running every 15 seconds
+2. **WMI BIOS Commands**:
+   - `SetFanMode` (0x1A): `{0xFF, mode, 0x00, 0x00}`
+   - `SetFanLevel` (0x2E): `{cpuLevel, gpuLevel, 0x00, 0x00}`
+3. **Countdown Extension** - Write to EC register `XFCD` (0x63) to reset 120s timer
+4. **Alternative Program** - Auto-switch to battery program on AC power loss
+5. **Suspend/Resume Handling** - Pause program during sleep, restore on wake
+
+#### Why OmenCore Doesn't Currently Have This
+
+OmenCore currently:
+- Maps presets to thermal policies (lets BIOS control fans)
+- Doesn't continuously adjust fan levels based on temperature
+- Doesn't extend the countdown timer
+
+This is why users report "fan not ramping" - the BIOS's built-in curves may not match user expectations.
+
+#### Files to Create
+
+- `Services/FanProgramService.cs` - Background monitoring service
+- `Models/FanProgram.cs` - Program definition model
+- `Models/FanProgramLevel.cs` - Temperature/fan level mapping
+- `Views/FanProgramEditor.xaml` - Program editor UI
 
 ---
 

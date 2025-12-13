@@ -4,7 +4,7 @@
 
 OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop application for managing thermals, performance, RGB lighting, and peripherals. Built with WPF on .NET 8, it provides professional-grade hardware control without bloat, telemetry, or mandatory sign-ins.
 
-[![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v1.1.1)
+[![Version](https://img.shields.io/badge/version-1.1.2-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v1.1.2)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Website](https://img.shields.io/badge/website-omencore.info-brightgreen.svg)](https://omencore.info)
@@ -13,68 +13,46 @@ OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop 
 
 ---
 
-## 🆕 What's New in v1.1.1
+## 🆕 What's New in v1.1.2
 
-### � OGH Service Proxy (2023+ Model Support)
-- **Secure Boot compatible** - Fan control works on 2023+ OMEN laptops with Secure Boot enabled
-- **OGH service detection** - Automatically uses OMEN Gaming Hub's WMI interface when available
-- **Seamless fallback** - OGH Proxy → WMI BIOS → EC Access → Monitoring-only
-- **No conflicts** - Coexists peacefully with OMEN Gaming Hub if installed
+### 🚀 Fixed: Windows Startup Issues
+- **Task Scheduler startup** - Now uses scheduled task with elevated privileges instead of registry
+- OmenCore properly starts with Windows and has admin rights for hardware access
+- No more need to manually create scheduled tasks or run as admin
 
-### 🧠 Capability-Based Provider Architecture
-- **Universal OMEN support** - Runtime detection adapts to your specific laptop model
-- **10-phase detection** - Identifies available backends at startup
-- **Future-proof** - Architecture ready for new HP models without code changes
+### 🎮 New Gaming Fan Preset
+- **"Gaming" quick preset** - Aggressive cooling for gaming sessions
+- Uses Performance thermal policy (0x31) for proper fan ramping
+- Fans ramp aggressively starting at 60°C - ideal for sustained gaming loads
+- Recommended if "Auto" mode doesn't ramp fans during gaming
 
-### 🔥 WMI-Based Fan Control (No Driver Required!)
-- **HP WMI BIOS interface** - Fan control without WinRing0 driver installation
-- **Automatic backend selection** - OGH → WMI BIOS → EC (PawnIO/WinRing0) → Monitoring-only fallback
-- **AMD Ryzen support** - Better compatibility for AMD laptops without driver hassles
-- **Fan modes via BIOS** - Default, Performance, Cool modes
+### 🌡️ Fixed: CPU Temperature 0°C on AMD Ryzen
+- **Extended AMD sensor detection** - More fallback patterns for Ryzen 8940HX, Hawk Point, etc.
+- **Auto-reinitialize** - Hardware monitor resets automatically if sensors become stale
+- Fixes temperature stuck at 0°C after system reboot on AMD systems
 
-### 🎮 Game Profile System
-- **Auto-switching profiles** - Automatically apply fan curves, performance, undervolt, GPU mode, and lighting when games launch
-- **Game detection** - Real-time process monitoring with profile auto-apply
-- **Profile analytics** - Track launch count and playtime per game
-- **Import/Export** - Share profiles or backup your settings
+### 📊 Improved Fan Curve Editor UX
+- **"How Fan Curves Work" explanation** - New info box explaining temperature → speed mapping
+- **Preset descriptions** - Each preset now has clear explanation of behavior
+- **Better tooltips** - Detailed explanation of what each preset does
 
-### ⚡ GPU Power Boost Control
-- **+15W Dynamic Boost** - Control GPU TGP and PPAB directly
-- **Three power levels** - Minimum (base TGP), Medium (Custom), Maximum (+15W boost)
-- **Same as Gaming Hub** - Omen Gaming Hub's "GPU Power" slider feature
+### 🔒 Clearer Secure Boot Message
+- **Specific limitation info** - Now explains EC access is limited, suggests PawnIO
+- **Actionable guidance** - Users know exactly what to do to enable full features
 
-### 🔧 Additional Features
-- **HP CMSL BIOS Updates** - Safe BIOS updates via HP Client Management Script Library (SoftPaq)
-- **BIOS Update Checker** - Check for HP BIOS updates from OmenCore
-- **Fan Profile Import/Export** - Share custom fan curves as JSON files
-- **Enhanced GPU Monitoring** - Power draw, core/memory clocks, hotspot temp
-- **Advanced Thermal Alerts** - Configurable warning thresholds with notifications
-- **HP Victus Support** - Full feature support for Victus gaming laptops
+### 💾 GPU Power Boost Persistence
+- **Settings saved to config** - Last used GPU power level restored on startup
+- **Reset warning** - UI explains settings may reset on some models (BIOS limitation)
 
-### 🐛 Bug Fixes
-- Fixed AMD CPU temperature detection (Tctl/Tdie sensors)
-- Fixed AMD CPU power reporting (Package Power sensor)
-- Fixed UI deadlocks with Dispatcher.BeginInvoke
-- Fixed memory leaks in event handlers
+### 🖥️ GPU Mode Switching Guidance
+- **Hardware limitation warning** - Explains reboot requirement and BIOS fallback
+- **Tips for users** - Guidance on when to use BIOS settings directly
 
-### ⚡ Performance & Quality
-- **Faster startup** - Batched CMSL queries (5-10s → 1-2s)
-- **Backend indicator** - Sidebar shows active fan control method
-- **Secure Boot warning** - Clear notification when features are limited
-- **Hotkey OSD** - On-screen popup shows current mode when switching via shortcuts
-- **Profile validation** - Real-time validation in Game Profile Manager
-
-### 🎨 UI/UX Polish
-- **Smooth scrolling** - Pixel-based scrolling throughout the app (no more chunky item scrolling)
-- **Modern scrollbars** - Thin scrollbars with hover-fade effect
-- **Brand imagery** - Corsair and Logitech logos in peripherals section
-- **Typography consistency** - Unified heading, caption, and label styles across all views
-
-See [CHANGELOG_v1.1.1.md](docs/CHANGELOG_v1.1.1.md) for full details.
+See [CHANGELOG_v1.1.2.md](docs/CHANGELOG_v1.1.2.md) for full details.
 
 ---
 
-## ✨ Features
+## 🔧 What's in v1.1.1
 
 ### 🌡️ **Thermal & Fan Management**
 - **Custom fan curves** with temperature breakpoints (e.g., 40°C→30%, 60°C→55%, 80°C→85%)

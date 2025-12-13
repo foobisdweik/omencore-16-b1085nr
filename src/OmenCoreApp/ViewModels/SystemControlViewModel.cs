@@ -328,6 +328,14 @@ namespace OmenCore.ViewModels
             {
                 _logging.Info($"Restored last performance mode: {savedModeName}");
             }
+            
+            // Restore last GPU Power Boost level from config
+            var savedGpuBoostLevel = _configService.Config.LastGpuPowerBoostLevel;
+            if (!string.IsNullOrEmpty(savedGpuBoostLevel) && GpuPowerBoostLevels.Contains(savedGpuBoostLevel))
+            {
+                _gpuPowerBoostLevel = savedGpuBoostLevel;
+                _logging.Info($"Restored last GPU Power Boost level from config: {savedGpuBoostLevel}");
+            }
 
             // Initialize GPU modes
             GpuSwitchModes.Add(GpuSwitchMode.Hybrid);
@@ -496,6 +504,9 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                         _ => "Applied"
                     };
                     _logging.Info($"✓ GPU Power Boost set to: {GpuPowerBoostLevel} via WMI BIOS");
+                    
+                    // Save to config for persistence (note: may still reset after sleep/reboot on some models)
+                    SaveGpuPowerBoostToConfig();
                     return;
                 }
             }
@@ -521,12 +532,30 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                         _ => "Applied via OGH"
                     };
                     _logging.Info($"✓ GPU Power Boost set to: {GpuPowerBoostLevel} via OGH");
+                    
+                    // Save to config for persistence
+                    SaveGpuPowerBoostToConfig();
                     return;
                 }
             }
             
             GpuPowerBoostStatus = "Failed - WMI GPU power commands not supported on this model";
             _logging.Warn($"Failed to set GPU Power Boost to: {GpuPowerBoostLevel} - WMI commands not functional on this OMEN model");
+        }
+        
+        private void SaveGpuPowerBoostToConfig()
+        {
+            try
+            {
+                var config = _configService.Config;
+                config.LastGpuPowerBoostLevel = GpuPowerBoostLevel;
+                _configService.Save(config);
+                _logging.Info($"GPU Power Boost level saved to config: {GpuPowerBoostLevel}");
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to save GPU Power Boost level to config: {ex.Message}");
+            }
         }
         
         private void DetectGpuMode()

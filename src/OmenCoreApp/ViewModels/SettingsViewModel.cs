@@ -552,27 +552,105 @@ namespace OmenCore.ViewModels
         {
             try
             {
-                using var key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
-                if (key == null) return;
-
+                var exePath = Process.GetCurrentProcess().MainModule?.FileName;
+                if (string.IsNullOrEmpty(exePath)) return;
+                
+                // Use Task Scheduler for elevated startup (required for hardware access)
+                // This method works better than registry Run key which doesn't elevate
+                var taskName = "OmenCore";
+                
                 if (enable)
                 {
-                    var exePath = Process.GetCurrentProcess().MainModule?.FileName;
-                    if (!string.IsNullOrEmpty(exePath))
+                    // First, try to remove any existing task
+                    try
                     {
-                        key.SetValue("OmenCore", $"\"{exePath}\"");
-                        _logging.Info("Added OmenCore to Windows startup");
+                        var deleteProcess = new Process
+                        {
+                            StartInfo = new ProcessStartInfo
+                            {
+                                FileName = "schtasks",
+                                Arguments = $"/delete /tn \"{taskName}\" /f",
+                                UseShellExecute = false,
+                                CreateNoWindow = true,
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true
+                            }
+                        };
+                        deleteProcess.Start();
+                        deleteProcess.WaitForExit(3000);
+                    }
+                    catch { /* Task may not exist, ignore */ }
+                    
+                    // Create scheduled task with highest privileges (runs as admin on logon)
+                    var createProcess = new Process
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = "schtasks",
+                            Arguments = $"/create /tn \"{taskName}\" /tr \"\\\"{exePath}\\\"\" /sc onlogon /rl highest /f",
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true
+                        }
+                    };
+                    createProcess.Start();
+                    var output = createProcess.StandardOutput.ReadToEnd();
+                    var error = createProcess.StandardError.ReadToEnd();
+                    createProcess.WaitForExit(5000);
+                    
+                    if (createProcess.ExitCode == 0)
+                    {
+                        _logging.Info($"Created scheduled task '{taskName}' for elevated startup");
+                        
+                        // Also add to registry as fallback (non-elevated, but ensures app at least tries to start)
+                        using var key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
+                        key?.SetValue("OmenCore", $"\"{exePath}\"");
+                    }
+                    else
+                    {
+                        _logging.Warn($"Task Scheduler creation returned exit code {createProcess.ExitCode}: {error}");
+                        // Fall back to registry only
+                        using var key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
+                        key?.SetValue("OmenCore", $"\"{exePath}\"");
+                        _logging.Info("Added OmenCore to Windows startup (registry fallback - may not have admin rights)");
                     }
                 }
                 else
                 {
-                    key.DeleteValue("OmenCore", false);
+                    // Remove scheduled task
+                    try
+                    {
+                        var deleteProcess = new Process
+                        {
+                            StartInfo = new ProcessStartInfo
+                            {
+                                FileName = "schtasks",
+                                Arguments = $"/delete /tn \"{taskName}\" /f",
+                                UseShellExecute = false,
+                                CreateNoWindow = true,
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true
+                            }
+                        };
+                        deleteProcess.Start();
+                        deleteProcess.WaitForExit(3000);
+                        _logging.Info($"Removed scheduled task '{taskName}'");
+                    }
+                    catch (Exception taskEx)
+                    {
+                        _logging.Warn($"Could not remove scheduled task: {taskEx.Message}");
+                    }
+                    
+                    // Also remove from registry
+                    using var key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
+                    key?.DeleteValue("OmenCore", false);
                     _logging.Info("Removed OmenCore from Windows startup");
                 }
             }
             catch (Exception ex)
             {
-                _logging.Error("Failed to modify startup registry", ex);
+                _logging.Error("Failed to modify startup settings", ex);
             }
         }
 

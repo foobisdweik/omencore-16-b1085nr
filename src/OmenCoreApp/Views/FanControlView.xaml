@@ -48,23 +48,29 @@
                                FontSize="13"
                                VerticalAlignment="Center" 
                                Margin="0,0,16,0"/>
-                    <Button Content="🔥 Max Cooling" 
+                    <Button Content="🔥 Max" 
                             Command="{Binding ApplyMaxCoolingCommand}" 
                             Style="{StaticResource SecondaryButton}" 
-                            Width="130" Height="36" 
-                            Margin="0,0,10,0"
-                            ToolTip="Maximum fan speed for intensive tasks"/>
+                            Width="90" Height="36" 
+                            Margin="0,0,8,0"
+                            ToolTip="100% fan speed - Use for benchmarks or extreme cooling needs"/>
+                    <Button Content="🎮 Gaming" 
+                            Command="{Binding ApplyGamingModeCommand}" 
+                            Style="{StaticResource SecondaryButton}" 
+                            Width="100" Height="36" 
+                            Margin="0,0,8,0"
+                            ToolTip="Aggressive cooling for gaming - Fans ramp up quickly at 60°C+"/>
                     <Button Content="⚖️ Auto" 
                             Command="{Binding ApplyAutoModeCommand}" 
                             Style="{StaticResource SecondaryButton}" 
-                            Width="100" Height="36" 
-                            Margin="0,0,10,0"
-                            ToolTip="Balanced automatic fan control"/>
-                    <Button Content="🔇 Quiet" 
+                            Width="90" Height="36" 
+                            Margin="0,0,8,0"
+                            ToolTip="BIOS default thermal policy - May be too conservative on some models"/>
+                    <Button Content="🔇 Silent" 
                             Command="{Binding ApplyQuietModeCommand}" 
                             Style="{StaticResource SecondaryButton}" 
-                            Width="100" Height="36"
-                            ToolTip="Reduced fan noise for quiet operation"/>
+                            Width="90" Height="36"
+                            ToolTip="Low fan speeds for quiet operation - May allow higher temps"/>
                 </StackPanel>
 
                 <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,20,0">
@@ -121,12 +127,35 @@
             </Grid.ColumnDefinitions>
 
             <!-- Custom Fan Curve Editor -->
-            <Border Grid.Column="0" Style="{StaticResource SurfaceCard}" Padding="20" Margin="0,0,16,0"
-                    ToolTip="Define custom temperature-to-fan-speed mappings. Higher temps trigger higher fan speeds.">
+            <Border Grid.Column="0" Style="{StaticResource SurfaceCard}" Padding="20" Margin="0,0,16,0">
                 <StackPanel>
                     <TextBlock Text="CURVE EDITOR" 
                                Style="{StaticResource Label}" 
-                               Margin="0,0,0,16"/>
+                               Margin="0,0,0,8"/>
+                    
+                    <!-- How Fan Curves Work - Explanation -->
+                    <Border Background="#1A2A3A"
+                            BorderBrush="{StaticResource AccentBlueBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="12"
+                            Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="How Fan Curves Work:" 
+                                       FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBlueBrush}"
+                                       Margin="0,0,0,6"/>
+                            <TextBlock Style="{StaticResource Caption}" FontSize="11" TextWrapping="Wrap">
+                                <Run Text="Each point sets fan speed at a temperature. Example:"/>
+                                <LineBreak/>
+                                <Run Text="• 40°C → 30% = Fans run at 30% when CPU hits 40°C"/>
+                                <LineBreak/>
+                                <Run Text="• 80°C → 100% = Full speed at 80°C"/>
+                                <LineBreak/>
+                                <Run Text="Lower starting temps = earlier fan ramp (cooler but louder)"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
                     
                     <TextBlock Text="Temperature → Fan Speed" 
                                Style="{StaticResource Caption}"
@@ -175,13 +204,18 @@
                             CornerRadius="6"
                             Padding="12"
                             Margin="0,16,0,0">
-                        <StackPanel Orientation="Horizontal">
-                            <Path Data="{StaticResource IconLighting}" Width="16" Height="16" Fill="{StaticResource AccentBlueBrush}" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Create smooth cooling curves for balanced thermals and acoustics" 
-                                       Style="{StaticResource Caption}"
-                                       FontSize="12"
-                                       TextWrapping="Wrap"
-                                       VerticalAlignment="Center"/>
+                        <StackPanel>
+                            <TextBlock Text="💡 Preset Guide:" 
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBlueBrush}"
+                                       Margin="0,0,0,4"/>
+                            <TextBlock Style="{StaticResource Caption}" FontSize="10" TextWrapping="Wrap">
+                                <Run Text="• Gaming: Aggressive cooling, fans ramp at 60°C+"/>
+                                <LineBreak/>
+                                <Run Text="• Auto: BIOS default (may be conservative)"/>
+                                <LineBreak/>
+                                <Run Text="• Silent: Quiet but allows higher temps"/>
+                            </TextBlock>
                         </StackPanel>
                     </Border>
                 </StackPanel>

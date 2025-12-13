@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.1.1-hotfix] - 2025-12-XX
+## [1.1.2] - 2025-12-13
+
+### Added
+- **Task Scheduler Startup** - Windows startup now uses scheduled task with elevated privileges (fixes startup issues)
+- **Gaming Fan Preset** - New aggressive cooling preset using Performance thermal policy for gaming
+- **GPU Power Boost Persistence** - Last used GPU power level saved to config and restored on startup
+- **Fan Curve Editor Guide** - "How Fan Curves Work" explanation box with examples
+- **Auto Hardware Reinit** - LibreHardwareMonitor auto-reinitializes when CPU temp stuck at 0°C
+
+### Fixed
+- **Startup Issues** - OmenCore now properly starts with Windows (Task Scheduler with HIGHEST privileges)
+- **CPU Temp 0°C on AMD** - Extended sensor detection for Ryzen 8940HX, Hawk Point, and other AMD CPUs
+- **Auto Fan Mode** - Clarified that "Auto" uses BIOS default; added "Gaming" preset for aggressive cooling
+
+### Changed
+- **Secure Boot Banner** - Now shows specific limitation and actionable solution (install PawnIO)
+- **GPU Mode Switching UI** - Added hardware limitation warning and BIOS fallback guidance
+- **GPU Power Boost UI** - Added warning about potential reset after sleep/reboot (BIOS behavior)
+- **Fan Presets** - Added detailed tooltips explaining each preset's behavior
+
+### Technical Notes
+- Task name: `OmenCore` with `onlogon` trigger and `highest` run level
+- New config properties: `LastGpuPowerBoostLevel`, `LastFanPresetName`
+- New `FanMode` values: `Performance`, `Quiet`
+- Extended AMD CPU sensor fallbacks (15+ patterns including CCD variants, SoC, Socket)
+- `LibreHardwareMonitorImpl.Reinitialize()` method for sensor recovery
+
+See [CHANGELOG_v1.1.2.md](docs/CHANGELOG_v1.1.2.md) for full details.
+
+---
+
+## [1.1.1] - 2025-12-13
 
 ### Added
 - **Smooth Scrolling** - New `SmoothScrollViewer` style with pixel-based scrolling for improved UX

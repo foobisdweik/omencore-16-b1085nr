@@ -121,13 +121,14 @@
                                     CornerRadius="6"
                                     Padding="8,6"
                                     Margin="0,6,0,0"
-                                    Visibility="{Binding SecureBootEnabled, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                                    Visibility="{Binding SecureBootEnabled, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}"
+                                    ToolTip="Secure Boot blocks WinRing0 driver. Install PawnIO (pawnio.eu) for EC access, or install OMEN Gaming Hub for full WMI control.">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                        <TextBlock Text="⚠" FontSize="12" Foreground="#F44336" Margin="0,0,6,0"/>
+                                        <TextBlock Text="🔒" FontSize="12" Foreground="#F44336" Margin="0,0,6,0"/>
                                         <TextBlock Text="SECURE BOOT" FontSize="8" FontWeight="Bold" Foreground="#F44336"/>
                                     </StackPanel>
-                                    <TextBlock Text="Some features limited" 
+                                    <TextBlock Text="EC access limited. Use WMI/OGH or install PawnIO." 
                                                FontSize="9" 
                                                Foreground="{StaticResource TextSecondaryBrush}"
                                                TextWrapping="Wrap"/>

@@ -30,5 +30,16 @@ namespace OmenCore.Models
         /// Restored on startup.
         /// </summary>
         public string? LastPerformanceModeName { get; set; }
+        
+        /// <summary>
+        /// Last applied GPU Power Boost level ("Minimum", "Medium", "Maximum").
+        /// Note: GPU power settings may reset after sleep/reboot on some OMEN models due to BIOS behavior.
+        /// </summary>
+        public string? LastGpuPowerBoostLevel { get; set; }
+        
+        /// <summary>
+        /// Last applied fan preset name for restoration on startup.
+        /// </summary>
+        public string? LastFanPresetName { get; set; }
     }
 }

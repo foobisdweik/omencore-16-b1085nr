@@ -14,7 +14,7 @@ namespace OmenCore.Hardware
     /// </summary>
     public class LibreHardwareMonitorImpl : IHardwareMonitorBridge, IDisposable
     {
-        private readonly Computer? _computer;
+        private Computer? _computer;
         private bool _initialized;
         private readonly object _lock = new();
 
@@ -48,10 +48,17 @@ namespace OmenCore.Hardware
         private double _cachedGpuHotspot = 0;
 
         private readonly Action<string>? _logger;
+        private int _consecutiveZeroTempReadings = 0;
+        private const int MaxZeroTempReadingsBeforeReinit = 5;
 
         public LibreHardwareMonitorImpl(Action<string>? logger = null)
         {
             _logger = logger;
+            InitializeComputer();
+        }
+        
+        private void InitializeComputer()
+        {
             try
             {
                 _computer = new Computer
@@ -67,6 +74,7 @@ namespace OmenCore.Hardware
                 };
                 _computer.Open();
                 _initialized = true;
+                _consecutiveZeroTempReadings = 0;
                 _logger?.Invoke("LibreHardwareMonitor initialized successfully");
             }
             catch (Exception ex)
@@ -74,6 +82,22 @@ namespace OmenCore.Hardware
                 _initialized = false;
                 _logger?.Invoke($"LibreHardwareMonitor init failed: {ex.Message}. Using WMI fallback.");
             }
+        }
+        
+        /// <summary>
+        /// Reinitialize hardware monitor if sensors are returning 0.
+        /// Useful after system resume from sleep or when sensors become stale.
+        /// </summary>
+        public void Reinitialize()
+        {
+            _logger?.Invoke("Reinitializing LibreHardwareMonitor...");
+            try
+            {
+                _computer?.Close();
+            }
+            catch { /* Ignore close errors */ }
+            
+            InitializeComputer();
         }
 
         public async Task<MonitoringSample> ReadSampleAsync(CancellationToken token)
@@ -119,23 +143,42 @@ namespace OmenCore.Hardware
                     {
                         case HardwareType.Cpu:
                             // AMD Ryzen uses "Core (Tctl/Tdie)" or "Tdie", Intel uses "CPU Package"
-                            // Ryzen AI (Phoenix/Strix Point) may use different sensor names
+                            // Ryzen AI (Phoenix/Strix Point/Hawk Point) may use different sensor names
+                            // Ryzen 8940HX (Hawk Point) and RTX 5070 systems need special handling
                             // Try multiple sensor patterns for broad compatibility
                             var cpuTempSensor = GetSensorExact(hardware, SensorType.Temperature, "CPU Package")  // Intel
                                 ?? GetSensorExact(hardware, SensorType.Temperature, "Core (Tctl/Tdie)")           // AMD Ryzen primary
                                 ?? GetSensor(hardware, SensorType.Temperature, "Tctl/Tdie")                       // AMD Ryzen (partial match)
                                 ?? GetSensor(hardware, SensorType.Temperature, "Tctl")                            // AMD older
                                 ?? GetSensor(hardware, SensorType.Temperature, "Tdie")                            // AMD Ryzen alt
+                                ?? GetSensorExact(hardware, SensorType.Temperature, "CPU (Tctl/Tdie)")            // AMD Ryzen variant
                                 ?? GetSensor(hardware, SensorType.Temperature, "CPU")                             // AMD Ryzen AI / generic
+                                ?? GetSensor(hardware, SensorType.Temperature, "CCD1 (Tdie)")                     // AMD CCD1 with Tdie suffix
+                                ?? GetSensor(hardware, SensorType.Temperature, "CCD 1 (Tdie)")                    // AMD CCD 1 with space
                                 ?? GetSensor(hardware, SensorType.Temperature, "CCD1")                            // AMD CCD fallback
+                                ?? GetSensor(hardware, SensorType.Temperature, "CCD 1")                           // AMD CCD with space
                                 ?? GetSensor(hardware, SensorType.Temperature, "CCDs Max")                        // AMD multi-CCD
                                 ?? GetSensor(hardware, SensorType.Temperature, "CCDs Average")                    // AMD multi-CCD avg
-                                ?? GetSensor(hardware, SensorType.Temperature, "Core #0")                         // Single core fallback
                                 ?? GetSensor(hardware, SensorType.Temperature, "Core Max")                        // Max core temp
                                 ?? GetSensor(hardware, SensorType.Temperature, "Core Average")                    // Avg core temp
+                                ?? GetSensor(hardware, SensorType.Temperature, "Core #0")                         // Single core fallback
+                                ?? GetSensor(hardware, SensorType.Temperature, "SoC")                             // AMD APU SoC
+                                ?? GetSensor(hardware, SensorType.Temperature, "Socket")                          // Socket temp
                                 ?? hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Temperature && s.Value > 0);
                             
                             _cachedCpuTemp = cpuTempSensor?.Value ?? 0;
+                            
+                            // If still 0, try refreshing the hardware
+                            if (_cachedCpuTemp == 0)
+                            {
+                                // Force re-scan of CPU sensors
+                                hardware.Update();
+                                cpuTempSensor = hardware.Sensors.FirstOrDefault(s => 
+                                    s.SensorType == SensorType.Temperature && 
+                                    s.Value.HasValue && s.Value.Value > 0);
+                                _cachedCpuTemp = cpuTempSensor?.Value ?? 0;
+                            }
+                            
                             if (_cachedCpuTemp == 0)
                             {
                                 // Log all available temp sensors for debugging
@@ -144,6 +187,34 @@ namespace OmenCore.Hardware
                                     .Select(s => $"{s.Name}={s.Value}")
                                     .ToList();
                                 _logger?.Invoke($"CPU temp sensor issue in {hardware.Name}. Available: [{string.Join(", ", availableTempSensors)}]");
+                                
+                                // Try to get any temperature reading above 0
+                                var anyTempSensor = hardware.Sensors
+                                    .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value.Value > 10)
+                                    .OrderByDescending(s => s.Value!.Value)
+                                    .FirstOrDefault();
+                                if (anyTempSensor != null)
+                                {
+                                    _cachedCpuTemp = anyTempSensor.Value!.Value;
+                                    _logger?.Invoke($"Using fallback CPU temp sensor: {anyTempSensor.Name}={_cachedCpuTemp}°C");
+                                }
+                            }
+                            
+                            // Track consecutive 0°C readings and auto-reinitialize if needed
+                            if (_cachedCpuTemp == 0)
+                            {
+                                _consecutiveZeroTempReadings++;
+                                if (_consecutiveZeroTempReadings >= MaxZeroTempReadingsBeforeReinit)
+                                {
+                                    _logger?.Invoke($"CPU temp stuck at 0°C for {_consecutiveZeroTempReadings} readings. Reinitializing hardware monitor...");
+                                    // Queue reinitialization (will happen on next update cycle)
+                                    Task.Run(() => Reinitialize());
+                                    _consecutiveZeroTempReadings = 0;
+                                }
+                            }
+                            else
+                            {
+                                _consecutiveZeroTempReadings = 0;
                             }
                             
                             var cpuLoadRaw = GetSensor(hardware, SensorType.Load, "CPU Total")?.Value ?? 0;

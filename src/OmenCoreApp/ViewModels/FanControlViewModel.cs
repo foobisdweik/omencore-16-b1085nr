@@ -67,6 +67,7 @@ namespace OmenCore.ViewModels
         public ICommand ApplyMaxCoolingCommand { get; }
         public ICommand ApplyAutoModeCommand { get; }
         public ICommand ApplyQuietModeCommand { get; }
+        public ICommand ApplyGamingModeCommand { get; }
 
         public FanControlViewModel(FanService fanService, ConfigurationService configService, LoggingService logging)
         {
@@ -83,6 +84,7 @@ namespace OmenCore.ViewModels
             ApplyMaxCoolingCommand = new RelayCommand(_ => ApplyFanMode("Max"));
             ApplyAutoModeCommand = new RelayCommand(_ => ApplyFanMode("Auto"));
             ApplyQuietModeCommand = new RelayCommand(_ => ApplyQuietMode());
+            ApplyGamingModeCommand = new RelayCommand(_ => ApplyGamingMode());
             
             // Initialize built-in presets
             FanPresets.Add(new FanPreset 
@@ -271,6 +273,7 @@ namespace OmenCore.ViewModels
         
         private static List<FanCurvePoint> GetQuietCurve()
         {
+            // Silent mode: delayed fan ramp, allows higher temps for quiet operation
             return new List<FanCurvePoint>
             {
                 new() { TemperatureC = 50, FanPercent = 25 },
@@ -279,6 +282,45 @@ namespace OmenCore.ViewModels
                 new() { TemperatureC = 85, FanPercent = 70 },
                 new() { TemperatureC = 95, FanPercent = 100 }
             };
+        }
+        
+        private static List<FanCurvePoint> GetGamingCurve()
+        {
+            // Gaming mode: aggressive fan ramp starting at 60°C for sustained loads
+            // Recommended for gaming sessions where cooling is priority over noise
+            return new List<FanCurvePoint>
+            {
+                new() { TemperatureC = 45, FanPercent = 30 },
+                new() { TemperatureC = 55, FanPercent = 45 },
+                new() { TemperatureC = 65, FanPercent = 65 },
+                new() { TemperatureC = 75, FanPercent = 85 },
+                new() { TemperatureC = 80, FanPercent = 100 }
+            };
+        }
+        
+        private void ApplyGamingMode()
+        {
+            var gamingPreset = new FanPreset
+            {
+                Name = "Gaming",
+                Mode = FanMode.Performance, // Use Performance thermal policy for aggressive cooling
+                Curve = GetGamingCurve(),
+                IsBuiltIn = false
+            };
+            
+            // Add if not exists, select it
+            var existing = FanPresets.FirstOrDefault(p => p.Name == "Gaming");
+            if (existing == null)
+            {
+                FanPresets.Add(gamingPreset);
+                SelectedPreset = gamingPreset;
+            }
+            else
+            {
+                SelectedPreset = existing;
+            }
+            
+            _logging.Info("Applied Gaming fan mode (Performance thermal policy with aggressive curve)");
         }
         
         private void ApplyQuietMode()
