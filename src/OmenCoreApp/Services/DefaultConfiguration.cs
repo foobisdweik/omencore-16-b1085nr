@@ -94,8 +94,10 @@ namespace OmenCore.Services
 
             config.MacroProfiles.Add(new MacroProfile { Name = "Sample", Actions = new List<MacroAction>() });
 
-            config.EcFanRegisterMap["CPU"] = 0x2F;
-            config.EcFanRegisterMap["GPU"] = 0x30;
+            // OmenMon-style EC registers for fan control (XSS1/XSS2 - Fan Set Speed %)
+            // These work better on 2022+ OMEN models than the older 0x44/0x45 registers
+            config.EcFanRegisterMap["CPU"] = 0x2C;  // XSS1 - CPU Fan Speed %
+            config.EcFanRegisterMap["GPU"] = 0x2D;  // XSS2 - GPU Fan Speed %
 
             config.Undervolt = new UndervoltPreferences
             {

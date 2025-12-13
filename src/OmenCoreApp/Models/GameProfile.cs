@@ -143,6 +143,22 @@ namespace OmenCore.Models
             };
         }
 
+        private static string NormalizeExecutableName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return string.Empty;
+
+            name = name.Trim();
+
+            // Windows process names from Process.ProcessName typically omit the ".exe" extension.
+            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                name = name.Substring(0, name.Length - 4);
+            }
+
+            return name;
+        }
+
         /// <summary>
         /// Checks if this profile matches a given process.
         /// </summary>
@@ -151,8 +167,12 @@ namespace OmenCore.Models
             if (!IsEnabled) return false;
 
             // Exact executable name match (case-insensitive)
-            if (!string.IsNullOrEmpty(ExecutableName) &&
-                string.Equals(processName, ExecutableName, StringComparison.OrdinalIgnoreCase))
+            var normalizedProcess = NormalizeExecutableName(processName);
+            var normalizedProfile = NormalizeExecutableName(ExecutableName);
+
+            // Exact executable name match (case-insensitive), tolerant of optional ".exe" suffix
+            if (!string.IsNullOrEmpty(normalizedProfile) &&
+                string.Equals(normalizedProcess, normalizedProfile, StringComparison.OrdinalIgnoreCase))
             {
                 // If path is specified, verify it matches too
                 if (!string.IsNullOrEmpty(ExecutablePath) && !string.IsNullOrEmpty(processPath))

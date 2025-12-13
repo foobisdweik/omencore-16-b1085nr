@@ -241,7 +241,7 @@
                     BorderThickness="1"
                     CornerRadius="8"
                     Padding="20">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ScrollViewer Style="{StaticResource SmoothScrollViewer}">
                     <StackPanel>
                         <TextBlock Text="Profile Settings"
                                    FontSize="18"

@@ -9,11 +9,111 @@ namespace OmenCore.Services
     public class GpuSwitchService
     {
         private readonly LoggingService _logging;
+        private bool _gpuModeSupported = false;
+        private string _unsupportedReason = "";
 
         public GpuSwitchService(LoggingService logging)
         {
             _logging = logging;
+            CheckGpuModeSwitchingSupport();
         }
+        
+        /// <summary>
+        /// Check if GPU mode switching is supported on this system.
+        /// Only enable on systems with confirmed HP WMI BIOS support.
+        /// </summary>
+        private void CheckGpuModeSwitchingSupport()
+        {
+            try
+            {
+                // Only allow GPU switching on HP OMEN systems with confirmed WMI support
+                using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_ComputerSystem");
+                var systems = searcher.Get().Cast<ManagementObject>().FirstOrDefault();
+                
+                if (systems == null)
+                {
+                    _unsupportedReason = "Could not detect system information";
+                    return;
+                }
+                
+                var manufacturer = systems["Manufacturer"]?.ToString() ?? "";
+                var model = systems["Model"]?.ToString() ?? "";
+                
+                if (!manufacturer.Contains("HP", StringComparison.OrdinalIgnoreCase))
+                {
+                    _unsupportedReason = "GPU mode switching only supported on HP systems";
+                    return;
+                }
+                
+                // Only allow on OMEN models - Transcend, Victus, etc. may not have proper support
+                if (!model.Contains("OMEN", StringComparison.OrdinalIgnoreCase))
+                {
+                    _unsupportedReason = $"GPU mode switching only supported on HP OMEN models (detected: {model})";
+                    _logging.Info(_unsupportedReason);
+                    return;
+                }
+                
+                // Check if HP WMI BIOS interface for GPU mode exists
+                if (!HasHpGpuModeWmiSupport())
+                {
+                    _unsupportedReason = "HP BIOS does not support GPU mode switching via WMI";
+                    return;
+                }
+                
+                _gpuModeSupported = true;
+                _logging.Info("✓ GPU mode switching supported on this HP OMEN system");
+            }
+            catch (Exception ex)
+            {
+                _unsupportedReason = $"Error checking GPU mode support: {ex.Message}";
+                _logging.Error(_unsupportedReason, ex);
+            }
+        }
+        
+        private bool HasHpGpuModeWmiSupport()
+        {
+            try
+            {
+                // Check for HP BIOS interface that actually supports GPU mode
+                using var searcher = new ManagementObjectSearcher(@"root\WMI", "SELECT * FROM HPBIOS_BIOSSettingInterface");
+                var results = searcher.Get();
+                
+                if (results.Count == 0)
+                    return false;
+                    
+                // Try to enumerate available settings to check for GPU mode support
+                using var enumSearcher = new ManagementObjectSearcher(@"root\WMI", "SELECT * FROM HPBIOS_BIOSEnumeration");
+                var enumResults = enumSearcher.Get();
+                
+                foreach (ManagementObject obj in enumResults)
+                {
+                    var name = obj["Name"]?.ToString() ?? "";
+                    if (name.Contains("GPU", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("Graphics", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("Optimus", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logging.Info($"Found GPU-related BIOS setting: {name}");
+                        return true;
+                    }
+                }
+                
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Check if GPU mode switching is supported
+        /// </summary>
+        public bool IsSupported => _gpuModeSupported;
+        
+        /// <summary>
+        /// Reason why GPU mode switching is not supported (if applicable)
+        /// </summary>
+        public string UnsupportedReason => _unsupportedReason;
 
         /// <summary>
         /// Detect current GPU mode through WMI and NVIDIA/AMD control panels
@@ -39,10 +139,10 @@ namespace OmenCore.Services
                 }
 
                 // Method 3: Check via video controllers (active GPU count)
-                var activeGpuCount = CountActiveVideoControllers();
-                if (activeGpuCount > 1)
+                var activeDisplayControllerCount = CountActiveDisplayControllers();
+                if (activeDisplayControllerCount > 1)
                 {
-                    _logging.Info($"Multiple active GPUs detected ({activeGpuCount}) - assuming Hybrid mode");
+                    _logging.Info($"Multiple active display controllers detected ({activeDisplayControllerCount}) - assuming Hybrid mode");
                     return GpuSwitchMode.Hybrid;
                 }
 
@@ -57,6 +157,35 @@ namespace OmenCore.Services
             }
         }
 
+        private static bool IsDisplayActive(ManagementObject gpu)
+        {
+            try
+            {
+                // These properties tend to be non-null/positive on the adapter currently driving a display.
+                var h = gpu["CurrentHorizontalResolution"];
+                var v = gpu["CurrentVerticalResolution"];
+                var rr = gpu["CurrentRefreshRate"];
+                var bpp = gpu["CurrentBitsPerPixel"];
+
+                int hi = h != null ? Convert.ToInt32(h) : 0;
+                int vi = v != null ? Convert.ToInt32(v) : 0;
+                int rri = rr != null ? Convert.ToInt32(rr) : 0;
+                int bppi = bpp != null ? Convert.ToInt32(bpp) : 0;
+
+                if (hi > 0 && vi > 0)
+                    return true;
+                if (rri > 0 && bppi > 0)
+                    return true;
+
+                var modeDesc = gpu["VideoModeDescription"]?.ToString() ?? string.Empty;
+                return !string.IsNullOrWhiteSpace(modeDesc);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private GpuSwitchMode? DetectNvidiaOptimusMode()
         {
             try
@@ -68,28 +197,53 @@ namespace OmenCore.Services
                 if (nvidiaGpus.Count == 0)
                     return null; // No NVIDIA GPU
 
-                // Check if NVIDIA GPU is the only active adapter
-                using var allSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController WHERE Status = 'OK'");
-                var allGpus = allSearcher.Get().Count;
-
-                if (allGpus == 1 && nvidiaGpus.Count == 1)
+                // Check for Intel iGPU - this is the key indicator of hybrid mode capability
+                using var intelSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController WHERE Name LIKE '%Intel%'");
+                var intelGpus = intelSearcher.Get().Cast<ManagementObject>().ToList();
+                
+                // Log GPU info for diagnostics
+                foreach (var nvidia in nvidiaGpus)
                 {
-                    return GpuSwitchMode.Discrete; // Only NVIDIA active
+                    var name = nvidia["Name"]?.ToString() ?? "Unknown";
+                    var status = nvidia["Status"]?.ToString() ?? "Unknown";
+                    var availability = nvidia["Availability"]?.ToString() ?? "Unknown";
+                    _logging.Info($"NVIDIA GPU: {name}, Status: {status}, Availability: {availability}");
+                }
+                
+                foreach (var intel in intelGpus)
+                {
+                    var name = intel["Name"]?.ToString() ?? "Unknown";
+                    var status = intel["Status"]?.ToString() ?? "Unknown";
+                    var availability = intel["Availability"]?.ToString() ?? "Unknown";
+                    _logging.Info($"Intel GPU: {name}, Status: {status}, Availability: {availability}");
                 }
 
-                // Check for Intel iGPU
-                using var intelSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController WHERE Name LIKE '%Intel%' AND Status = 'OK'");
-                var intelActive = intelSearcher.Get().Count > 0;
-
-                if (intelActive && nvidiaGpus.Count > 0)
+                // If both Intel and NVIDIA GPUs exist, decide based on which adapter is actually driving a display.
+                // This avoids false Hybrid detection when iGPU is disabled but still enumerates in WMI.
+                if (intelGpus.Count > 0 && nvidiaGpus.Count > 0)
                 {
-                    return GpuSwitchMode.Hybrid; // Both active = Hybrid/Optimus
+                    var intelDisplayActive = intelGpus.Any(IsDisplayActive);
+                    var nvidiaDisplayActive = nvidiaGpus.Any(IsDisplayActive);
+
+                    _logging.Info($"Display activity: Intel={(intelDisplayActive ? "Active" : "Inactive")}, NVIDIA={(nvidiaDisplayActive ? "Active" : "Inactive")}");
+
+                    if (intelDisplayActive && nvidiaDisplayActive)
+                        return GpuSwitchMode.Hybrid;
+                    if (!intelDisplayActive && nvidiaDisplayActive)
+                        return GpuSwitchMode.Discrete;
+                    if (intelDisplayActive && !nvidiaDisplayActive)
+                        return GpuSwitchMode.Integrated;
+
+                    // Unknown edge case; default to Hybrid as safest assumption.
+                    return GpuSwitchMode.Hybrid;
                 }
 
+                // Only NVIDIA GPU present
                 return GpuSwitchMode.Discrete;
             }
-            catch
+            catch (Exception ex)
             {
+                _logging.Error("Error detecting NVIDIA Optimus mode", ex);
                 return null;
             }
         }
@@ -104,22 +258,27 @@ namespace OmenCore.Services
                 if (amdGpus.Count == 0)
                     return null;
 
-                using var allSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController WHERE Status = 'OK'");
-                var allGpus = allSearcher.Get().Count;
+                using var intelSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController WHERE Name LIKE '%Intel%'");
+                var intelGpus = intelSearcher.Get().Cast<ManagementObject>().ToList();
 
-                if (allGpus == 1 && amdGpus.Count == 1)
+                // If Intel + AMD exist, decide based on active display controller.
+                if (intelGpus.Count > 0 && amdGpus.Count > 0)
                 {
-                    return GpuSwitchMode.Discrete;
-                }
+                    var intelDisplayActive = intelGpus.Any(IsDisplayActive);
+                    var amdDisplayActive = amdGpus.Any(IsDisplayActive);
 
-                using var intelSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController WHERE Name LIKE '%Intel%' AND Status = 'OK'");
-                var intelActive = intelSearcher.Get().Count > 0;
+                    _logging.Info($"Display activity: Intel={(intelDisplayActive ? "Active" : "Inactive")}, AMD={(amdDisplayActive ? "Active" : "Inactive")}");
 
-                if (intelActive && amdGpus.Count > 0)
-                {
+                    if (intelDisplayActive && amdDisplayActive)
+                        return GpuSwitchMode.Hybrid;
+                    if (!intelDisplayActive && amdDisplayActive)
+                        return GpuSwitchMode.Discrete;
+                    if (intelDisplayActive && !amdDisplayActive)
+                        return GpuSwitchMode.Integrated;
                     return GpuSwitchMode.Hybrid;
                 }
 
+                // Only AMD GPU present
                 return GpuSwitchMode.Discrete;
             }
             catch
@@ -128,12 +287,13 @@ namespace OmenCore.Services
             }
         }
 
-        private int CountActiveVideoControllers()
+        private int CountActiveDisplayControllers()
         {
             try
             {
-                using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController WHERE Status = 'OK'");
-                return searcher.Get().Count;
+                using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController");
+                var controllers = searcher.Get().Cast<ManagementObject>().ToList();
+                return controllers.Count(IsDisplayActive);
             }
             catch
             {
@@ -142,37 +302,30 @@ namespace OmenCore.Services
         }
 
         /// <summary>
-        /// Switch GPU mode - requires system restart to take effect
+        /// Switch GPU mode - requires system restart to take effect.
+        /// SAFETY: Only works on HP OMEN systems with verified WMI BIOS support.
         /// </summary>
         public bool Switch(GpuSwitchMode mode)
         {
+            // Safety check - don't allow switching on unsupported systems
+            if (!_gpuModeSupported)
+            {
+                _logging.Warn($"GPU mode switching blocked - {_unsupportedReason}");
+                return false;
+            }
+            
             try
             {
-                // HP Omen systems may use HP Command Center or BIOS-level switching
-                // Try multiple methods to maximize compatibility
-
-                // Method 1: HP Omen Command Center WMI (if available)
+                // HP Omen systems use HP BIOS WMI for GPU mode switching
+                // This is the ONLY safe method - registry and other hacks can corrupt drivers
+                
                 if (TrySwitchViaHpWmi(mode))
                 {
-                    _logging.Info($"✓ GPU mode switched to {mode} via HP WMI");
+                    _logging.Info($"✓ GPU mode switched to {mode} via HP WMI BIOS");
                     return true;
                 }
 
-                // Method 2: NVIDIA/AMD control panel commands
-                if (TrySwitchViaGpuControlPanel(mode))
-                {
-                    _logging.Info($"✓ GPU mode switched to {mode} via GPU control panel");
-                    return true;
-                }
-
-                // Method 3: Registry-based switching (some HP systems)
-                if (TrySwitchViaRegistry(mode))
-                {
-                    _logging.Info($"✓ GPU mode set to {mode} via registry (restart required)");
-                    return true;
-                }
-
-                _logging.Warn($"GPU mode switching not supported on this system. Current mode: {DetectCurrentMode()}");
+                _logging.Warn($"GPU mode switching failed. HP BIOS WMI did not accept the change.");
                 return false;
             }
             catch (Exception ex)
@@ -186,12 +339,15 @@ namespace OmenCore.Services
         {
             try
             {
-                // HP-specific WMI namespace for OMEN Command Center
+                // HP-specific WMI namespace for BIOS settings
                 using var searcher = new ManagementObjectSearcher(@"root\WMI", "SELECT * FROM HPBIOS_BIOSSettingInterface");
                 var results = searcher.Get();
                 
                 if (results.Count == 0)
+                {
+                    _logging.Warn("HP BIOS WMI interface not found");
                     return false;
+                }
 
                 foreach (ManagementObject obj in results)
                 {
@@ -202,8 +358,8 @@ namespace OmenCore.Services
                         _ => "Hybrid"
                     };
 
-                    // HP BIOS setting name varies by model
-                    var settingNames = new[] { "GPU Mode", "Graphics Mode", "Switchable Graphics", "Advanced Optimus" };
+                    // HP BIOS setting name varies by model - try known names
+                    var settingNames = new[] { "GPU Mode", "Graphics Mode", "Switchable Graphics" };
                     
                     foreach (var setting in settingNames)
                     {
@@ -215,87 +371,35 @@ namespace OmenCore.Services
                             inParams["Password"] = ""; // Most systems don't have BIOS password set
                             
                             var outParams = obj.InvokeMethod("SetBIOSSetting", inParams, null);
-                            if (outParams != null && (uint)outParams["Return"] == 0)
+                            var returnCode = outParams?["Return"];
+                            
+                            if (returnCode != null && Convert.ToUInt32(returnCode) == 0)
                             {
-                                _logging.Info($"Set HP BIOS setting '{setting}' to '{modeValue}'");
+                                _logging.Info($"Successfully set HP BIOS setting '{setting}' to '{modeValue}'");
                                 return true;
                             }
+                            else
+                            {
+                                _logging.Info($"HP BIOS setting '{setting}' returned code: {returnCode}");
+                            }
                         }
-                        catch
+                        catch (ManagementException ex)
                         {
-                            continue;
+                            _logging.Info($"HP BIOS setting '{setting}' not available: {ex.Message}");
                         }
                     }
                 }
 
                 return false;
             }
-            catch
+            catch (Exception ex)
             {
+                _logging.Error($"HP WMI GPU mode switch failed: {ex.Message}", ex);
                 return false;
             }
         }
-
-        private bool TrySwitchViaGpuControlPanel(GpuSwitchMode mode)
-        {
-            try
-            {
-                // NVIDIA: Use nvcplui.exe or nvidia-smi if available
-                var nvidiaPath = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                    "NVIDIA Corporation", "Control Panel Client", "nvcplui.exe");
-
-                if (System.IO.File.Exists(nvidiaPath))
-                {
-                    // Open NVIDIA Control Panel to Optimus settings
-                    // Note: Automated switching requires NVIDIA drivers that support it
-                    var psi = new ProcessStartInfo
-                    {
-                        FileName = nvidiaPath,
-                        Arguments = "/page:optimus",
-                        UseShellExecute = true
-                    };
-                    Process.Start(psi);
-                    _logging.Info("Opened NVIDIA Control Panel - manual GPU mode selection required");
-                    return true; // User must complete manually
-                }
-
-                return false;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private bool TrySwitchViaRegistry(GpuSwitchMode mode)
-        {
-            try
-            {
-                // Some HP systems store GPU preference in registry
-                // This is highly system-dependent and may not work on all models
-                
-                using var key = Microsoft.Win32.Registry.LocalMachine.CreateSubKey(
-                    @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000");
-                
-                if (key == null)
-                    return false;
-
-                var modeValue = mode switch
-                {
-                    GpuSwitchMode.Discrete => 1,
-                    GpuSwitchMode.Integrated => 2,
-                    _ => 0 // Hybrid
-                };
-
-                key.SetValue("EnableMsHybrid", modeValue, Microsoft.Win32.RegistryValueKind.DWord);
-                _logging.Info($"Set registry GPU mode preference to {mode}");
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
+        
+        // REMOVED: TrySwitchViaGpuControlPanel - Opening control panels doesn't actually switch modes
+        // REMOVED: TrySwitchViaRegistry - Registry modifications can corrupt GPU drivers!
     }
 }

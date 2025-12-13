@@ -67,78 +67,38 @@ This guide helps you quickly understand and use the new optimizations and featur
 
 ## 🛠️ For Developers
 
-### Quick Test (No Hardware Required):
+### Quick Test (SDK Abstraction Layer)
 
 ```csharp
-// All services work with stubs by default
-var corsairService = await EnhancedCorsairDeviceService.CreateAsync(logging);
-await corsairService.DiscoverAsync(); // Finds fake devices
+// Corsair/Logitech services auto-select an available provider.
+// Corsair uses RGB.NET (requires iCUE running + SDK enabled in iCUE).
+// Logitech provider is currently a placeholder; the service may fall back to a stub.
+var corsairService = await CorsairDeviceService.CreateAsync(logging);
+await corsairService.DiscoverAsync();
 
-var logitechService = await EnhancedLogitechDeviceService.CreateAsync(logging);
-await logitechService.DiscoverAsync(); // Finds fake devices
+var logitechService = await LogitechDeviceService.CreateAsync(logging);
+await logitechService.DiscoverAsync();
 ```
 
-### Enable Real Hardware Monitoring:
+### Real Hardware Monitoring
 
-**Step 1:** Install NuGet Package
-```bash
-dotnet add package LibreHardwareMonitorLib
-```
-
-**Step 2:** Update MainViewModel.cs
-```csharp
-// Line ~638 - Replace this:
-var monitorBridge = new LibreHardwareMonitorBridge();
-
-// With this:
-var monitorBridge = new LibreHardwareMonitorImpl();
-```
-
-**Step 3:** Uncomment code in `Hardware/LibreHardwareMonitorImpl.cs`
-- Search for `// TODO: Uncomment` comments
-- Remove comment blocks
-
-**Done!** Real sensor data will now appear.
+Real monitoring is already integrated in the app codebase. If you see missing sensors, check logs under `%LOCALAPPDATA%\OmenCore\` for provider/permission errors.
 
 ---
 
 ## 🎨 Enable Corsair iCUE Support:
 
-**Step 1:** Install NuGet Package
-```bash
-dotnet add package CUE.NET
-```
+Corsair device support is implemented via RGB.NET. Requirements:
+- iCUE is installed and running
+- iCUE setting "Enable SDK" is enabled
 
-**Step 2:** Uncomment implementation
-- Open: `Services/Corsair/ICorsairSdkProvider.cs`
-- Find: `CorsairICueSdk` class
-- Uncomment code blocks marked with `// TODO`
-
-**Step 3:** Update MainViewModel (Optional)
-```csharp
-// Service auto-detects SDK, but you can force it:
-var sdk = new CorsairICueSdk(logging);
-await sdk.InitializeAsync();
-var service = new EnhancedCorsairDeviceService(sdk, logging);
-```
-
-**Done!** Real Corsair devices will be detected.
+If those are met, `CorsairDeviceService.CreateAsync(...)` will use `CorsairICueSdk` automatically.
 
 ---
 
 ## 🖱️ Enable Logitech G HUB Support:
 
-**Step 1:** Get Logitech SDK
-- Download from: [Logitech Developer Portal](https://www.logitechg.com/en-us/innovation/developer-lab.html)
-- Copy `LogitechLedEnginesWrapper.dll` to project `libs/` folder
-- Add to project references
-
-**Step 2:** Uncomment implementation
-- Open: `Services/Logitech/ILogitechSdkProvider.cs`
-- Find: `LogitechGHubSdk` class
-- Uncomment code blocks marked with `// TODO`
-
-**Done!** Real Logitech devices will be detected.
+Logitech G HUB integration is currently WIP (the concrete provider is a placeholder). The app includes a stub provider for UI/testing.
 
 ---
 

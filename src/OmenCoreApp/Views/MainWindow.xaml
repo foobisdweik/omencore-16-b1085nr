@@ -7,6 +7,7 @@
         xmlns:views="clr-namespace:OmenCore.Views"
         xmlns:controls="clr-namespace:OmenCore.Controls"
         xmlns:models="clr-namespace:OmenCore.Models"
+        xmlns:utils="clr-namespace:OmenCore.Utils"
         mc:Ignorable="d"
         Title="OmenCore - Gaming Laptop Control Center" Height="900" Width="1500" MinHeight="700" MinWidth="1100"
         Icon="/Assets/OmenCore.ico"
@@ -132,6 +133,27 @@
                                                TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
+                            
+                            <!-- Capability Warning Banner (Desktop/Fan unavailable) -->
+                            <Border Background="#2D2D1F"
+                                    BorderBrush="#FF9800"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="8,6"
+                                    Margin="0,6,0,0"
+                                    Visibility="{Binding CapabilityWarning, Converter={StaticResource NullToVisibilityConverter}, FallbackValue=Collapsed}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <TextBlock Text="⚠" FontSize="12" Foreground="#FF9800" Margin="0,0,6,0"/>
+                                        <TextBlock Text="LIMITED MODE" FontSize="8" FontWeight="Bold" Foreground="#FF9800"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding CapabilityWarning}" 
+                                               FontSize="9" 
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="180"/>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                         <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
                             <Button Command="{Binding CheckForUpdatesCommand}" Style="{StaticResource SecondaryButton}" Height="32" Margin="0,0,0,5" ToolTip="Manually check for a new version">
@@ -165,10 +187,7 @@
                                 </StackPanel>
                             </Button>
                         </StackPanel>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" 
-                                      ScrollViewer.CanContentScroll="True"
-                                      ScrollViewer.IsDeferredScrollingEnabled="False"
-                                      VirtualizingPanel.ScrollUnit="Pixel">
+                        <ScrollViewer Style="{StaticResource SmoothScrollViewer}" utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="2.5">
                             <StackPanel>
                                 <TextBlock Text="QUICK ACTIONS" Foreground="{StaticResource TextTertiaryBrush}" FontSize="9" FontWeight="SemiBold" Margin="0,0,0,6" />
                                 <Button Command="{Binding ApplyFanPresetCommand}" Style="{StaticResource ModernButton}" Margin="0,0,0,5" HorizontalContentAlignment="Left" Padding="8,6" Height="32">
@@ -385,8 +404,7 @@
 
                     <TabControl Grid.Row="1" Margin="24,0,24,16" Style="{StaticResource ModernTabControl}" ItemContainerStyle="{StaticResource ModernTabItem}">
                 <TabItem Header="HP Omen">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer Style="{StaticResource SmoothScrollViewer}" utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="2.5">
                         <StackPanel Margin="20,20,20,40">
                             <Border Style="{StaticResource SurfaceCard}" 
                                     Padding="16,12"
@@ -446,7 +464,7 @@
                 <Border Grid.Column="1" Style="{StaticResource CardBorder}">
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Top" Text="SYSTEM LOG" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,0,0,12" />
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" Background="Transparent">
+                        <ScrollViewer Style="{StaticResource SmoothScrollViewer}">
                             <TextBlock Text="{Binding LogBuffer}" TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontFamily="Consolas" FontSize="11" LineHeight="16" />
                         </ScrollViewer>
                     </DockPanel>

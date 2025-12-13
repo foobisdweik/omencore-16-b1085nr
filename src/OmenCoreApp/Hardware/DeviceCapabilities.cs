@@ -15,6 +15,13 @@ namespace OmenCore.Hardware
         public string ModelName { get; set; } = "";
         public string SerialNumber { get; set; } = "";
         
+        // Chassis/Form factor
+        public ChassisType Chassis { get; set; } = ChassisType.Unknown;
+        public bool IsDesktop => Chassis == ChassisType.Desktop || Chassis == ChassisType.Tower || 
+                                  Chassis == ChassisType.MiniTower || Chassis == ChassisType.AllInOne;
+        public bool IsLaptop => Chassis == ChassisType.Laptop || Chassis == ChassisType.Notebook || 
+                                 Chassis == ChassisType.Portable || Chassis == ChassisType.SubNotebook;
+        
         // Fan control capabilities
         public FanControlMethod FanControl { get; set; } = FanControlMethod.None;
         public bool CanReadRpm { get; set; }
@@ -69,6 +76,7 @@ namespace OmenCore.Hardware
             var lines = new System.Text.StringBuilder();
             lines.AppendLine($"Device: {ModelName} ({ProductId})");
             lines.AppendLine($"BIOS: {BiosVersion}");
+            lines.AppendLine($"Form Factor: {Chassis} ({(IsDesktop ? "Desktop" : IsLaptop ? "Laptop" : "Unknown")})");
             lines.AppendLine();
             
             lines.AppendLine("Fan Control:");
@@ -185,5 +193,49 @@ namespace OmenCore.Hardware
         AmdCurveOptimizer,
         /// <summary>Intel XTU compatibility layer</summary>
         IntelXtu
+    }
+    
+    /// <summary>
+    /// System chassis/enclosure type from SMBIOS.
+    /// Values match Win32_SystemEnclosure ChassisTypes.
+    /// </summary>
+    public enum ChassisType
+    {
+        Unknown = 0,
+        Other = 1,
+        Desktop = 3,
+        LowProfileDesktop = 4,
+        PizzaBox = 5,
+        MiniTower = 6,
+        Tower = 7,
+        Portable = 8,
+        Laptop = 9,
+        Notebook = 10,
+        HandHeld = 11,
+        DockingStation = 12,
+        AllInOne = 13,
+        SubNotebook = 14,
+        SpaceSaving = 15,
+        LunchBox = 16,
+        MainServerChassis = 17,
+        ExpansionChassis = 18,
+        SubChassis = 19,
+        BusExpansionChassis = 20,
+        PeripheralChassis = 21,
+        RaidChassis = 22,
+        RackMountChassis = 23,
+        SealedCasePC = 24,
+        MultiSystemChassis = 25,
+        CompactPci = 26,
+        AdvancedTca = 27,
+        Blade = 28,
+        BladeEnclosure = 29,
+        Tablet = 30,
+        Convertible = 31,
+        Detachable = 32,
+        IoTGateway = 33,
+        EmbeddedPC = 34,
+        MiniPC = 35,
+        StickPC = 36
     }
 }

@@ -111,8 +111,11 @@ namespace OmenCore.Services
                 }
                 else
                 {
-                    result.Message = "Unable to retrieve BIOS information from HP. Try checking HP Support Assistant or hp.com/support";
-                    _logging.Warn(result.Message);
+                    // Construct helpful fallback message with support link
+                    var supportUrl = ConstructSupportUrl(systemInfo);
+                    result.Message = "HP's API doesn't provide direct BIOS lookup. Click 'Check HP Support' to visit your system's driver page.";
+                    result.DownloadUrl = supportUrl; // Provide direct link to HP support page
+                    _logging.Info($"BIOS check: API unavailable, providing support URL: {supportUrl}");
                 }
             }
             catch (HttpRequestException ex)
@@ -157,30 +160,89 @@ namespace OmenCore.Services
 
         /// <summary>
         /// Try to lookup BIOS from HP's softpaq catalog
+        /// Note: HP's API requires complex authentication and product ID mapping.
+        /// This attempts a basic lookup but may not always succeed.
         /// </summary>
         private async Task<BiosInfo?> TryHpCatalogLookupAsync(SystemInfo systemInfo)
         {
             try
             {
-                // HP has a CVA (Content Version Announcement) XML catalog
+                // HP doesn't have a simple public API for BIOS lookups.
+                // The most reliable approach is to use the serial number lookup
+                // which returns product-specific driver information.
+                
+                if (!string.IsNullOrEmpty(systemInfo.SerialNumber))
+                {
+                    // Try HP's driver lookup API by serial number
+                    var serialLookupUrl = $"https://support.hp.com/wcc-services/drivers/bySerial?sn={Uri.EscapeDataString(systemInfo.SerialNumber)}&cc=us&lang=en";
+                    
+                    try
+                    {
+                        var response = await _httpClient.GetAsync(serialLookupUrl);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var content = await response.Content.ReadAsStringAsync();
+                            
+                            // Check if response is HTML (HP redirects to webpage for some queries)
+                            if (content.TrimStart().StartsWith("<") || content.Contains("<!DOCTYPE"))
+                            {
+                                _logging.Info("HP serial lookup returned HTML (webpage redirect), not JSON - skipping parse");
+                                // HP returned a webpage instead of JSON API response
+                                // This happens when the serial lookup redirects to the support page
+                            }
+                            else
+                            {
+                                _logging.Info("HP serial lookup returned data, parsing BIOS info...");
+                                
+                                // Try to parse the JSON for BIOS softpaq
+                                var biosInfo = ParseHpDriverResponse(content, systemInfo);
+                                if (biosInfo != null)
+                                {
+                                    return biosInfo;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Info($"HP serial lookup failed: {ex.Message}");
+                    }
+                }
+                
+                // Try product ID based lookup
                 var productId = ExtractProductId(systemInfo.SystemSku);
-                if (string.IsNullOrEmpty(productId)) return null;
+                if (string.IsNullOrEmpty(productId)) 
+                {
+                    // Try extracting from product name
+                    productId = ExtractProductId(systemInfo.ProductName);
+                }
+                
+                if (!string.IsNullOrEmpty(productId))
+                {
+                    // HP's product search API
+                    var productUrl = $"https://support.hp.com/wcc-services/searchApi/products/en_US/{Uri.EscapeDataString(productId)}";
+                    
+                    try
+                    {
+                        var response = await _httpClient.GetAsync(productUrl);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var json = await response.Content.ReadAsStringAsync();
+                            _logging.Info($"HP product lookup responded for ID: {productId}");
+                            
+                            // Note: This API returns product info, not BIOS versions
+                            // We'd need to follow up with a specific softpaq query
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Info($"HP product lookup failed: {ex.Message}");
+                    }
+                }
 
-                // Try HP's product lookup API
-                var lookupUrl = $"https://support.hp.com/wcc-services/searchApi/products/en_US/{Uri.EscapeDataString(systemInfo.ProductName ?? systemInfo.Model)}";
-
-                var response = await _httpClient.GetAsync(lookupUrl);
-                if (!response.IsSuccessStatusCode) return null;
-
-                var json = await response.Content.ReadAsStringAsync();
-
-                // Parse the JSON response to find BIOS softpaq
-                using var doc = JsonDocument.Parse(json);
-                // Note: HP's API structure varies, this is a simplified example
-
-                _logging.Info("HP catalog lookup attempted - API response received");
-
-                // For now, return null and provide fallback info
+                // HP's public APIs require complex state management and don't directly expose BIOS versions
+                // The most reliable method is directing users to their support page
+                _logging.Info("HP BIOS lookup: API does not provide direct BIOS version data. Use HP Support Assistant or hp.com/support for updates.");
                 return null;
             }
             catch (Exception ex)
@@ -188,6 +250,71 @@ namespace OmenCore.Services
                 _logging.Info($"HP catalog lookup failed: {ex.Message}");
                 return null;
             }
+        }
+        
+        /// <summary>
+        /// Try to parse BIOS info from HP's driver API response
+        /// </summary>
+        private BiosInfo? ParseHpDriverResponse(string json, SystemInfo systemInfo)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                
+                // HP's response structure varies, try common paths
+                if (root.TryGetProperty("softpaqs", out var softpaqs) && softpaqs.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var softpaq in softpaqs.EnumerateArray())
+                    {
+                        // Look for BIOS updates
+                        var name = softpaq.TryGetProperty("name", out var nameProp) ? nameProp.GetString() : "";
+                        var category = softpaq.TryGetProperty("category", out var catProp) ? catProp.GetString() : "";
+                        
+                        if (!string.IsNullOrEmpty(name) && 
+                            (name.Contains("BIOS", StringComparison.OrdinalIgnoreCase) ||
+                             category?.Contains("BIOS", StringComparison.OrdinalIgnoreCase) == true))
+                        {
+                            var biosInfo = new BiosInfo
+                            {
+                                Version = softpaq.TryGetProperty("version", out var verProp) ? verProp.GetString() ?? "" : "",
+                                ReleaseDate = softpaq.TryGetProperty("releaseDate", out var dateProp) ? dateProp.GetString() ?? "" : "",
+                                SoftpaqNumber = softpaq.TryGetProperty("id", out var idProp) ? idProp.GetString() : null,
+                                DownloadUrl = softpaq.TryGetProperty("downloadUrl", out var urlProp) ? urlProp.GetString() : null,
+                            };
+                            
+                            if (!string.IsNullOrEmpty(biosInfo.Version))
+                            {
+                                _logging.Info($"Found BIOS softpaq: {biosInfo.SoftpaqNumber} version {biosInfo.Version}");
+                                return biosInfo;
+                            }
+                        }
+                    }
+                }
+                
+                // Try alternate response structures
+                if (root.TryGetProperty("drivers", out var drivers) && drivers.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var driver in drivers.EnumerateArray())
+                    {
+                        var type = driver.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : "";
+                        if (type?.Contains("BIOS", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            return new BiosInfo
+                            {
+                                Version = driver.TryGetProperty("version", out var v) ? v.GetString() ?? "" : "",
+                                DownloadUrl = driver.TryGetProperty("url", out var u) ? u.GetString() : null
+                            };
+                        }
+                    }
+                }
+            }
+            catch (JsonException ex)
+            {
+                _logging.Info($"Failed to parse HP response: {ex.Message}");
+            }
+            
+            return null;
         }
 
         /// <summary>

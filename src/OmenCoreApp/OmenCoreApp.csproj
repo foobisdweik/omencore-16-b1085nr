@@ -6,12 +6,17 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>OmenCore</AssemblyName>
-    <AssemblyVersion>1.1.0</AssemblyVersion>
-    <FileVersion>1.1.0</FileVersion>
+    <AssemblyVersion>1.1.1</AssemblyVersion>
+    <FileVersion>1.1.1</FileVersion>
     <ApplicationIcon>Assets\OmenCore.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <NoWarn>$(NoWarn);NU1701</NoWarn>
   </PropertyGroup>
+  <!-- Exclude SDK reference files from compilation -->
+  <ItemGroup>
+    <Compile Remove="runtimes\**\*.cs" />
+    <None Remove="runtimes\**\*.cs" />
+  </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\\OmenCore.ico" />
     <Resource Include="Assets\\logo.png" />
@@ -27,8 +32,10 @@
   <ItemGroup>
     <PackageReference Include="CUE.NET" Version="1.2.0.1" />
     <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
+    <PackageReference Include="HidSharp" Version="2.1.0" />
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.4" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Management.Infrastructure" Version="3.0.0" />
     <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
     <PackageReference Include="RGB.NET.Core" Version="3.1.0" />
     <PackageReference Include="RGB.NET.Devices.Corsair" Version="3.1.0" />
@@ -38,5 +45,59 @@
     <None Include="..\..\VERSION.txt" Link="VERSION.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- PawnIO bundled files - self-contained EC and MSR access -->
+    <None Include="drivers\PawnIOLib.dll" Condition="Exists('drivers\PawnIOLib.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>drivers\PawnIOLib.dll</Link>
+    </None>
+    <!-- EC Access modules -->
+    <None Include="drivers\LpcACPIEC.bin" Condition="Exists('drivers\LpcACPIEC.bin')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>drivers\LpcACPIEC.bin</Link>
+    </None>
+    <None Include="drivers\IsaBridgeEC.bin" Condition="Exists('drivers\IsaBridgeEC.bin')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>drivers\IsaBridgeEC.bin</Link>
+    </None>
+    <!-- Intel MSR module -->
+    <None Include="drivers\IntelMSR.bin" Condition="Exists('drivers\IntelMSR.bin')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>drivers\IntelMSR.bin</Link>
+    </None>
+    <!-- AMD modules -->
+    <None Include="drivers\AMDFamily17.bin" Condition="Exists('drivers\AMDFamily17.bin')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>drivers\AMDFamily17.bin</Link>
+    </None>
+    <None Include="drivers\RyzenSMU.bin" Condition="Exists('drivers\RyzenSMU.bin')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>drivers\RyzenSMU.bin</Link>
+    </None>
+    <None Include="drivers\AMDFamily0F.bin" Condition="Exists('drivers\AMDFamily0F.bin')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>drivers\AMDFamily0F.bin</Link>
+    </None>
+    <None Include="drivers\AMDFamily10.bin" Condition="Exists('drivers\AMDFamily10.bin')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>drivers\AMDFamily10.bin</Link>
+    </None>
+    <None Include="drivers\AMDReset.bin" Condition="Exists('drivers\AMDReset.bin')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>drivers\AMDReset.bin</Link>
+    </None>
+    <!-- Corsair iCUE SDK native libraries - must be in x64 folder for RGB.NET -->
+    <Content Include="runtimes\win-x64\native\iCUESDK.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>x64\iCUESDK.dll</Link>
+    </Content>
+    <Content Include="runtimes\win-x64\native\iCUESDK.x64_2019.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>x64\iCUESDK.x64_2019.dll</Link>
+    </Content>
+    <!-- Logitech G LED SDK native library -->
+    <Content Include="runtimes\win-x64\native\LogitechLedEnginesWrapper.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>LogitechLedEnginesWrapper.dll</Link>
+    </Content>
   </ItemGroup>
 </Project>

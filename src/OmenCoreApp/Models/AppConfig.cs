@@ -19,5 +19,16 @@ namespace OmenCore.Models
         public MonitoringPreferences Monitoring { get; set; } = new();
         public UpdatePreferences Updates { get; set; } = new();
         public bool FirstRunCompleted { get; set; } = false;
+        
+        /// <summary>
+        /// Enable detailed diagnostics logging at startup (OGH commands, WMI status, etc.)
+        /// </summary>
+        public bool EnableDiagnostics { get; set; } = false;
+        
+        /// <summary>
+        /// Last applied performance mode name (e.g., "Balanced", "Performance", "Quiet")
+        /// Restored on startup.
+        /// </summary>
+        public string? LastPerformanceModeName { get; set; }
     }
 }

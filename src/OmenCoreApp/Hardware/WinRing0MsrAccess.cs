@@ -10,7 +10,14 @@ namespace OmenCore.Hardware
     /// </summary>
     public class WinRing0MsrAccess : IDisposable
     {
-        private const string DevicePath = "\\\\.\\WinRing0_1_2_0";
+        // Try multiple device paths for different WinRing0 versions
+        private static readonly string[] DevicePaths = new[]
+        {
+            "\\\\.\\WinRing0_1_2_0",
+            "\\\\.\\WinRing0_1_2",
+            "\\\\.\\WinRing0"
+        };
+        
         private const uint IOCTL_MSR_READ = 0x9C402084;  // Standard WinRing0 IOCTL
         private const uint IOCTL_MSR_WRITE = 0x9C402088; // Standard WinRing0 IOCTL
         
@@ -24,19 +31,25 @@ namespace OmenCore.Hardware
 
         public WinRing0MsrAccess()
         {
-            _handle = NativeMethods.CreateFile(
-                DevicePath,
-                NativeMethods.GENERIC_READ | NativeMethods.GENERIC_WRITE,
-                0,
-                IntPtr.Zero,
-                NativeMethods.OPEN_EXISTING,
-                0,
-                IntPtr.Zero);
-
-            if (_handle.IsInvalid)
+            // Try each device path until one works
+            foreach (var devicePath in DevicePaths)
             {
-                throw new InvalidOperationException($"Failed to open WinRing0 device at {DevicePath}. Ensure driver is installed.");
+                _handle = NativeMethods.CreateFile(
+                    devicePath,
+                    NativeMethods.GENERIC_READ | NativeMethods.GENERIC_WRITE,
+                    0,
+                    IntPtr.Zero,
+                    NativeMethods.OPEN_EXISTING,
+                    0,
+                    IntPtr.Zero);
+
+                if (!_handle.IsInvalid)
+                {
+                    return; // Successfully opened
+                }
             }
+
+            throw new InvalidOperationException($"Failed to open WinRing0 device. Tried: {string.Join(", ", DevicePaths)}. Ensure driver is installed.");
         }
 
         public bool IsAvailable => !_handle.IsInvalid && !_handle.IsClosed;
@@ -202,6 +215,85 @@ namespace OmenCore.Hardware
             {
                 return 0;
             }
+        }
+        
+        // ==========================================
+        // TCC Offset (Thermal Control Circuit)
+        // ==========================================
+        
+        /// <summary>
+        /// MSR 0x1A2 - IA32_TEMPERATURE_TARGET
+        /// Bits 29:24 contain the TCC activation temperature offset (0-63°C reduction)
+        /// </summary>
+        private const uint MSR_IA32_TEMPERATURE_TARGET = 0x1A2;
+        
+        /// <summary>
+        /// Read the current TCC offset (temperature limit reduction).
+        /// Returns 0-63, where 0 = no limit, 63 = max 63°C below TjMax.
+        /// </summary>
+        public int ReadTccOffset()
+        {
+            try
+            {
+                ulong value = ReadMsr(MSR_IA32_TEMPERATURE_TARGET);
+                // Bits 29:24 contain the TCC offset
+                int offset = (int)((value >> 24) & 0x3F);
+                return offset;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+        
+        /// <summary>
+        /// Read the TjMax (maximum junction temperature) from MSR.
+        /// This is the base temperature before TCC offset is applied.
+        /// </summary>
+        public int ReadTjMax()
+        {
+            try
+            {
+                ulong value = ReadMsr(MSR_IA32_TEMPERATURE_TARGET);
+                // Bits 23:16 contain TjMax
+                int tjMax = (int)((value >> 16) & 0xFF);
+                return tjMax > 0 ? tjMax : 100; // Default to 100°C if not readable
+            }
+            catch
+            {
+                return 100; // Default TjMax
+            }
+        }
+        
+        /// <summary>
+        /// Set the TCC offset to limit maximum CPU temperature.
+        /// Offset of N means CPU will throttle at (TjMax - N)°C.
+        /// </summary>
+        /// <param name="offset">Offset in degrees (0-63). 0 = no limit, 15 = throttle 15°C below TjMax</param>
+        public void SetTccOffset(int offset)
+        {
+            if (offset < 0 || offset > 63)
+            {
+                throw new ArgumentException("TCC offset must be between 0 and 63");
+            }
+            
+            // Read current value to preserve other bits
+            ulong currentValue = ReadMsr(MSR_IA32_TEMPERATURE_TARGET);
+            
+            // Clear bits 29:24 and set new offset
+            ulong newValue = (currentValue & ~(0x3FUL << 24)) | ((ulong)offset << 24);
+            
+            WriteMsr(MSR_IA32_TEMPERATURE_TARGET, newValue);
+        }
+        
+        /// <summary>
+        /// Get the effective temperature limit (TjMax - TCC offset).
+        /// </summary>
+        public int GetEffectiveTempLimit()
+        {
+            int tjMax = ReadTjMax();
+            int offset = ReadTccOffset();
+            return tjMax - offset;
         }
 
         public void Dispose()

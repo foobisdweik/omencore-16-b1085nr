@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.1-hotfix] - 2025-12-XX
+
+### Added
+- **Smooth Scrolling** - New `SmoothScrollViewer` style with pixel-based scrolling for improved UX
+- **SystemControlView Scrolling** - Added ScrollViewer wrapper so long content scrolls correctly
+- **Modern Scrollbar Style** - Thin scrollbars with hover-fade effect
+
+### Changed
+- Applied smooth scrolling to all major views: Dashboard, Settings, Lighting, SystemControl, MainWindow
+- Improved scroll responsiveness throughout the application
+
+### UI/UX Improvements
+- Eliminated chunky item-based scrolling that felt slow and unintuitive
+- Consistent brand imagery (Corsair/Logitech) in RGB & Peripherals tab
+- Verified typography and color palette consistency across all views
+
+---
+
 ## [1.0.0.7] - 2025-12-XX
 
 ### Fixed

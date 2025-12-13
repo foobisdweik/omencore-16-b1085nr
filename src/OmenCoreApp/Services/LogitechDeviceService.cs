@@ -32,7 +32,7 @@ namespace OmenCore.Services
 
         /// <summary>
         /// Factory method to create service with auto-detection of SDK availability.
-        /// Falls back to stub if G HUB SDK is not available.
+        /// Prioritizes direct HID access (no G HUB required), falls back to G HUB SDK, then stub.
         /// </summary>
         public static async Task<LogitechDeviceService> CreateAsync(LoggingService logging)
         {
@@ -40,20 +40,33 @@ namespace OmenCore.Services
 
             try
             {
-                // Try to use real G HUB SDK
-                sdk = new LogitechGHubSdk(logging);
+                // Priority 1: Try direct HID access (no G HUB required)
+                logging.Info("Attempting Logitech direct HID access...");
+                sdk = new LogitechHidDirect(logging);
                 var initialized = await sdk.InitializeAsync();
 
-                if (!initialized)
+                if (initialized)
                 {
-                    logging.Warn("Logitech G HUB SDK unavailable, falling back to stub");
-                    sdk = new LogitechSdkStub(logging);
-                    await sdk.InitializeAsync();
+                    logging.Info("✓ Using Logitech direct HID - no G HUB required");
+                }
+                else
+                {
+                    // Priority 2: Try G HUB SDK (requires G HUB running)
+                    logging.Info("No devices via direct HID, trying G HUB SDK...");
+                    sdk = new LogitechGHubSdk(logging);
+                    initialized = await sdk.InitializeAsync();
+
+                    if (!initialized)
+                    {
+                        logging.Info("No Logitech devices found via any method");
+                        sdk = new LogitechSdkStub(logging);
+                        await sdk.InitializeAsync();
+                    }
                 }
             }
             catch (Exception ex)
             {
-                logging.Error("Failed to initialize G HUB SDK, using stub", ex);
+                logging.Error($"Failed to initialize Logitech access: {ex.Message}");
                 sdk = new LogitechSdkStub(logging);
                 await sdk.InitializeAsync();
             }

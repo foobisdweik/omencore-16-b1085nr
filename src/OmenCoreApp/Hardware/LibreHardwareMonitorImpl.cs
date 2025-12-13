@@ -61,6 +61,7 @@ namespace OmenCore.Hardware
                     IsMemoryEnabled = true,
                     IsStorageEnabled = true,
                     IsControllerEnabled = true,
+                    IsMotherboardEnabled = true,  // Required for laptop fan sensors (EC)
                     IsNetworkEnabled = false,
                     IsBatteryEnabled = true
                 };
@@ -118,14 +119,20 @@ namespace OmenCore.Hardware
                     {
                         case HardwareType.Cpu:
                             // AMD Ryzen uses "Core (Tctl/Tdie)" or "Tdie", Intel uses "CPU Package"
+                            // Ryzen AI (Phoenix/Strix Point) may use different sensor names
                             // Try multiple sensor patterns for broad compatibility
                             var cpuTempSensor = GetSensorExact(hardware, SensorType.Temperature, "CPU Package")  // Intel
                                 ?? GetSensorExact(hardware, SensorType.Temperature, "Core (Tctl/Tdie)")           // AMD Ryzen primary
                                 ?? GetSensor(hardware, SensorType.Temperature, "Tctl/Tdie")                       // AMD Ryzen (partial match)
                                 ?? GetSensor(hardware, SensorType.Temperature, "Tctl")                            // AMD older
                                 ?? GetSensor(hardware, SensorType.Temperature, "Tdie")                            // AMD Ryzen alt
+                                ?? GetSensor(hardware, SensorType.Temperature, "CPU")                             // AMD Ryzen AI / generic
                                 ?? GetSensor(hardware, SensorType.Temperature, "CCD1")                            // AMD CCD fallback
                                 ?? GetSensor(hardware, SensorType.Temperature, "CCDs Max")                        // AMD multi-CCD
+                                ?? GetSensor(hardware, SensorType.Temperature, "CCDs Average")                    // AMD multi-CCD avg
+                                ?? GetSensor(hardware, SensorType.Temperature, "Core #0")                         // Single core fallback
+                                ?? GetSensor(hardware, SensorType.Temperature, "Core Max")                        // Max core temp
+                                ?? GetSensor(hardware, SensorType.Temperature, "Core Average")                    // Avg core temp
                                 ?? hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Temperature && s.Value > 0);
                             
                             _cachedCpuTemp = cpuTempSensor?.Value ?? 0;
@@ -492,17 +499,17 @@ namespace OmenCore.Hardware
                         
                         hardware.Update();
 
-                        // Check main hardware for fan sensors
+                        // Check main hardware for fan sensors (CPU, GPU have built-in fans on some laptops)
                         var fanSensors = hardware.Sensors
                             .Where(s => s.SensorType == SensorType.Fan && s.Value.HasValue)
                             .ToList();
 
                         foreach (var sensor in fanSensors)
                         {
-                            results.Add((sensor.Name, sensor.Value!.Value));
+                            results.Add(($"{hardware.Name} - {sensor.Name}", sensor.Value!.Value));
                         }
 
-                        // Check subhardware (e.g., motherboard sensors)
+                        // Check subhardware (e.g., motherboard EC for laptop fan sensors)
                         foreach (var subHardware in hardware.SubHardware)
                         {
                             if (_disposed) return results;
@@ -514,9 +521,16 @@ namespace OmenCore.Hardware
 
                             foreach (var sensor in subFanSensors)
                             {
-                                results.Add((sensor.Name, sensor.Value!.Value));
+                                results.Add(($"{subHardware.Name} - {sensor.Name}", sensor.Value!.Value));
                             }
                         }
+                    }
+                    
+                    // Log hardware types found for debugging if no fans detected
+                    if (results.Count == 0)
+                    {
+                        var hwTypes = _computer?.Hardware?.Select(h => $"{h.HardwareType}:{h.Name}").ToList() ?? new List<string>();
+                        _logger?.Invoke($"[FanDebug] No fan sensors found. Hardware: [{string.Join(", ", hwTypes)}]");
                     }
                 }
                 catch (ObjectDisposedException)

@@ -13,6 +13,21 @@ namespace OmenCore.Services
     public class OmenGamingHubCleanupService
     {
         private readonly LoggingService _logging;
+        
+        /// <summary>
+        /// Default timeout for individual cleanup commands (2 minutes)
+        /// </summary>
+        private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromMinutes(2);
+        
+        /// <summary>
+        /// Timeout for winget operations which can be slower (3 minutes)
+        /// </summary>
+        private static readonly TimeSpan WingetTimeout = TimeSpan.FromMinutes(3);
+        
+        /// <summary>
+        /// Event fired when a cleanup step is completed
+        /// </summary>
+        public event Action<string>? StepCompleted;
         private readonly string[] _storePackages =
         {
             "AD2F1837.OMENCommandCenter",
@@ -72,56 +87,100 @@ namespace OmenCore.Services
         public async Task<OmenCleanupResult> CleanupAsync(OmenCleanupOptions options, CancellationToken token = default)
         {
             var result = new OmenCleanupResult();
+            var totalSteps = CountSteps(options);
+            var currentStep = 0;
+            
+            void ReportProgress(string message)
+            {
+                currentStep++;
+                var progress = $"[{currentStep}/{totalSteps}] {message}";
+                _logging.Info(progress);
+                result.Steps.Add(message);
+                StepCompleted?.Invoke(progress);
+            }
+            
             try
             {
+                _logging.Info("═══════════════════════════════════════════════════");
+                _logging.Info("Starting OMEN Gaming Hub cleanup...");
+                _logging.Info("═══════════════════════════════════════════════════");
+                
                 if (options.KillRunningProcesses)
                 {
                     KillProcesses();
-                    result.Steps.Add("Killed running OMEN processes");
+                    ReportProgress("Killed running OMEN processes");
                 }
 
                 if (options.RemoveStorePackage)
                 {
+                    ReportProgress("Removing Store packages (this may take a minute)...");
                     result.StorePackageRemoved = await RemoveStorePackagesAsync(options.DryRun, token);
-                    result.Steps.Add(result.StorePackageRemoved ? "Store packages removed" : "Store packages still present");
+                    ReportProgress(result.StorePackageRemoved ? "✓ Store packages removed" : "⚠ Store packages still present");
                 }
 
                 if (options.RemoveLegacyInstallers)
                 {
+                    ReportProgress("Running legacy uninstallers (this may take a few minutes)...");
                     result.UninstallTriggered = await RunLegacyUninstallersAsync(options.DryRun, token);
-                    result.Steps.Add(result.UninstallTriggered ? "Legacy uninstallers triggered" : "Legacy uninstallers unavailable");
+                    ReportProgress(result.UninstallTriggered ? "✓ Legacy uninstallers completed" : "⚠ Legacy uninstallers unavailable");
                 }
 
                 if (options.RemoveRegistryTraces)
                 {
                     result.RegistryCleaned = RemoveRegistryTraces(options.DryRun);
-                    result.Steps.Add(result.RegistryCleaned ? "Registry entries removed" : "No registry entries removed");
+                    ReportProgress(result.RegistryCleaned ? "✓ Registry entries removed" : "⚠ No registry entries removed");
                 }
 
                 if (options.RemoveResidualFiles)
                 {
                     result.FilesRemoved = RemoveResidualFiles(options.DryRun);
-                    result.Steps.Add(result.FilesRemoved ? "Residual files deleted" : "Residual files could not be fully deleted");
+                    ReportProgress(result.FilesRemoved ? "✓ Residual files deleted" : "⚠ Residual files could not be fully deleted");
                 }
 
                 if (options.RemoveServicesAndTasks)
                 {
+                    ReportProgress("Cleaning up services and scheduled tasks...");
                     result.ServicesCleaned = await CleanupServicesAndTasksAsync(options.DryRun, token);
-                    result.Steps.Add(result.ServicesCleaned ? "Services/tasks cleaned" : "Services/tasks cleanup incomplete");
+                    ReportProgress(result.ServicesCleaned ? "✓ Services/tasks cleaned" : "⚠ Services/tasks cleanup incomplete");
                 }
 
                 if (options.PreserveFirewallRules)
                 {
-                    result.Steps.Add("Firewall rules preserved per user preference");
+                    ReportProgress("Firewall rules preserved per user preference");
                 }
+                
+                _logging.Info("═══════════════════════════════════════════════════");
+                _logging.Info("OMEN Gaming Hub cleanup completed successfully");
+                _logging.Info("═══════════════════════════════════════════════════");
+                ReportProgress("✓ Cleanup completed successfully");
+            }
+            catch (OperationCanceledException)
+            {
+                _logging.Warn("OMEN Gaming Hub cleanup was cancelled");
+                result.Errors.Add("Cleanup was cancelled by user");
+                ReportProgress("⚠ Cleanup cancelled");
             }
             catch (Exception ex)
             {
                 _logging.Error("OMEN Gaming Hub cleanup failed", ex);
                 result.Errors.Add(ex.Message);
+                ReportProgress($"✗ Cleanup failed: {ex.Message}");
             }
 
             return result;
+        }
+        
+        private int CountSteps(OmenCleanupOptions options)
+        {
+            var count = 1; // Final completion message
+            if (options.KillRunningProcesses) count++;
+            if (options.RemoveStorePackage) count += 2; // Start + result
+            if (options.RemoveLegacyInstallers) count += 2;
+            if (options.RemoveRegistryTraces) count++;
+            if (options.RemoveResidualFiles) count++;
+            if (options.RemoveServicesAndTasks) count += 2;
+            if (options.PreserveFirewallRules) count++;
+            return count;
         }
 
         private void KillProcesses()
@@ -157,16 +216,16 @@ namespace OmenCore.Services
 
         private async Task<bool> RunLegacyUninstallersAsync(bool dryRun, CancellationToken token)
         {
-            var commands = new List<(string file, string args)>
+            var commands = new List<(string file, string args, TimeSpan timeout)>
             {
-                ("winget", "uninstall --id 9N1NRK41F8S3 -e --silent"),
-                ("winget", "uninstall --name \"OMEN Gaming Hub\" --silent"),
-                ("powershell", "-NoLogo -NoProfile -Command \"Get-AppxPackage -Name 'HPInc.HPGamingHub' | Remove-AppxPackage\"")
+                ("winget", "uninstall --id 9N1NRK41F8S3 -e --silent", WingetTimeout),
+                ("winget", "uninstall --name \"OMEN Gaming Hub\" --silent", WingetTimeout),
+                ("powershell", "-NoLogo -NoProfile -Command \"Get-AppxPackage -Name 'HPInc.HPGamingHub' | Remove-AppxPackage\"", DefaultCommandTimeout)
             };
 
-            foreach (var cmd in commands)
+            foreach (var (file, args, timeout) in commands)
             {
-                if (await RunProcessAsync(cmd.file, cmd.args, dryRun, token))
+                if (await RunProcessWithTimeoutAsync(file, args, timeout, dryRun, token))
                 {
                     return true;
                 }
@@ -337,21 +396,21 @@ namespace OmenCore.Services
             foreach (var task in _scheduledTasks)
             {
                 var args = $"/Delete /TN \"{task}\" /F";
-                any |= await RunProcessAsync("schtasks", args, dryRun, token);
+                any |= await RunProcessWithTimeoutAsync("schtasks", args, DefaultCommandTimeout, dryRun, token);
             }
 
             foreach (var service in _serviceNames)
             {
                 var stopArgs = $"stop {service}";
                 var deleteArgs = $"delete {service}";
-                var stopped = await RunProcessAsync("sc", stopArgs, dryRun, token);
-                var deleted = await RunProcessAsync("sc", deleteArgs, dryRun, token);
+                var stopped = await RunProcessWithTimeoutAsync("sc", stopArgs, TimeSpan.FromSeconds(30), dryRun, token);
+                var deleted = await RunProcessWithTimeoutAsync("sc", deleteArgs, TimeSpan.FromSeconds(30), dryRun, token);
                 any |= stopped || deleted;
             }
             return any;
         }
 
-        private async Task<bool> RunProcessAsync(string fileName, string arguments, bool dryRun, CancellationToken token)
+        private async Task<bool> RunProcessWithTimeoutAsync(string fileName, string arguments, TimeSpan timeout, bool dryRun, CancellationToken token)
         {
             if (dryRun)
             {
@@ -361,6 +420,8 @@ namespace OmenCore.Services
 
             try
             {
+                _logging.Info($"Executing: {fileName} {arguments} (timeout: {timeout.TotalSeconds}s)");
+                
                 using var process = new Process
                 {
                     StartInfo = new ProcessStartInfo
@@ -379,12 +440,17 @@ namespace OmenCore.Services
                 process.Exited += (_, _) => tcs.TrySetResult(process.ExitCode);
                 process.Start();
 
-                using (token.Register(() =>
+                // Create a combined cancellation token with timeout
+                using var timeoutCts = new CancellationTokenSource(timeout);
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutCts.Token);
+                
+                using (linkedCts.Token.Register(() =>
                 {
                     try
                     {
                         if (!process.HasExited)
                         {
+                            _logging.Warn($"Command timed out or cancelled, killing process: {fileName}");
                             process.Kill(true);
                         }
                     }
@@ -392,21 +458,48 @@ namespace OmenCore.Services
                     {
                         // ignored
                     }
-                    tcs.TrySetCanceled(token);
+                    
+                    if (timeoutCts.IsCancellationRequested && !token.IsCancellationRequested)
+                    {
+                        tcs.TrySetException(new TimeoutException($"Command timed out after {timeout.TotalSeconds}s: {fileName} {arguments}"));
+                    }
+                    else
+                    {
+                        tcs.TrySetCanceled(token);
+                    }
                 }))
                 {
-                    var exitCode = await tcs.Task.ConfigureAwait(false);
-                    var output = await process.StandardOutput.ReadToEndAsync();
-                    var error = await process.StandardError.ReadToEndAsync();
-                    if (!string.IsNullOrWhiteSpace(output))
+                    try
                     {
-                        _logging.Info(output.Trim());
+                        var exitCode = await tcs.Task.ConfigureAwait(false);
+                        
+                        // Read output with a short timeout to avoid hanging on output
+                        var outputTask = process.StandardOutput.ReadToEndAsync();
+                        var errorTask = process.StandardError.ReadToEndAsync();
+                        
+                        if (await Task.WhenAny(Task.WhenAll(outputTask, errorTask), Task.Delay(TimeSpan.FromSeconds(5))) == Task.WhenAll(outputTask, errorTask))
+                        {
+                            var output = outputTask.Result;
+                            var error = errorTask.Result;
+                            
+                            if (!string.IsNullOrWhiteSpace(output))
+                            {
+                                _logging.Info(output.Trim());
+                            }
+                            if (!string.IsNullOrWhiteSpace(error))
+                            {
+                                _logging.Warn(error.Trim());
+                            }
+                        }
+                        
+                        _logging.Info($"Command completed with exit code {exitCode}: {fileName}");
+                        return exitCode == 0;
                     }
-                    if (!string.IsNullOrWhiteSpace(error))
+                    catch (TimeoutException tex)
                     {
-                        _logging.Warn(error.Trim());
+                        _logging.Warn(tex.Message);
+                        return false;
                     }
-                    return exitCode == 0;
                 }
             }
             catch (OperationCanceledException)
@@ -419,6 +512,12 @@ namespace OmenCore.Services
                 _logging.Warn($"Unable to execute {fileName} {arguments}: {ex.Message}");
                 return false;
             }
+        }
+        
+        // Legacy method for backwards compatibility - uses default timeout
+        private Task<bool> RunProcessAsync(string fileName, string arguments, bool dryRun, CancellationToken token)
+        {
+            return RunProcessWithTimeoutAsync(fileName, arguments, DefaultCommandTimeout, dryRun, token);
         }
     }
 }

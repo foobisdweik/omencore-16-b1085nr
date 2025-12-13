@@ -91,6 +91,9 @@ namespace OmenCore.Hardware
                     _logging?.Info($"  Model: {Capabilities.ModelName}");
                 }
                 
+                // Get chassis type (desktop vs laptop)
+                DetectChassisType();
+                
                 // Get BIOS info
                 using var biosSearcher = new ManagementObjectSearcher("SELECT * FROM Win32_BIOS");
                 foreach (var obj in biosSearcher.Get())
@@ -112,6 +115,39 @@ namespace OmenCore.Hardware
             catch (Exception ex)
             {
                 _logging?.Warn($"Device identification error: {ex.Message}");
+            }
+        }
+        
+        private void DetectChassisType()
+        {
+            try
+            {
+                using var searcher = new ManagementObjectSearcher("SELECT ChassisTypes FROM Win32_SystemEnclosure");
+                foreach (var obj in searcher.Get())
+                {
+                    var chassisTypes = obj["ChassisTypes"] as ushort[];
+                    if (chassisTypes != null && chassisTypes.Length > 0)
+                    {
+                        var chassisValue = chassisTypes[0];
+                        Capabilities.Chassis = (ChassisType)chassisValue;
+                        
+                        var formFactor = Capabilities.IsDesktop ? "Desktop" : 
+                                        Capabilities.IsLaptop ? "Laptop" : "Other";
+                        _logging?.Info($"  Chassis: {Capabilities.Chassis} ({formFactor})");
+                        
+                        // Warn about limited desktop support
+                        if (Capabilities.IsDesktop)
+                        {
+                            _logging?.Warn("  ⚠️ Desktop PC detected - EC-based fan control may have limited support");
+                            _logging?.Info("  💡 OMEN desktops (25L/30L/40L/45L) use different EC registers than laptops");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging?.Warn($"Chassis detection error: {ex.Message}");
+                Capabilities.Chassis = ChassisType.Unknown;
             }
         }
 
@@ -170,28 +206,33 @@ namespace OmenCore.Hardware
         {
             _logging?.Info("Phase 4: Driver availability...");
             
+            // Check PawnIO first (Secure Boot compatible)
+            Capabilities.PawnIOAvailable = CheckPawnIOAvailable();
+            if (Capabilities.PawnIOAvailable)
+            {
+                _logging?.Info($"  PawnIO: Available ✓ (Secure Boot compatible)");
+            }
+            
             // Check WinRing0
             Capabilities.WinRing0Available = CheckWinRing0Available();
             _logging?.Info($"  WinRing0: {(Capabilities.WinRing0Available ? "Available" : "Not available")}");
             
-            if (!Capabilities.WinRing0Available && Capabilities.SecureBootEnabled)
-            {
-                Capabilities.DriverStatus = "Secure Boot enabled - unsigned drivers blocked";
-            }
-            else if (!Capabilities.WinRing0Available)
-            {
-                Capabilities.DriverStatus = "WinRing0 driver not loaded";
-            }
-            else
-            {
-                Capabilities.DriverStatus = "WinRing0 available";
-            }
-            
-            // Check for PawnIO (future)
-            Capabilities.PawnIOAvailable = CheckPawnIOAvailable();
+            // Determine overall driver status
             if (Capabilities.PawnIOAvailable)
             {
                 Capabilities.DriverStatus = "PawnIO available (Secure Boot compatible)";
+            }
+            else if (Capabilities.WinRing0Available)
+            {
+                Capabilities.DriverStatus = "WinRing0 available";
+            }
+            else if (Capabilities.SecureBootEnabled)
+            {
+                Capabilities.DriverStatus = "No EC driver - Install PawnIO from pawnio.eu for Secure Boot compatible access";
+            }
+            else
+            {
+                Capabilities.DriverStatus = "No EC driver available";
             }
         }
 
@@ -214,10 +255,35 @@ namespace OmenCore.Hardware
         {
             try
             {
+                // Check if PawnIO is installed (registry or default path)
+                using var key = Registry.LocalMachine.OpenSubKey(
+                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO");
+                if (key != null)
+                {
+                    _logging?.Info("  PawnIO: Found in registry (Secure Boot compatible EC access)");
+                    return true;
+                }
+                
+                // Check default installation path
+                string defaultPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), 
+                    "PawnIO", "PawnIOLib.dll");
+                if (System.IO.File.Exists(defaultPath))
+                {
+                    _logging?.Info("  PawnIO: Found at default path (Secure Boot compatible EC access)");
+                    return true;
+                }
+                
                 // Check if PawnIO driver is loaded
                 using var searcher = new ManagementObjectSearcher(
                     "SELECT * FROM Win32_SystemDriver WHERE Name LIKE '%PawnIO%'");
-                return searcher.Get().Count > 0;
+                if (searcher.Get().Count > 0)
+                {
+                    _logging?.Info("  PawnIO: Driver loaded (Secure Boot compatible EC access)");
+                    return true;
+                }
+                
+                return false;
             }
             catch
             {
@@ -265,8 +331,9 @@ namespace OmenCore.Hardware
             // Priority order:
             // 1. WMI BIOS (no driver needed, works everywhere)
             // 2. OGH Proxy (if WMI fails but OGH is running)
-            // 3. Direct EC (if WinRing0/PawnIO available)
-            // 4. Monitoring only
+            // 3. Direct EC via PawnIO (Secure Boot compatible)
+            // 4. Direct EC via WinRing0 (requires Secure Boot disabled)
+            // 5. Monitoring only
             
             if (_wmiBios?.IsAvailable == true)
             {
@@ -283,12 +350,19 @@ namespace OmenCore.Hardware
                 Capabilities.RequiresOghService = true;
                 _logging?.Info("  → Using OGH proxy for fan control");
             }
-            else if (Capabilities.WinRing0Available || Capabilities.PawnIOAvailable)
+            else if (Capabilities.PawnIOAvailable)
             {
                 Capabilities.FanControl = FanControlMethod.EcDirect;
                 Capabilities.CanSetFanSpeed = true;
                 Capabilities.CanReadRpm = true;
-                _logging?.Info("  → Using direct EC access for fan control");
+                _logging?.Info("  → Using PawnIO for EC access (Secure Boot compatible)");
+            }
+            else if (Capabilities.WinRing0Available)
+            {
+                Capabilities.FanControl = FanControlMethod.EcDirect;
+                Capabilities.CanSetFanSpeed = true;
+                Capabilities.CanReadRpm = true;
+                _logging?.Info("  → Using WinRing0 for EC access");
             }
             else if (Capabilities.OghInstalled && !Capabilities.OghRunning)
             {
@@ -296,11 +370,18 @@ namespace OmenCore.Hardware
                 Capabilities.FanControl = FanControlMethod.None;
                 _logging?.Warn("  → Fan control unavailable. Try starting OMEN Gaming Hub services.");
             }
+            else if (Capabilities.SecureBootEnabled)
+            {
+                Capabilities.FanControl = FanControlMethod.MonitoringOnly;
+                Capabilities.CanSetFanSpeed = false;
+                Capabilities.CanReadRpm = true;
+                _logging?.Warn("  → Fan control unavailable. Install PawnIO from pawnio.eu for Secure Boot compatible EC access.");
+            }
             else
             {
                 Capabilities.FanControl = FanControlMethod.MonitoringOnly;
                 Capabilities.CanSetFanSpeed = false;
-                Capabilities.CanReadRpm = true; // Can still monitor via other means
+                Capabilities.CanReadRpm = true;
                 _logging?.Warn("  → Fan control unavailable, monitoring only");
             }
         }

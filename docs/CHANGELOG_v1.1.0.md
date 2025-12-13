@@ -9,7 +9,16 @@
 
 ## ✨ New Features
 
-### 🔌 OGH Service Proxy (2023+ Model Support)
+### � PawnIO Support (Secure Boot Compatible EC Access)
+- **NEW**: Full PawnIO driver integration for EC access with Secure Boot enabled!
+- Automatically detects PawnIO installation and uses it for fan/thermal control
+- Falls back to WinRing0 if PawnIO not installed and Secure Boot disabled
+- Uses `LpcACPIEC` module for ACPI Embedded Controller access
+- No need to disable Secure Boot for full fan control anymore!
+- Install PawnIO from https://pawnio.eu/ for Secure Boot compatible operation
+- EC Backend displayed in status (PawnIO, WinRing0, or None)
+
+### �🔌 OGH Service Proxy (2023+ Model Support)
 - **NEW**: OMEN Gaming Hub service proxy for 2023+ laptops with Secure Boot
 - Automatically detects OGH services (HPOmenCap, OmenCommandCenterBackground, etc.)
 - Uses `hpCpsPubGetSetCommand` WMI interface when OGH is running
@@ -116,6 +125,9 @@
 - **Fixed**: Process handle leak in `ProcessMonitoringService` - was leaking ~200 handles every 2 seconds
 - **Fixed**: OGH Error Code 2 spam - proxy now validates commands before claiming availability
 - **Fixed**: Slow startup - ViewModels now lazy-load on first tab access instead of all at once
+- **Fixed**: Secure Boot EC access - Added PawnIO support as alternative to blocked WinRing0- **Fixed**: OGH cleanup hanging indefinitely - Added command timeouts (2-3 min per command)
+- **Improved**: OGH cleanup now shows real-time progress with step-by-step status updates- **Improved**: EcAccessFactory - Automatic backend selection (PawnIO → WinRing0 → None)
+- **Improved**: Capability detection now checks for PawnIO installation
 - **Hidden**: RGB & Peripherals tab when no Corsair/Logitech devices found (stub SDK cleanup)
 ### AMD Ryzen Support Improvements
 - **Fixed**: AMD CPU temperature detection (Tctl/Tdie sensors)

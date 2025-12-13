@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:controls="clr-namespace:OmenCore.Controls"
+             xmlns:utils="clr-namespace:OmenCore.Utils"
              mc:Ignorable="d" 
              d:DesignHeight="800" d:DesignWidth="1000">
     <Grid>
@@ -18,7 +19,7 @@
                    Foreground="{StaticResource TextPrimaryBrush}" 
                    Margin="0,0,0,16"/>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="1" Style="{StaticResource SmoothScrollViewer}" utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="2.5">
             <StackPanel>
                 <!-- General Settings -->
                 <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16">
@@ -434,12 +435,13 @@
                         <TextBlock TextWrapping="Wrap" FontSize="13" 
                                    Foreground="{StaticResource TextSecondaryBrush}" 
                                    Margin="0,0,0,12">
-                            The WinRing0 driver is required for fan control and CPU undervolting. 
-                            The easiest way to install it is through LibreHardwareMonitor.
+                            On modern Windows systems, Secure Boot and Memory Integrity can block legacy drivers.
+                            OmenCore prefers driverless control paths (WMI/OGH) when available, and recommends PawnIO for Secure Boot compatible EC access.
+                            WinRing0 is a legacy fallback for certain features.
                         </TextBlock>
 
                         <StackPanel Orientation="Horizontal">
-                            <Button Content="📥 Install Driver (LibreHardwareMonitor)" 
+                            <Button Content="📥 Get Driver Backend (PawnIO / LibreHardwareMonitor)" 
                                     Style="{StaticResource ModernButton}"
                                     Background="#9575CD"
                                     Command="{Binding InstallDriverCommand}"

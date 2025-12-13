@@ -131,38 +131,120 @@ namespace OmenCore.Services.Corsair
     {
         private readonly LoggingService _logging;
         private readonly RGBSurface _surface;
-        private readonly CorsairDeviceProvider _provider;
+        private CorsairDeviceProvider? _provider;
         private bool _initialized;
 
         public CorsairICueSdk(LoggingService logging)
         {
             _logging = logging;
             _surface = new RGBSurface();
-            _provider = new CorsairDeviceProvider();
+            // Provider will be created in InitializeAsync to get better error handling
+        }
+
+        private bool IsIcueRunning()
+        {
+            try
+            {
+                return System.Diagnostics.Process.GetProcessesByName("iCUE").Length > 0;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public async Task<bool> InitializeAsync()
         {
             try
             {
-                // Initialize RGB.NET Corsair device provider
-                _surface.Load(_provider, throwExceptions: false);
-                
-                if (_surface.Devices.Any())
+                // Check if iCUE is running
+                var icueRunning = IsIcueRunning();
+                if (!icueRunning)
                 {
-                    _logging.Info($"Corsair iCUE SDK initialized successfully - {_surface.Devices.Count()} device(s) found");
+                    _logging.Warn("Corsair iCUE software not detected - Corsair device discovery requires iCUE to be running");
+                    _logging.Info("💡 To enable Corsair device support: Install and run Corsair iCUE from https://www.corsair.com/icue");
+                    return false;
+                }
+                
+                _logging.Info("Corsair iCUE detected, initializing SDK...");
+                
+                // Set explicit SDK paths - RGB.NET looks in x64 subfolder relative to app location
+                var appDir = AppDomain.CurrentDomain.BaseDirectory;
+                var x64SdkPath = System.IO.Path.Combine(appDir, "x64");
+                
+                // Configure provider to look in the correct location (static property)
+                CorsairDeviceProvider.PossibleX64NativePaths.Clear();
+                CorsairDeviceProvider.PossibleX64NativePaths.Add(x64SdkPath);
+                
+                _logging.Info($"Corsair SDK search path: {x64SdkPath}");
+                
+                // Create provider with specific settings for better compatibility
+                _provider = new CorsairDeviceProvider();
+                
+                // Subscribe to exception events on the provider
+                Exception? loadException = null;
+                _provider.Exception += (sender, args) => 
+                {
+                    loadException = args.Exception;
+                    _logging.Warn($"RGB.NET Corsair provider exception: {args.Exception.Message}");
+                };
+                
+                // Try to load the provider
+                _logging.Info("Loading Corsair device provider...");
+                
+                try
+                {
+                    _surface.Load(_provider, throwExceptions: true);
+                }
+                catch (Exception loadEx)
+                {
+                    _logging.Warn($"RGB.NET provider load error: {loadEx.Message}");
+                    // Continue anyway - some devices might still work
+                }
+                
+                // Give time for device enumeration (wireless devices may need longer)
+                await Task.Delay(1000);
+                
+                // Log detailed info about what was found
+                var deviceCount = _surface.Devices.Count();
+                _logging.Info($"RGB.NET Corsair provider loaded - Found {deviceCount} device(s)");
+                
+                // Also check the provider's device list directly
+                var providerDevices = _provider.Devices?.Count() ?? 0;
+                _logging.Info($"Provider reports {providerDevices} device(s)");
+                
+                if (deviceCount > 0 || providerDevices > 0)
+                {
+                    foreach (var device in _surface.Devices)
+                    {
+                        _logging.Info($"  Found: {device.DeviceInfo.Model} ({device.DeviceInfo.DeviceType}) - {device.DeviceInfo.Manufacturer}");
+                    }
                     _initialized = true;
-                    return await Task.FromResult(true);
+                    return true;
                 }
                 else
                 {
                     _logging.Warn("Corsair iCUE SDK initialized but no devices found");
-                    return await Task.FromResult(false);
+                    
+                    // More detailed troubleshooting
+                    if (loadException != null)
+                    {
+                        _logging.Warn($"SDK Load error: {loadException.Message}");
+                    }
+                    
+                    _logging.Info("💡 Troubleshooting steps:");
+                    _logging.Info("   1. Ensure 'Enable SDK' is ON in iCUE Settings → General");
+                    _logging.Info("   2. Close and restart iCUE after enabling SDK");
+                    _logging.Info("   3. iCUE v4 or v5 required for SDK support");
+                    _logging.Info("   4. Wireless devices: Ensure receiver is connected and device is powered on");
+                    _logging.Info("   5. Try running OmenCore as Administrator");
+                    return false;
                 }
             }
             catch (Exception ex)
             {
-                _logging.Error("iCUE SDK initialization failed", ex);
+                _logging.Error($"iCUE SDK initialization failed: {ex.Message}", ex);
+                _logging.Info("This may indicate iCUE SDK is not properly installed or is a version incompatibility");
                 return false;
             }
         }

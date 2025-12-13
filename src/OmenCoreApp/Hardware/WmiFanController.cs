@@ -50,6 +50,17 @@ namespace OmenCore.Hardware
 
             try
             {
+                var nameLower = preset.Name.ToLowerInvariant();
+                
+                // Check if this is a "Max" preset - enable full fan speed
+                bool isMaxPreset = nameLower.Contains("max") && !nameLower.Contains("auto");
+                
+                // Disable max fan first when switching away from max mode
+                if (!isMaxPreset)
+                {
+                    _wmiBios.SetFanMax(false);
+                }
+                
                 // Map preset to fan mode
                 var mode = MapPresetToFanMode(preset);
                 
@@ -57,6 +68,13 @@ namespace OmenCore.Hardware
                 {
                     _lastMode = mode;
                     IsManualControlActive = false;
+                    
+                    // For "Max" presets, also enable max fan speed (forces 100%)
+                    if (isMaxPreset)
+                    {
+                        _wmiBios.SetFanMax(true);
+                        _logging?.Info($"✓ Max fan speed enabled for preset: {preset.Name}");
+                    }
                     
                     // Apply GPU power settings if needed
                     ApplyGpuPowerFromPreset(preset);
@@ -226,6 +244,9 @@ namespace OmenCore.Hardware
 
             try
             {
+                // Disable max fan speed first
+                _wmiBios.SetFanMax(false);
+                
                 // Set default mode to restore automatic control
                 if (_wmiBios.SetFanMode(HpWmiBios.FanMode.Default))
                 {
@@ -281,26 +302,47 @@ namespace OmenCore.Hardware
                 index++;
             }
 
-            // Fallback if no fans detected
+            // Fallback if no fans detected by LibreHardwareMonitor (common on HP OMEN)
+            // HP OMEN laptops expose fan data via HP WMI BIOS, not standard EC Super I/O
             if (fans.Count == 0)
             {
                 var biosTemp = _wmiBios.GetTemperature();
                 var cpuTemp = _hwMonitor.GetCpuTemperature();
                 var gpuTemp = _hwMonitor.GetGpuTemperature();
+                
+                // Get fan speed from HP WMI BIOS - returns krpm (0-55 = 0-5500 RPM)
+                var fanLevel = _wmiBios.GetFanLevel();
+                int fan1Rpm = 0;
+                int fan2Rpm = 0;
+                int fan1Percent = 0;
+                int fan2Percent = 0;
+                
+                if (fanLevel.HasValue)
+                {
+                    // Convert krpm to RPM: value * 100 (e.g., 35 = 3500 RPM)
+                    fan1Rpm = fanLevel.Value.fan1 * 100;
+                    fan2Rpm = fanLevel.Value.fan2 * 100;
+                    
+                    // Calculate percent: 55 krpm = 100%
+                    fan1Percent = Math.Clamp(fanLevel.Value.fan1 * 100 / 55, 0, 100);
+                    fan2Percent = Math.Clamp(fanLevel.Value.fan2 * 100 / 55, 0, 100);
+                    
+                    _logging?.Info($"HP WMI Fan levels: Fan1={fanLevel.Value.fan1} krpm ({fan1Rpm} RPM), Fan2={fanLevel.Value.fan2} krpm ({fan2Rpm} RPM)");
+                }
 
                 fans.Add(new FanTelemetry 
                 { 
                     Name = "CPU Fan", 
-                    SpeedRpm = 0, 
-                    DutyCyclePercent = 0, 
+                    SpeedRpm = fan1Rpm, 
+                    DutyCyclePercent = fan1Percent, 
                     Temperature = cpuTemp > 0 ? cpuTemp : biosTemp ?? 0
                 });
                 
                 fans.Add(new FanTelemetry 
                 { 
                     Name = "GPU Fan", 
-                    SpeedRpm = 0, 
-                    DutyCyclePercent = 0, 
+                    SpeedRpm = fan2Rpm, 
+                    DutyCyclePercent = fan2Percent, 
                     Temperature = gpuTemp
                 });
             }

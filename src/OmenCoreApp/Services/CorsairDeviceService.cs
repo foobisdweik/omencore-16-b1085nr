@@ -34,7 +34,7 @@ namespace OmenCore.Services
 
         /// <summary>
         /// Factory method to create service with auto-detection of SDK availability.
-        /// Falls back to stub if iCUE SDK is not available.
+        /// Prioritizes direct HID access (no iCUE required), falls back to iCUE SDK, then stub.
         /// </summary>
         public static async Task<CorsairDeviceService> CreateAsync(LoggingService logging)
         {
@@ -42,20 +42,33 @@ namespace OmenCore.Services
 
             try
             {
-                // Try to use real iCUE SDK
-                sdk = new CorsairICueSdk(logging);
+                // Priority 1: Try direct HID access (no iCUE required)
+                logging.Info("Attempting Corsair direct HID access...");
+                sdk = new CorsairHidDirect(logging);
                 var initialized = await sdk.InitializeAsync();
 
-                if (!initialized)
+                if (initialized)
                 {
-                    logging.Warn("iCUE SDK unavailable, falling back to stub implementation");
-                    sdk = new CorsairSdkStub(logging);
-                    await sdk.InitializeAsync();
+                    logging.Info("✓ Using Corsair direct HID - no iCUE required");
+                }
+                else
+                {
+                    // Priority 2: Try iCUE SDK (requires iCUE running)
+                    logging.Info("No devices via direct HID, trying iCUE SDK...");
+                    sdk = new CorsairICueSdk(logging);
+                    initialized = await sdk.InitializeAsync();
+
+                    if (!initialized)
+                    {
+                        logging.Info("No Corsair devices found via any method");
+                        sdk = new CorsairSdkStub(logging);
+                        await sdk.InitializeAsync();
+                    }
                 }
             }
             catch (Exception ex)
             {
-                logging.Error("Failed to initialize iCUE SDK, using stub", ex);
+                logging.Error($"Failed to initialize Corsair access: {ex.Message}");
                 sdk = new CorsairSdkStub(logging);
                 await sdk.InitializeAsync();
             }

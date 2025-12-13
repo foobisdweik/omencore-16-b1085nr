@@ -431,7 +431,7 @@ if ($updates) {{
             try
             {
                 using var client = new HttpClient();
-                client.DefaultRequestHeaders.Add("User-Agent", "OmenCore/1.1.0");
+                client.DefaultRequestHeaders.Add("User-Agent", "OmenCore/1.1.1");
                 client.Timeout = TimeSpan.FromMinutes(30); // BIOS files can be large
                 
                 using var response = await client.GetAsync(update.SoftPaqUrl, HttpCompletionOption.ResponseHeadersRead);

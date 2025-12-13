@@ -4,7 +4,7 @@
 
 OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop application for managing thermals, performance, RGB lighting, and peripherals. Built with WPF on .NET 8, it provides professional-grade hardware control without bloat, telemetry, or mandatory sign-ins.
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v1.1.0)
+[![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v1.1.1)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Website](https://img.shields.io/badge/website-omencore.info-brightgreen.svg)](https://omencore.info)
@@ -13,7 +13,7 @@ OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop 
 
 ---
 
-## 🆕 What's New in v1.1.0
+## 🆕 What's New in v1.1.1
 
 ### � OGH Service Proxy (2023+ Model Support)
 - **Secure Boot compatible** - Fan control works on 2023+ OMEN laptops with Secure Boot enabled
@@ -28,7 +28,7 @@ OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop 
 
 ### 🔥 WMI-Based Fan Control (No Driver Required!)
 - **HP WMI BIOS interface** - Fan control without WinRing0 driver installation
-- **Automatic backend selection** - OGH → WMI BIOS → EC (WinRing0) → Monitoring-only fallback
+- **Automatic backend selection** - OGH → WMI BIOS → EC (PawnIO/WinRing0) → Monitoring-only fallback
 - **AMD Ryzen support** - Better compatibility for AMD laptops without driver hassles
 - **Fan modes via BIOS** - Default, Performance, Cool modes
 
@@ -64,7 +64,13 @@ OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop 
 - **Hotkey OSD** - On-screen popup shows current mode when switching via shortcuts
 - **Profile validation** - Real-time validation in Game Profile Manager
 
-See [CHANGELOG_v1.1.0.md](docs/CHANGELOG_v1.1.0.md) for full details.
+### 🎨 UI/UX Polish
+- **Smooth scrolling** - Pixel-based scrolling throughout the app (no more chunky item scrolling)
+- **Modern scrollbars** - Thin scrollbars with hover-fade effect
+- **Brand imagery** - Corsair and Logitech logos in peripherals section
+- **Typography consistency** - Unified heading, caption, and label styles across all views
+
+See [CHANGELOG_v1.1.1.md](docs/CHANGELOG_v1.1.1.md) for full details.
 
 ---
 
@@ -77,6 +83,7 @@ See [CHANGELOG_v1.1.0.md](docs/CHANGELOG_v1.1.0.md) for full details.
 - **Real-time monitoring** with live CPU/GPU temperature charts
 - **Per-fan telemetry** displays RPM and duty cycle for each cooling zone
 - **System tray badge** overlays live CPU temperature on the notification icon
+- **CPU Temperature Limit** - Set max CPU temp via TCC offset (Intel only)
 
 ### ⚡ **Performance Control**
 - **CPU undervolting** via Intel MSR with separate core/cache offset sliders (typical: -100mV to -150mV)
@@ -153,22 +160,25 @@ See [CHANGELOG_v1.1.0.md](docs/CHANGELOG_v1.1.0.md) for full details.
 - **Disk**: 100 MB for app + 50 MB for logs/config
 
 ### Hardware
-- **CPU**: Intel 6th-gen+ (Skylake or newer) for undervolting support; AMD Ryzen supported for monitoring/fan control
+- **CPU**: Intel 6th-gen+ (Skylake or newer) for undervolting/TCC offset; AMD Ryzen supported for monitoring/fan control
 - **Laptop**: HP OMEN 15/16/17 series and HP Victus (2019-2024 models)
   - ✅ Tested: OMEN 15-dh, 16-b, 16-k, 17-ck (2023), Victus 15/16
   - ✅ **2023+ models**: OGH Service Proxy enables fan control with Secure Boot enabled
-  - ⚠️ May work: OMEN 25L/30L/40L/45L desktops (limited fan control)
+- **Desktop**: HP OMEN 25L/30L/40L/45L (limited support)
+  - ⚠️ Desktop PCs use different EC registers - fan control may not work
+  - Monitoring, game profiles, and OGH cleanup still functional
+  - Auto-detected via chassis type with warning message
 - **EC Layout**: Standard HP OMEN Embedded Controller
   - Fan registers: `0x44` (Fan1 duty), `0x45` (Fan2 duty), `0x46` (mode)
   - Performance register: `0xCE` (mode selector)
   - Keyboard RGB: `0xBA`, `0xBB` (zone control)
 
 ### Driver (Optional with OGH/WMI)
-- **WinRing0 v1.2** - kernel driver for EC-based hardware access
-  - Auto-installed via OmenCore installer ("Install WinRing0" task)
-  - OR install [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases) separately
-  - **NEW in v1.1.0**: OGH Proxy and WMI BIOS support means driver is optional for fan control!
-  - **Secure Boot users**: OGH Proxy works without disabling Secure Boot
+- **PawnIO** (recommended for Secure Boot) - Secure Boot compatible EC access
+  - Optional install during setup (if offered by the installer)
+- **WinRing0 v1.2** - legacy kernel driver for EC/MSR-based hardware access (may be blocked by Secure Boot / Memory Integrity)
+  - Optional via OmenCore installer ("Install WinRing0" task)
+  - **Note**: Some features (e.g., Intel MSR-based undervolt/TCC) may still require a driver/backend that can access MSRs
 
 **⚠️ Windows Defender False Positive**: WinRing0 is flagged as `HackTool:Win64/WinRing0` by antivirus. This is a **known false positive** for kernel hardware drivers. Add exclusion for `C:\Windows\System32\drivers\WinRing0x64.sys` and verify signature. See [WINRING0_SETUP.md](docs/WINRING0_SETUP.md).
 
@@ -182,20 +192,21 @@ See [CHANGELOG_v1.1.0.md](docs/CHANGELOG_v1.1.0.md) for full details.
 ## 🚀 Installation
 
 ### Option 1: Installer (Recommended)
-1. Download `OmenCoreSetup-1.0.0.8.exe` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
+1. Download `OmenCoreSetup-1.1.1.exe` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
 2. Run installer as Administrator
-3. Select "Install WinRing0 driver" task (recommended)
+3. Select "Install PawnIO driver" task (recommended, Secure Boot compatible)
+4. (Optional) Select "Install WinRing0 driver" task (legacy)
 4. Launch OmenCore from Start Menu or Desktop
 
 ### Option 2: Portable ZIP
-1. Download `OmenCore-1.0.0.8-win-x64.zip` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
+1. Download `OmenCore-1.1.1-win-x64.zip` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
 2. Extract to `C:\OmenCore` (or preferred location)
 3. Right-click `OmenCore.exe` → Run as Administrator
-4. Manually install [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases) for WinRing0 driver
+4. Install [PawnIO](https://pawnio.eu/) (recommended) or [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases) (legacy WinRing0)
 
 ### First Launch
-- OmenCore checks for WinRing0 driver on startup
-- If missing, prompts installation with instructions
+- OmenCore checks for an available hardware backend (PawnIO / WinRing0) on startup
+- On Secure Boot / Memory Integrity systems, PawnIO is recommended
 - Config copied from `config/default_config.json` to `%APPDATA%\OmenCore\config.json`
 - Logs written to `%LOCALAPPDATA%\OmenCore\OmenCore_<timestamp>.log`
 

@@ -45,6 +45,7 @@ namespace OmenCore.ViewModels
         private readonly NotificationService _notificationService;
         private readonly BiosUpdateService _biosUpdateService;
         private HpWmiBios? _wmiBios;
+        private OghServiceProxy? _oghProxy;
         private HotkeyOsdWindow? _hotkeyOsd;
         
         // Sub-ViewModels for modular UI (Lazy Loaded)
@@ -85,13 +86,17 @@ namespace OmenCore.ViewModels
                         _systemRestoreService,
                         _gpuSwitchService,
                         _logging,
-                        _wmiBios
+                        _configService,
+                        _wmiBios,
+                        _oghProxy
                     );
                     _systemControl.PropertyChanged += (s, e) =>
                     {
                         if (e.PropertyName == nameof(SystemControlViewModel.CurrentPerformanceModeName) && _dashboard != null)
                         {
                             _dashboard.CurrentPerformanceMode = _systemControl.CurrentPerformanceModeName;
+                            // Also sync to MainViewModel's CurrentPerformanceMode for tray menu
+                            CurrentPerformanceMode = _systemControl.CurrentPerformanceModeName;
                         }
                     };
                     OnPropertyChanged(nameof(SystemControl));
@@ -109,7 +114,12 @@ namespace OmenCore.ViewModels
                 {
                     _dashboard = new DashboardViewModel(_hardwareMonitoringService);
                     // Initialize with current values (triggers creation of dependencies if needed)
-                    if (SystemControl != null) _dashboard.CurrentPerformanceMode = SystemControl.CurrentPerformanceModeName;
+                    if (SystemControl != null)
+                    {
+                        _dashboard.CurrentPerformanceMode = SystemControl.CurrentPerformanceModeName;
+                        // Sync to tray menu as well
+                        CurrentPerformanceMode = SystemControl.CurrentPerformanceModeName;
+                    }
                     if (FanControl != null) _dashboard.CurrentFanMode = FanControl.CurrentFanModeName;
                     OnPropertyChanged(nameof(Dashboard));
                 }
@@ -218,6 +228,11 @@ namespace OmenCore.ViewModels
         /// The active fan control backend (for UI display).
         /// </summary>
         public string FanBackend { get; private set; } = "Detecting...";
+        
+        /// <summary>
+        /// The active EC access backend (PawnIO or WinRing0).
+        /// </summary>
+        public string EcBackend { get; private set; } = "None";
         
         /// <summary>
         /// True if Secure Boot is enabled (blocks WinRing0).
@@ -855,7 +870,12 @@ namespace OmenCore.ViewModels
             DetectedCapabilities = capabilities;
             
             // Set capability warning if functionality is limited
-            if (capabilities.SecureBootEnabled && !capabilities.OghRunning)
+            if (capabilities.IsDesktop)
+            {
+                CapabilityWarning = $"Desktop PC detected ({capabilities.Chassis}). OMEN desktop fan control is experimental - EC registers differ from laptops.";
+                _logging.Warn("Desktop OMEN PC - fan control support is limited. Consider using OMEN Gaming Hub for desktop systems.");
+            }
+            else if (capabilities.SecureBootEnabled && !capabilities.OghRunning)
             {
                 CapabilityWarning = "Secure Boot enabled - some features may be limited. Install OMEN Gaming Hub for full control.";
             }
@@ -864,18 +884,27 @@ namespace OmenCore.ViewModels
                 CapabilityWarning = "Fan control unavailable - monitoring only mode.";
             }
             
-            // Initialize EC access (used as fallback if WMI BIOS not available)
-            var ec = new WinRing0EcAccess();
+            // Initialize EC access with automatic backend selection
+            // Tries PawnIO first (Secure Boot compatible), then WinRing0
+            IEcAccess? ec = null;
             try
             {
-                if (!ec.Initialize(_config.EcDevicePath))
+                ec = EcAccessFactory.GetEcAccess();
+                if (ec != null && ec.IsAvailable)
                 {
-                    _logging.Info("EC bridge not available; will try WMI BIOS for fan control");
+                    _logging.Info($"EC access initialized: {EcAccessFactory.GetStatusMessage()}");
+                    EcBackend = EcAccessFactory.ActiveBackend.ToString();
+                }
+                else
+                {
+                    _logging.Info("EC access not available; will try WMI BIOS for fan control");
+                    EcBackend = "None";
                 }
             }
             catch (Exception ex)
             {
-                _logging.Info($"EC bridge initialization skipped: {ex.Message}");
+                _logging.Info($"EC access initialization skipped: {ex.Message}");
+                EcBackend = "Error";
             }
 
             // Create fan controller with intelligent backend selection using pre-detected capabilities
@@ -887,6 +916,17 @@ namespace OmenCore.ViewModels
             // Create HP WMI BIOS instance for GPU Power Boost control
             _wmiBios = new HpWmiBios(_logging);
             
+            // Create OGH Proxy for systems where WMI BIOS commands don't work
+            // This is common on 2023+ OMEN laptops with Secure Boot enabled
+            _oghProxy = new OghServiceProxy(_logging);
+            
+            // Run OGH diagnostics on startup to help debug command issues
+            if (_oghProxy.Status.WmiAvailable && _config.EnableDiagnostics)
+            {
+                _logging.Info("Running OGH command diagnostics...");
+                _oghProxy.RunDiagnostics();
+            }
+            
             _fanService = new FanService(fanController, new ThermalSensorProvider(monitorBridge), _logging, _config.MonitoringIntervalMs);
             ThermalSamples = _fanService.ThermalSamples;
             FanTelemetry = _fanService.FanTelemetry;
@@ -894,14 +934,21 @@ namespace OmenCore.ViewModels
             
             // Power limit controller (EC-based CPU/GPU power control)
             PowerLimitController? powerLimitController = null;
-            try
+            if (ec != null && ec.IsAvailable)
             {
-                powerLimitController = new PowerLimitController(ec, useSimplifiedMode: true);
-                _logging.Info("✓ Power limit controller initialized (simplified mode)");
+                try
+                {
+                    powerLimitController = new PowerLimitController(ec, useSimplifiedMode: true);
+                    _logging.Info("✓ Power limit controller initialized (simplified mode)");
+                }
+                catch (Exception ex)
+                {
+                    _logging.Warn($"Power limit controller unavailable: {ex.Message}");
+                }
             }
-            catch (Exception ex)
+            else
             {
-                _logging.Warn($"Power limit controller unavailable: {ex.Message}");
+                _logging.Info("Power limit controller skipped (EC not available)");
             }
             
             _performanceModeService = new PerformanceModeService(fanController, powerPlanService, powerLimitController, _logging);
@@ -912,7 +959,9 @@ namespace OmenCore.ViewModels
             // Services initialized asynchronously
             InitializeServicesAsync();
 
-            var undervoltProvider = new IntelUndervoltProvider();
+            // Auto-detect CPU vendor (Intel/AMD) and create appropriate undervolt provider
+            var undervoltProvider = CpuUndervoltProviderFactory.Create(out string undervoltBackend);
+            _logging.Info($"CPU undervolt provider: {undervoltBackend}");
             _undervoltService = new UndervoltService(undervoltProvider, _logging, _config.Undervolt?.ProbeIntervalMs ?? 4000);
             _undervoltService.StatusChanged += UndervoltServiceOnStatusChanged;
             RespectExternalUndervolt = _config.Undervolt?.RespectExternalControllers ?? true;
@@ -930,7 +979,7 @@ namespace OmenCore.ViewModels
             _autoUpdateService = new AutoUpdateService(_logging);
             _processMonitoringService = new ProcessMonitoringService(_logging);
             _gameProfileService = new GameProfileService(_logging, _processMonitoringService, _configService);
-            _fanCleaningService = new FanCleaningService(_logging, ec, _systemInfoService);
+            _fanCleaningService = new FanCleaningService(_logging, ec, _systemInfoService, _wmiBios, _oghProxy);
             _biosUpdateService = new BiosUpdateService(_logging);
             _hotkeyService = new HotkeyService(_logging);
             _notificationService = new NotificationService(_logging);
@@ -1741,42 +1790,56 @@ namespace OmenCore.ViewModels
             CleanupInProgress = true;
             CleanupStatus = CleanupDryRun ? "Running cleanup dry run..." : "Removing OMEN Gaming Hub...";
             OmenCleanupSteps.Clear();
+            
+            // Subscribe to real-time progress updates
+            void OnStepCompleted(string step)
+            {
+                Application.Current?.Dispatcher?.BeginInvoke(() =>
+                {
+                    OmenCleanupSteps.Add(step);
+                    CleanupStatus = step;
+                });
+            }
+            
+            _hubCleanupService.StepCompleted += OnStepCompleted;
+            
             try
             {
                 var options = BuildCleanupOptions();
                 var result = await _hubCleanupService.CleanupAsync(options);
-                foreach (var step in result.Steps)
-                {
-                    OmenCleanupSteps.Add(step);
-                }
+                
+                // Add any warnings/errors that weren't reported via events
                 foreach (var warning in result.Warnings)
                 {
-                    OmenCleanupSteps.Add($"Warning: {warning}");
+                    if (!OmenCleanupSteps.Contains($"Warning: {warning}"))
+                        OmenCleanupSteps.Add($"Warning: {warning}");
                 }
                 foreach (var error in result.Errors)
                 {
-                    OmenCleanupSteps.Add($"Error: {error}");
+                    if (!OmenCleanupSteps.Contains($"Error: {error}"))
+                        OmenCleanupSteps.Add($"Error: {error}");
                 }
 
                 if (result.Success)
                 {
-                    CleanupStatus = CleanupDryRun ? "Dry run completed" : "OMEN Gaming Hub removed";
+                    CleanupStatus = CleanupDryRun ? "✓ Dry run completed" : "✓ OMEN Gaming Hub removed";
                     PushEvent(CleanupDryRun ? "OMEN cleanup dry run completed" : "OMEN Gaming Hub cleanup complete");
                 }
                 else
                 {
-                    CleanupStatus = "Cleanup finished with errors";
+                    CleanupStatus = "⚠ Cleanup finished with errors";
                     PushEvent("OMEN cleanup completed with errors");
                 }
             }
             catch (Exception ex)
             {
-                CleanupStatus = $"Cleanup failed: {ex.Message}";
+                CleanupStatus = $"✗ Cleanup failed: {ex.Message}";
                 _logging.Error("OMEN cleanup failed", ex);
                 PushEvent("OMEN cleanup failed");
             }
             finally
             {
+                _hubCleanupService.StepCompleted -= OnStepCompleted;
                 CleanupInProgress = false;
             }
         }
@@ -1879,16 +1942,29 @@ namespace OmenCore.ViewModels
                 // Initialize Lighting sub-ViewModel after async services are ready
                 if (_corsairDeviceService != null && _logitechDeviceService != null)
                 {
-                    // Only show lighting tab if devices are actually found
-                    if (_corsairDeviceService.Devices.Any() || _logitechDeviceService.Devices.Any())
+                    // Show lighting tab if:
+                    // 1. Corsair or Logitech peripheral devices are found, OR
+                    // 2. HP OMEN keyboard lighting is available
+                    bool hasPeripherals = _corsairDeviceService.Devices.Any() || _logitechDeviceService.Devices.Any();
+                    bool hasKeyboardLighting = _keyboardLightingService?.IsAvailable ?? false;
+                    
+                    if (hasPeripherals || hasKeyboardLighting)
                     {
                         Lighting = new LightingViewModel(_corsairDeviceService, _logitechDeviceService, _logging);
                         OnPropertyChanged(nameof(Lighting));
-                        _logging.Info("Lighting sub-ViewModel initialized (devices found)");
+                        
+                        if (hasKeyboardLighting && !hasPeripherals)
+                        {
+                            _logging.Info("Lighting sub-ViewModel initialized (keyboard lighting available)");
+                        }
+                        else
+                        {
+                            _logging.Info("Lighting sub-ViewModel initialized (devices found)");
+                        }
                     }
                     else
                     {
-                        _logging.Info("Lighting sub-ViewModel skipped (no devices found)");
+                        _logging.Info("Lighting sub-ViewModel skipped (no devices or keyboard lighting found)");
                     }
                 }
             }

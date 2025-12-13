@@ -375,6 +375,9 @@ namespace OmenCore.ViewModels
         #region Data & About
 
         public string ConfigFolderPath => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OmenCore");
+
+        public string LogFolderPath => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OmenCore");
 
         public string AppVersion => System.Reflection.Assembly.GetExecutingAssembly()
@@ -497,6 +500,17 @@ namespace OmenCore.ViewModels
             _lowOverheadMode = _config.Monitoring.LowOverheadMode;
             _autoCheckUpdates = _config.Updates?.AutoCheckEnabled ?? true;
             // Note: IncludePreReleases not yet in UpdatePreferences, using default false
+            
+            // Load hotkey and notification settings
+            _hotkeysEnabled = _config.Monitoring.HotkeysEnabled;
+            _notificationsEnabled = _config.Monitoring.NotificationsEnabled;
+            _gameNotificationsEnabled = _config.Monitoring.GameNotificationsEnabled;
+            _modeChangeNotificationsEnabled = _config.Monitoring.ModeChangeNotificationsEnabled;
+            _temperatureWarningsEnabled = _config.Monitoring.TemperatureWarningsEnabled;
+            
+            // Load UI preferences
+            _startMinimized = _config.Monitoring.StartMinimized;
+            _minimizeToTrayOnClose = _config.Monitoring.MinimizeToTrayOnClose;
 
             // Check startup registry
             try
@@ -505,6 +519,8 @@ namespace OmenCore.ViewModels
                 _startWithWindows = key?.GetValue("OmenCore") != null;
             }
             catch { }
+            
+            _logging.Info($"Settings loaded: Hotkeys={_hotkeysEnabled}, Notifications={_notificationsEnabled}");
         }
 
         private void SaveSettings()
@@ -512,6 +528,17 @@ namespace OmenCore.ViewModels
             _config.Monitoring.PollIntervalMs = _pollingIntervalMs;
             _config.Monitoring.HistoryCount = _historyCount;
             _config.Monitoring.LowOverheadMode = _lowOverheadMode;
+            
+            // Save hotkey and notification settings
+            _config.Monitoring.HotkeysEnabled = _hotkeysEnabled;
+            _config.Monitoring.NotificationsEnabled = _notificationsEnabled;
+            _config.Monitoring.GameNotificationsEnabled = _gameNotificationsEnabled;
+            _config.Monitoring.ModeChangeNotificationsEnabled = _modeChangeNotificationsEnabled;
+            _config.Monitoring.TemperatureWarningsEnabled = _temperatureWarningsEnabled;
+            
+            // Save UI preferences
+            _config.Monitoring.StartMinimized = _startMinimized;
+            _config.Monitoring.MinimizeToTrayOnClose = _minimizeToTrayOnClose;
             
             if (_config.Updates == null)
                 _config.Updates = new UpdatePreferences();
@@ -568,7 +595,7 @@ namespace OmenCore.ViewModels
         {
             try
             {
-                var path = ConfigFolderPath;
+                var path = LogFolderPath;
                 if (!Directory.Exists(path))
                     Directory.CreateDirectory(path);
                 Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
@@ -607,10 +634,12 @@ namespace OmenCore.ViewModels
                 }
                 else
                 {
-                    FanCleaningStatusText = $"⚠️ HP OMEN detected but EC access unavailable. Install WinRing0 driver.";
+                    var reason = _fanCleaningService.UnsupportedReason;
+                    FanCleaningStatusText = $"⚠️ {reason}";
                     FanCleaningStatusIcon = "M13,14H11V10H13M13,18H11V16H13M1,21H23L12,2L1,21Z"; // Warning
                     FanCleaningStatusColor = new SolidColorBrush(Color.FromRgb(255, 183, 77)); // Orange
                     CanStartFanCleaning = false;
+                    _logging.Info($"Fan cleaning unavailable: {reason}");
                 }
             }
             else
@@ -729,28 +758,100 @@ namespace OmenCore.ViewModels
         {
             try
             {
-                var devicePath = @"\\.\WinRing0_1_2";
-                var handle = NativeMethods.CreateFile(
-                    devicePath,
-                    0, // GENERIC_READ
-                    0,
-                    IntPtr.Zero,
-                    3, // OPEN_EXISTING
-                    0,
-                    IntPtr.Zero);
+                var secureBootEnabled = IsSecureBootEnabled();
+                var memoryIntegrityEnabled = IsMemoryIntegrityEnabled();
 
-                if (handle.IsInvalid || handle.IsClosed)
+                var pawnIoAvailable = IsPawnIOAvailable();
+
+                // Check WinRing0 driver - try multiple device paths
+                var devicePaths = new[] { @"\\.\WinRing0_1_2_0", @"\\.\WinRing0_1_2", @"\\.\WinRing0" };
+                bool winRing0Available = false;
+                
+                foreach (var devicePath in devicePaths)
                 {
-                    DriverStatusText = "Driver Not Installed";
-                    DriverStatusDetail = "Fan control and undervolting are disabled";
-                    DriverStatusColor = new SolidColorBrush(Color.FromRgb(239, 83, 80)); // Red
+                    try
+                    {
+                        var handle = NativeMethods.CreateFile(
+                            devicePath,
+                            NativeMethods.GENERIC_READ | NativeMethods.GENERIC_WRITE,
+                            NativeMethods.FILE_SHARE_READ | NativeMethods.FILE_SHARE_WRITE,
+                            IntPtr.Zero,
+                            3, // OPEN_EXISTING
+                            0,
+                            IntPtr.Zero);
+
+                        if (!handle.IsInvalid && !handle.IsClosed)
+                        {
+                            winRing0Available = true;
+                            handle.Close();
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+                
+                // Check for XTU service conflict
+                bool xtuRunning = false;
+                string? xtuServiceName = null;
+                try
+                {
+                    var xtuServices = new[] { "XTU3SERVICE", "XtuService", "IntelXtuService" };
+                    foreach (var svc in xtuServices)
+                    {
+                        var processes = Process.GetProcessesByName(svc);
+                        if (processes.Any())
+                        {
+                            xtuRunning = true;
+                            xtuServiceName = svc;
+                            foreach (var p in processes) p.Dispose();
+                            break;
+                        }
+                    }
+                }
+                catch { }
+
+                if (pawnIoAvailable)
+                {
+                    DriverStatusText = "PawnIO Installed";
+                    DriverStatusDetail = "Secure Boot compatible driver backend available (recommended)";
+                    DriverStatusColor = new SolidColorBrush(Color.FromRgb(102, 187, 106)); // Green
+                }
+                else if (winRing0Available)
+                {
+                    if (xtuRunning)
+                    {
+                        DriverStatusText = "WinRing0 Installed (XTU Conflict)";
+                        DriverStatusDetail = $"Intel XTU service ({xtuServiceName}) may block undervolting. Stop XTU to use OmenCore undervolting.";
+                        DriverStatusColor = new SolidColorBrush(Color.FromRgb(255, 183, 77)); // Orange
+                    }
+                    else
+                    {
+                        DriverStatusText = "WinRing0 Installed (Legacy)";
+                        DriverStatusDetail = "Legacy driver backend detected. On Secure Boot/HVCI systems, PawnIO is recommended.";
+                        DriverStatusColor = new SolidColorBrush(Color.FromRgb(102, 187, 106)); // Green
+                    }
                 }
                 else
                 {
-                    DriverStatusText = "Driver Installed";
-                    DriverStatusDetail = "Full hardware control available";
-                    DriverStatusColor = new SolidColorBrush(Color.FromRgb(102, 187, 106)); // Green
-                    handle.Close();
+                    DriverStatusText = "No Driver Backend Detected";
+
+                    if (secureBootEnabled || memoryIntegrityEnabled)
+                    {
+                        var reasons = new List<string>();
+                        if (secureBootEnabled) reasons.Add("Secure Boot is enabled");
+                        if (memoryIntegrityEnabled) reasons.Add("Memory Integrity (HVCI) is enabled");
+
+                        DriverStatusDetail =
+                            $"WinRing0 may be blocked ({string.Join(", ", reasons)}). " +
+                            "Install PawnIO (pawnio.eu) for Secure Boot compatible EC access.";
+                    }
+                    else
+                    {
+                        DriverStatusDetail =
+                            "Install PawnIO (recommended) or LibreHardwareMonitor (WinRing0) to enable driver-dependent features.";
+                    }
+
+                    DriverStatusColor = new SolidColorBrush(Color.FromRgb(239, 83, 80)); // Red
                 }
             }
             catch (Exception ex)
@@ -760,9 +861,81 @@ namespace OmenCore.ViewModels
                 DriverStatusColor = new SolidColorBrush(Color.FromRgb(255, 183, 77)); // Orange
             }
         }
+
+        private static bool IsPawnIOAvailable()
+        {
+            try
+            {
+                // Registry check
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO");
+                if (key != null)
+                    return true;
+
+                // Default install path
+                var defaultPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    "PawnIO", "PawnIOLib.dll");
+                if (System.IO.File.Exists(defaultPath))
+                    return true;
+
+                // Driver loaded check
+                using var searcher = new System.Management.ManagementObjectSearcher(
+                    "SELECT * FROM Win32_SystemDriver WHERE Name LIKE '%PawnIO%'");
+                return searcher.Get().Count > 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsSecureBootEnabled()
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\SecureBoot\State");
+                var value = key?.GetValue("UEFISecureBootEnabled");
+                return value != null && Convert.ToInt32(value) == 1;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsMemoryIntegrityEnabled()
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                    @"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity");
+                var value = key?.GetValue("Enabled");
+                return value != null && Convert.ToInt32(value) == 1;
+            }
+            catch
+            {
+                return false;
+            }
+        }
         
         private void InstallDriver()
         {
+            // Show info about what will be installed
+            var result = MessageBox.Show(
+                "OmenCore requires LibreHardwareMonitor for hardware monitoring.\n\n" +
+                "LibreHardwareMonitor includes the WinRing0 driver needed for:\n" +
+                "• CPU temperature monitoring\n" +
+                "• CPU undervolting (MSR access)\n" +
+                "• TCC offset control\n\n" +
+                "Click OK to download and install LibreHardwareMonitor.",
+                "Install Hardware Monitor", 
+                MessageBoxButton.OKCancel, 
+                MessageBoxImage.Information);
+                
+            if (result != MessageBoxResult.OK)
+                return;
+            
             // Delegate to App's download method
             if (Application.Current is App app)
             {
@@ -770,15 +943,30 @@ namespace OmenCore.ViewModels
                 var method = typeof(App).GetMethod("DownloadAndInstallLibreHardwareMonitor", 
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 method?.Invoke(app, null);
+                
+                // Refresh status after install attempt
+                Task.Delay(3000).ContinueWith(_ => 
+                    Application.Current.Dispatcher.Invoke(CheckDriverStatus));
             }
             else
             {
-                // Fallback: Open download page
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/latest",
-                    UseShellExecute = true
-                });
+                    // Prefer PawnIO on Secure Boot / Memory Integrity systems.
+                    if (IsSecureBootEnabled() || IsMemoryIntegrityEnabled())
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "https://pawnio.eu/",
+                            UseShellExecute = true
+                        });
+                        return;
+                    }
+
+                    // Legacy / optional: LibreHardwareMonitor (WinRing0-based) backend.
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor",
+                        UseShellExecute = true
+                    });
             }
         }
         
@@ -879,6 +1067,11 @@ namespace OmenCore.ViewModels
         
         private static class NativeMethods
         {
+            public const uint GENERIC_READ = 0x80000000;
+            public const uint GENERIC_WRITE = 0x40000000;
+            public const uint FILE_SHARE_READ = 0x00000001;
+            public const uint FILE_SHARE_WRITE = 0x00000002;
+            
             [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
             public static extern SafeFileHandle CreateFile(
                 string lpFileName,

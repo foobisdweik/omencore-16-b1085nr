@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Management;
 using System.Threading;
 using System.Threading.Tasks;
 using OmenCore.Models;
@@ -14,17 +15,114 @@ namespace OmenCore.Hardware
         Task<UndervoltStatus> ProbeAsync(CancellationToken token);
     }
 
+    /// <summary>
+    /// Factory for creating the appropriate undervolt provider based on CPU type.
+    /// </summary>
+    public static class CpuUndervoltProviderFactory
+    {
+        public enum CpuVendor { Unknown, Intel, AMD }
+
+        public static CpuVendor DetectedVendor { get; private set; } = CpuVendor.Unknown;
+        public static string CpuName { get; private set; } = string.Empty;
+
+        /// <summary>
+        /// Detect CPU vendor and create appropriate undervolt provider.
+        /// </summary>
+        public static ICpuUndervoltProvider Create(out string backendInfo)
+        {
+            DetectCpu();
+
+            if (DetectedVendor == CpuVendor.AMD)
+            {
+                var amdProvider = new AmdUndervoltProvider();
+                backendInfo = $"AMD Ryzen ({amdProvider.Family}) - {amdProvider.ActiveBackend}";
+                return amdProvider;
+            }
+            else
+            {
+                var intelProvider = new IntelUndervoltProvider();
+                backendInfo = $"Intel - {intelProvider.ActiveBackend}";
+                return intelProvider;
+            }
+        }
+
+        private static void DetectCpu()
+        {
+            if (DetectedVendor != CpuVendor.Unknown) return;
+
+            try
+            {
+                using var searcher = new ManagementObjectSearcher("select * from Win32_Processor");
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    CpuName = obj["Name"]?.ToString() ?? string.Empty;
+                    string manufacturer = obj["Manufacturer"]?.ToString() ?? string.Empty;
+
+                    if (manufacturer.Contains("AMD", StringComparison.OrdinalIgnoreCase) ||
+                        CpuName.Contains("AMD", StringComparison.OrdinalIgnoreCase) ||
+                        CpuName.Contains("Ryzen", StringComparison.OrdinalIgnoreCase))
+                    {
+                        DetectedVendor = CpuVendor.AMD;
+                        RyzenControl.Init(); // Initialize AMD-specific detection
+                    }
+                    else if (manufacturer.Contains("Intel", StringComparison.OrdinalIgnoreCase) ||
+                             CpuName.Contains("Intel", StringComparison.OrdinalIgnoreCase) ||
+                             CpuName.Contains("Core", StringComparison.OrdinalIgnoreCase))
+                    {
+                        DetectedVendor = CpuVendor.Intel;
+                    }
+                    else
+                    {
+                        // Default to Intel for unknown CPUs (more common in gaming laptops)
+                        DetectedVendor = CpuVendor.Intel;
+                    }
+                    break;
+                }
+            }
+            catch
+            {
+                DetectedVendor = CpuVendor.Intel; // Default fallback
+            }
+        }
+    }
+
     public class IntelUndervoltProvider : ICpuUndervoltProvider
     {
         private readonly object _stateLock = new();
         private UndervoltOffset _lastApplied = new() { CoreMv = 0, CacheMv = 0 };
         private WinRing0MsrAccess? _msrAccess;
+        private PawnIOMsrAccess? _pawnIOMsrAccess;
+        private string _activeBackend = "None";
+
+        public string ActiveBackend => _activeBackend;
 
         public IntelUndervoltProvider()
         {
+            // Try PawnIO first (Secure Boot compatible)
+            try
+            {
+                _pawnIOMsrAccess = new PawnIOMsrAccess();
+                if (_pawnIOMsrAccess.IsAvailable)
+                {
+                    _activeBackend = "PawnIO";
+                    return; // PawnIO available, skip WinRing0
+                }
+                _pawnIOMsrAccess.Dispose();
+                _pawnIOMsrAccess = null;
+            }
+            catch
+            {
+                _pawnIOMsrAccess = null;
+            }
+
+            // Fall back to WinRing0
             try
             {
                 _msrAccess = new WinRing0MsrAccess();
+                if (_msrAccess.IsAvailable)
+                {
+                    _activeBackend = "WinRing0";
+                }
             }
             catch
             {
@@ -33,13 +131,27 @@ namespace OmenCore.Hardware
             }
         }
 
+        private bool HasMsrAccess => (_pawnIOMsrAccess?.IsAvailable ?? false) || (_msrAccess?.IsAvailable ?? false);
+
         public Task ApplyOffsetAsync(UndervoltOffset offset, CancellationToken token)
         {
             lock (_stateLock)
             {
                 _lastApplied = offset.Clone();
                 
-                if (_msrAccess != null && _msrAccess.IsAvailable)
+                if (_pawnIOMsrAccess != null && _pawnIOMsrAccess.IsAvailable)
+                {
+                    try
+                    {
+                        _pawnIOMsrAccess.ApplyCoreVoltageOffset((int)offset.CoreMv);
+                        _pawnIOMsrAccess.ApplyCacheVoltageOffset((int)offset.CacheMv);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidOperationException($"Failed to apply voltage offset via PawnIO: {ex.Message}", ex);
+                    }
+                }
+                else if (_msrAccess != null && _msrAccess.IsAvailable)
                 {
                     try
                     {
@@ -62,7 +174,19 @@ namespace OmenCore.Hardware
             {
                 _lastApplied = new UndervoltOffset();
                 
-                if (_msrAccess != null && _msrAccess.IsAvailable)
+                if (_pawnIOMsrAccess != null && _pawnIOMsrAccess.IsAvailable)
+                {
+                    try
+                    {
+                        _pawnIOMsrAccess.ApplyCoreVoltageOffset(0);
+                        _pawnIOMsrAccess.ApplyCacheVoltageOffset(0);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidOperationException($"Failed to reset voltage offset via PawnIO: {ex.Message}", ex);
+                    }
+                }
+                else if (_msrAccess != null && _msrAccess.IsAvailable)
                 {
                     try
                     {
@@ -92,8 +216,21 @@ namespace OmenCore.Hardware
             {
                 copy = _lastApplied.Clone();
                 
-                // Try to read actual MSR values if WinRing0 available
-                if (_msrAccess != null && _msrAccess.IsAvailable)
+                // Try to read actual MSR values - PawnIO first, then WinRing0
+                if (_pawnIOMsrAccess != null && _pawnIOMsrAccess.IsAvailable)
+                {
+                    try
+                    {
+                        actualCore = _pawnIOMsrAccess.ReadCoreVoltageOffset();
+                        actualCache = _pawnIOMsrAccess.ReadCacheVoltageOffset();
+                        canReadMsr = true;
+                    }
+                    catch
+                    {
+                        canReadMsr = false;
+                    }
+                }
+                else if (_msrAccess != null && _msrAccess.IsAvailable)
                 {
                     try
                     {
@@ -124,11 +261,25 @@ namespace OmenCore.Hardware
                 status.ExternalController = external.Source;
                 status.ExternalCoreOffsetMv = external.Offset.CoreMv;
                 status.ExternalCacheOffsetMv = external.Offset.CacheMv;
-                status.Warning = $"External undervolt detected via {external.Source}. OmenCore may conflict with this application.";
+                
+                // Provide specific guidance based on the detected controller
+                if (external.Source.Contains("XTU", StringComparison.OrdinalIgnoreCase))
+                {
+                    status.Warning = $"Intel XTU service detected. XTU blocks MSR access for other applications. " +
+                        "To use OmenCore undervolting:\n" +
+                        "1. Open Services (services.msc)\n" +
+                        "2. Find 'Intel(R) Extreme Tuning Utility' service\n" +
+                        "3. Stop the service and set to 'Disabled'\n" +
+                        "4. Restart OmenCore";
+                }
+                else
+                {
+                    status.Warning = $"External undervolt detected via {external.Source}. OmenCore may conflict with this application.";
+                }
             }
-            else if (!canReadMsr && copy.CoreMv == 0 && copy.CacheMv == 0)
+            else if (!HasMsrAccess && copy.CoreMv == 0 && copy.CacheMv == 0)
             {
-                status.Warning = "WinRing0 driver not available. Install driver to enable CPU undervolting.";
+                status.Warning = "No MSR access backend available. Install PawnIO (Secure Boot) or WinRing0 driver to enable CPU undervolting.";
             }
             else if (!canReadMsr)
             {
@@ -140,18 +291,29 @@ namespace OmenCore.Hardware
 
         private ExternalUndervoltInfo? DetectExternalController()
         {
-            var probes = new[] { "OmenGamingHub", "ThrottleStop", "XTUService", "IntelXtuService" };
-            foreach (var probe in probes)
+            // Check for services/processes that may control MSR
+            var probes = new[] 
+            { 
+                ("OmenGamingHub", "OMEN Gaming Hub"),
+                ("ThrottleStop", "ThrottleStop"),
+                ("XTU3SERVICE", "Intel XTU"),
+                ("XtuService", "Intel XTU"),
+                ("IntelXtuService", "Intel XTU"),
+                ("esif_uf", "Intel DTT") // Intel Dynamic Tuning Technology
+            };
+            
+            foreach (var (processName, displayName) in probes)
             {
                 try
                 {
-                    var processes = Process.GetProcessesByName(probe);
+                    var processes = Process.GetProcessesByName(processName);
                     if (processes.Any())
                     {
+                        foreach (var p in processes) p.Dispose();
                         return new ExternalUndervoltInfo
                         {
-                            Source = probe,
-                            Offset = new UndervoltOffset { CoreMv = -80, CacheMv = -60 }
+                            Source = displayName,
+                            Offset = new UndervoltOffset { CoreMv = 0, CacheMv = 0 } // Unknown actual offset
                         };
                     }
                 }

@@ -1,63 +1,93 @@
 using System;
 using System.Management;
 using System.Runtime.InteropServices;
+using System.Threading;
+using Microsoft.Management.Infrastructure;
 using OmenCore.Services;
 
 namespace OmenCore.Hardware
 {
     /// <summary>
     /// HP OMEN WMI BIOS interface for fan control and system management.
-    /// Communicates with HP BIOS via WMI instead of direct EC access,
-    /// eliminating the need for the WinRing0 driver.
+    /// Uses the direct hpqBIntM WMI interface like OmenMon project.
     /// 
     /// Based on HP ACPI\PNP0C14 driver interface documented by OmenMon project.
+    /// Uses CIM (Common Information Model) for WMI communication.
+    /// 
+    /// NOTE: 2023+ OMEN models (13th gen Intel and newer) require periodic "heartbeat"
+    /// WMI queries to keep fan control unlocked.
     /// </summary>
     public class HpWmiBios : IDisposable
     {
         private readonly LoggingService? _logging;
         private bool _isAvailable;
         private bool _disposed;
-        private ManagementObject? _biosInterface;
+        
+        // CIM session for WMI access (same as OmenMon)
+        private CimSession? _cimSession;
+        private CimInstance? _biosData;
+        private CimInstance? _biosMethods;
         
         // Error throttling to reduce log spam
         private DateTime _lastErrorLog = DateTime.MinValue;
         private int _errorCount = 0;
         private const int ErrorLogIntervalSeconds = 30;
         
-        // Track WMI command failures - disable WMI if it consistently fails
+        // Track WMI command failures
         private int _consecutiveFailures = 0;
-        private const int MaxConsecutiveFailures = 3;
+        private const int MaxConsecutiveFailures = 5;
         private bool _wmiCommandsDisabled = false;
+        
+        // Heartbeat timer for 2023+ models
+        private Timer? _heartbeatTimer;
+        private const int HeartbeatIntervalMs = 60000; // 60 seconds
+        private bool _heartbeatEnabled = false;
 
-        // HP WMI namespaces
-        private const string WmiNamespace = @"root\WMI";
-        private const string HpBiosClass = "hpqBIntM";
-
-        // BIOS command identifiers (from HP.Omen.Core.Common.PowerControl)
-        private const int CMD_FAN_GET_COUNT = 0x10;
-        private const int CMD_FAN_GET_LEVEL = 0x11;
-        private const int CMD_FAN_SET_LEVEL = 0x12;
-        private const int CMD_FAN_GET_TYPE = 0x13;
-        private const int CMD_FAN_GET_TABLE = 0x17;
-        private const int CMD_FAN_SET_TABLE = 0x18;
-        private const int CMD_FAN_MAX_GET = 0x1A;
-        private const int CMD_FAN_MAX_SET = 0x1B;
-        private const int CMD_FAN_MODE_SET = 0x1C;
-        private const int CMD_SYSTEM_GET_DATA = 0x28;
-        private const int CMD_GPU_GET_POWER = 0x2F;
-        private const int CMD_GPU_SET_POWER = 0x30;
-        private const int CMD_GPU_GET_MODE = 0x32;
-        private const int CMD_GPU_SET_MODE = 0x33;
-        private const int CMD_TEMP_GET = 0x3C;
-        private const int CMD_BACKLIGHT_GET = 0x25;
-        private const int CMD_BACKLIGHT_SET = 0x26;
-        private const int CMD_COLOR_GET = 0x21;
-        private const int CMD_COLOR_SET = 0x22;
-        private const int CMD_THROTTLE_GET = 0x3D;
-        private const int CMD_IDLE_SET = 0x3E;
-
-        // BIOS signature bytes
-        private const uint BIOS_SIGNATURE = 0x4F4D4E48; // "HNMO" (OMEN Hardware)
+        // HP WMI constants (from OmenMon)
+        private const string BIOS_NAMESPACE = @"root\wmi";
+        private const string BIOS_DATA = "hpqBDataIn";
+        private const string BIOS_DATA_FIELD = "hpqBData";
+        private const string BIOS_METHOD = "hpqBIOSInt";
+        private const string BIOS_METHOD_CLASS = "hpqBIntM";
+        private const string BIOS_METHOD_INSTANCE = @"ACPI\PNP0C14\0_0";
+        private const string BIOS_RETURN_CODE_FIELD = "rwReturnCode";
+        
+        // Pre-defined shared secret for BIOS authorization (from OmenMon)
+        private static readonly byte[] BiosSign = new byte[4] { 0x53, 0x45, 0x43, 0x55 }; // "SECU"
+        
+        /// <summary>
+        /// BIOS command identifiers (from OmenMon BiosData.cs).
+        /// </summary>
+        public enum BiosCmd : uint
+        {
+            Default = 0x20008,   // Most commands (131080)
+            Keyboard = 0x20009,  // Keyboard-related (131081)
+            Legacy = 0x00001,    // Earliest implemented (1)
+            GpuMode = 0x00002    // Graphics mode switch (2)
+        }
+        
+        // Command type IDs (second parameter in Send method)
+        private const uint CMD_FAN_GET_COUNT = 0x10;
+        private const uint CMD_FAN_SET_LEVEL = 0x2E;  // SetFanLevel (OmenMon 0x2E)
+        private const uint CMD_FAN_GET_LEVEL = 0x2D;  // GetFanLevel (OmenMon 0x2D)
+        private const uint CMD_FAN_GET_TYPE = 0x2C;   // GetFanType
+        private const uint CMD_FAN_MODE_SET = 0x1A;   // SetFanMode (OmenMon 0x1A)
+        private const uint CMD_FAN_MAX_GET = 0x26;    // GetMaxFan (OmenMon 0x26)
+        private const uint CMD_FAN_MAX_SET = 0x27;    // SetMaxFan (OmenMon 0x27)
+        private const uint CMD_FAN_GET_TABLE = 0x2F;  // GetFanTable
+        private const uint CMD_FAN_SET_TABLE = 0x32;  // SetFanTable
+        private const uint CMD_SYSTEM_GET_DATA = 0x28;
+        private const uint CMD_GPU_GET_POWER = 0x21;  // GetGpuPower (OmenMon 0x21)
+        private const uint CMD_GPU_SET_POWER = 0x22;  // SetGpuPower (OmenMon 0x22)
+        private const uint CMD_GPU_GET_MODE = 0x52;   // GetGpuMode - uses Legacy cmd
+        private const uint CMD_GPU_SET_MODE = 0x52;   // SetGpuMode - uses GpuMode cmd
+        private const uint CMD_TEMP_GET = 0x23;       // GetTemperature (OmenMon 0x23)
+        private const uint CMD_BACKLIGHT_GET = 0x04;  // GetBacklight - uses Keyboard cmd
+        private const uint CMD_BACKLIGHT_SET = 0x05;  // SetBacklight - uses Keyboard cmd
+        private const uint CMD_COLOR_GET = 0x02;      // GetColorTable - uses Keyboard cmd
+        private const uint CMD_COLOR_SET = 0x03;      // SetColorTable - uses Keyboard cmd
+        private const uint CMD_THROTTLE_GET = 0x35;
+        private const uint CMD_IDLE_SET = 0x31;       // SetIdle (OmenMon 0x31)
         
         /// <summary>
         /// Fan performance mode enumeration.
@@ -107,6 +137,7 @@ namespace OmenCore.Hardware
         public string Status { get; private set; } = "Not initialized";
         public ThermalPolicyVersion ThermalPolicy { get; private set; } = ThermalPolicyVersion.V1;
         public int FanCount { get; private set; } = 2;
+        public bool HeartbeatEnabled => _heartbeatEnabled;
 
         public HpWmiBios(LoggingService? logging = null)
         {
@@ -118,42 +149,57 @@ namespace OmenCore.Hardware
         {
             try
             {
-                // Check for HP OMEN WMI BIOS interface
-                using var searcher = new ManagementObjectSearcher(WmiNamespace, $"SELECT * FROM {HpBiosClass}");
-                var results = searcher.Get();
-
-                foreach (ManagementObject obj in results)
-                {
-                    _biosInterface = obj;
-                    break;
-                }
-
-                if (_biosInterface != null)
+                // Create CIM session (like OmenMon)
+                _cimSession = CimSession.Create(null);
+                
+                // Set up the BIOS data structure with shared secret
+                _biosData = new CimInstance(_cimSession.GetClass(BIOS_NAMESPACE, BIOS_DATA));
+                _biosData.CimInstanceProperties["Sign"].Value = BiosSign;
+                
+                // Retrieve the BIOS methods instance
+                _biosMethods = new CimInstance(BIOS_METHOD_CLASS, BIOS_NAMESPACE);
+                _biosMethods.CimInstanceProperties.Add(CimProperty.Create("InstanceName", BIOS_METHOD_INSTANCE, CimFlags.Key));
+                _biosMethods = _cimSession.GetInstance(BIOS_NAMESPACE, _biosMethods);
+                
+                if (_biosMethods != null)
                 {
                     _isAvailable = true;
-                    Status = "HP WMI BIOS interface available";
+                    Status = "HP WMI BIOS interface available (CIM)";
                     _logging?.Info($"✓ {Status}");
 
-                    // Query system data to get thermal policy version and fan count
-                    // This also serves as a validation that WMI commands actually work
+                    // Query system data to validate and get thermal policy
                     if (!QuerySystemData())
                     {
-                        // WMI class exists but commands don't work - this system may need WinRing0
-                        _isAvailable = false;
-                        Status = "HP WMI BIOS found but commands not functional";
-                        _logging?.Warn($"⚠️ {Status} - fan control requires WinRing0 driver on this system");
+                        _logging?.Info("WMI BIOS: Initial query failed, attempting heartbeat sequence...");
+                        
+                        if (TryHeartbeatSequence())
+                        {
+                            _logging?.Info("✓ WMI BIOS initialized via heartbeat sequence");
+                            StartHeartbeat();
+                        }
+                        else
+                        {
+                            _isAvailable = false;
+                            Status = "HP WMI BIOS found but commands not functional";
+                            _logging?.Warn($"⚠️ {Status}");
+                        }
+                    }
+                    else
+                    {
+                        StartHeartbeat();
                     }
                 }
                 else
                 {
-                    // Try alternate class name
-                    TryAlternateInterface();
+                    _isAvailable = false;
+                    Status = "HP WMI BIOS interface not found";
+                    _logging?.Info($"HP WMI BIOS: {Status}");
                 }
             }
-            catch (ManagementException ex)
+            catch (CimException ex)
             {
                 _isAvailable = false;
-                Status = $"WMI query failed: {ex.Message}";
+                Status = $"CIM query failed: {ex.Message}";
                 _logging?.Info($"HP WMI BIOS: {Status}");
             }
             catch (Exception ex)
@@ -163,29 +209,78 @@ namespace OmenCore.Hardware
                 _logging?.Error($"HP WMI BIOS: {Status}", ex);
             }
         }
-
-        private void TryAlternateInterface()
+        
+        /// <summary>
+        /// Try a series of heartbeat queries to "wake up" the WMI interface on 2023+ models.
+        /// </summary>
+        private bool TryHeartbeatSequence()
         {
+            // Send multiple heartbeat queries with small delays
+            for (int i = 0; i < 3; i++)
+            {
+                // Try fan count query (minimal command that usually works)
+                var result = SendBiosCommand(BiosCmd.Default, CMD_FAN_GET_COUNT, new byte[4], 4);
+                if (result != null && result.Length >= 1)
+                {
+                    FanCount = result[0];
+                    _logging?.Info($"  Heartbeat #{i+1}: Fan count = {FanCount}");
+                    
+                    // Try full system data query now
+                    if (QuerySystemData())
+                    {
+                        return true;
+                    }
+                }
+                
+                // Small delay between attempts
+                System.Threading.Thread.Sleep(200);
+            }
+            
+            return false;
+        }
+        
+        /// <summary>
+        /// Start the heartbeat timer to keep WMI commands working on 2023+ models.
+        /// </summary>
+        public void StartHeartbeat()
+        {
+            if (_heartbeatEnabled || !_isAvailable) return;
+            
+            _heartbeatTimer = new Timer(HeartbeatCallback, null, HeartbeatIntervalMs, HeartbeatIntervalMs);
+            _heartbeatEnabled = true;
+            _logging?.Info($"✓ WMI BIOS heartbeat started (every {HeartbeatIntervalMs/1000}s)");
+        }
+        
+        /// <summary>
+        /// Stop the heartbeat timer.
+        /// </summary>
+        public void StopHeartbeat()
+        {
+            _heartbeatTimer?.Dispose();
+            _heartbeatTimer = null;
+            _heartbeatEnabled = false;
+            _logging?.Info("WMI BIOS heartbeat stopped");
+        }
+        
+        /// <summary>
+        /// Heartbeat callback - sends periodic query to keep WMI commands active.
+        /// </summary>
+        private void HeartbeatCallback(object? state)
+        {
+            if (!_isAvailable || _wmiCommandsDisabled) return;
+            
             try
             {
-                // Some HP systems use a different WMI class
-                using var searcher = new ManagementObjectSearcher(WmiNamespace, "SELECT * FROM HP_BIOSMethod");
-                var results = searcher.Get();
-
-                foreach (ManagementObject obj in results)
+                // Send a simple fan count query to keep the interface active
+                var result = SendBiosCommand(BiosCmd.Default, CMD_FAN_GET_COUNT, new byte[4], 4);
+                if (result == null)
                 {
-                    _biosInterface = obj;
-                    _isAvailable = true;
-                    Status = "HP WMI BIOS interface available (alternate)";
-                    _logging?.Info($"✓ {Status}");
-                    break;
+                    _logging?.Warn("WMI BIOS heartbeat failed - commands may stop working");
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                _isAvailable = false;
-                Status = "HP WMI BIOS interface not found";
-                _logging?.Info($"HP WMI BIOS: {Status}");
+                _logging?.Warn($"WMI BIOS heartbeat error: {ex.Message}");
             }
         }
 
@@ -197,14 +292,14 @@ namespace OmenCore.Hardware
         {
             try
             {
-                var result = ExecuteBiosCommand(CMD_SYSTEM_GET_DATA, new byte[4], 128);
+                var result = SendBiosCommand(BiosCmd.Default, CMD_SYSTEM_GET_DATA, null, 128);
                 if (result != null && result.Length >= 9)
                 {
                     ThermalPolicy = (ThermalPolicyVersion)result[3];
                     _logging?.Info($"  Thermal Policy: V{(int)ThermalPolicy}");
 
                     // Query fan count
-                    var fanResult = ExecuteBiosCommand(CMD_FAN_GET_COUNT, new byte[4], 4);
+                    var fanResult = SendBiosCommand(BiosCmd.Default, CMD_FAN_GET_COUNT, new byte[4], 4);
                     if (fanResult != null && fanResult.Length >= 1)
                     {
                         FanCount = fanResult[0];
@@ -226,6 +321,7 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Set fan performance mode via WMI BIOS.
+        /// Uses OmenMon's exact command format: Cmd.Default (0x20008), CommandType 0x1A, data {0xFF, mode, 0, 0}
         /// </summary>
         public bool SetFanMode(FanMode mode)
         {
@@ -237,14 +333,22 @@ namespace OmenCore.Hardware
 
             try
             {
+                // OmenMon format: {0xFF, (byte)mode, 0x00, 0x00}
                 var data = new byte[4];
-                data[0] = (byte)mode;
+                data[0] = 0xFF;  // Constant required by HP BIOS
+                data[1] = (byte)mode;
+                data[2] = 0x00;
+                data[3] = 0x00;
 
-                var result = ExecuteBiosCommand(CMD_FAN_MODE_SET, data, 4);
+                var result = SendBiosCommand(BiosCmd.Default, CMD_FAN_MODE_SET, data, 0);
                 if (result != null)
                 {
-                    _logging?.Info($"✓ Fan mode set to: {mode}");
+                    _logging?.Info($"✓ Fan mode set to: {mode} (0x{(byte)mode:X2})");
                     return true;
+                }
+                else
+                {
+                    _logging?.Warn($"Fan mode command returned null for: {mode}");
                 }
             }
             catch (Exception ex)
@@ -256,6 +360,8 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Set fan speed levels directly (0-255, in krpm units).
+        /// OmenMon: Cmd.Default, 0x2E, {fan1Level, fan2Level, 0x00, 0x00}
+        /// Note: This call will always check for BIOS error and throw an exception if it occurred.
         /// </summary>
         public bool SetFanLevel(byte fan1Level, byte fan2Level)
         {
@@ -270,8 +376,10 @@ namespace OmenCore.Hardware
                 var data = new byte[4];
                 data[0] = fan1Level;
                 data[1] = fan2Level;
+                data[2] = 0x00;
+                data[3] = 0x00;
 
-                var result = ExecuteBiosCommand(CMD_FAN_SET_LEVEL, data, 4);
+                var result = SendBiosCommand(BiosCmd.Default, CMD_FAN_SET_LEVEL, data, 0);
                 if (result != null)
                 {
                     _logging?.Info($"✓ Fan levels set: CPU={fan1Level}, GPU={fan2Level}");
@@ -287,6 +395,7 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Get current fan speed levels.
+        /// OmenMon: Cmd.Default, 0x2D
         /// </summary>
         public (byte fan1, byte fan2)? GetFanLevel()
         {
@@ -294,7 +403,7 @@ namespace OmenCore.Hardware
 
             try
             {
-                var result = ExecuteBiosCommand(CMD_FAN_GET_LEVEL, new byte[4], 4);
+                var result = SendBiosCommand(BiosCmd.Default, CMD_FAN_GET_LEVEL, new byte[4], 128);
                 if (result != null && result.Length >= 2)
                 {
                     return (result[0], result[1]);
@@ -309,6 +418,7 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Enable or disable maximum fan speed mode.
+        /// OmenMon: Cmd.Default, 0x27, {enabled ? 1 : 0, 0, 0, 0}
         /// </summary>
         public bool SetFanMax(bool enabled)
         {
@@ -322,8 +432,11 @@ namespace OmenCore.Hardware
             {
                 var data = new byte[4];
                 data[0] = (byte)(enabled ? 1 : 0);
+                data[1] = 0x00;
+                data[2] = 0x00;
+                data[3] = 0x00;
 
-                var result = ExecuteBiosCommand(CMD_FAN_MAX_SET, data, 4);
+                var result = SendBiosCommand(BiosCmd.Default, CMD_FAN_MAX_SET, data, 0);
                 if (result != null)
                 {
                     _logging?.Info($"✓ Fan max mode: {(enabled ? "enabled" : "disabled")}");
@@ -339,6 +452,7 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Get current fan max mode status.
+        /// OmenMon: Cmd.Default, 0x26
         /// </summary>
         public bool? GetFanMax()
         {
@@ -346,7 +460,7 @@ namespace OmenCore.Hardware
 
             try
             {
-                var result = ExecuteBiosCommand(CMD_FAN_MAX_GET, new byte[4], 4);
+                var result = SendBiosCommand(BiosCmd.Default, CMD_FAN_MAX_GET, new byte[4], 4);
                 if (result != null && result.Length >= 1)
                 {
                     return result[0] != 0;
@@ -361,7 +475,7 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Get BIOS temperature sensor reading.
-        /// Note: This tends to read lower than EC sensors.
+        /// OmenMon: Cmd.Default, 0x23, {0x01, 0, 0, 0}
         /// </summary>
         public int? GetTemperature()
         {
@@ -369,7 +483,7 @@ namespace OmenCore.Hardware
 
             try
             {
-                var result = ExecuteBiosCommand(CMD_TEMP_GET, new byte[4], 4);
+                var result = SendBiosCommand(BiosCmd.Default, CMD_TEMP_GET, new byte[4] { 0x01, 0x00, 0x00, 0x00 }, 4);
                 if (result != null && result.Length >= 1)
                 {
                     return result[0];
@@ -384,6 +498,7 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Set GPU power preset.
+        /// OmenMon: Cmd.Default, 0x22
         /// </summary>
         public bool SetGpuPower(GpuPowerLevel level)
         {
@@ -412,8 +527,10 @@ namespace OmenCore.Hardware
                         data[1] = 1; // PPAB on
                         break;
                 }
+                data[2] = 0x01; // DState = D1
+                data[3] = 0x00; // PeakTemperature
 
-                var result = ExecuteBiosCommand(CMD_GPU_SET_POWER, data, 4);
+                var result = SendBiosCommand(BiosCmd.Default, CMD_GPU_SET_POWER, data, 0);
                 if (result != null)
                 {
                     _logging?.Info($"✓ GPU power set to: {level}");
@@ -429,6 +546,7 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Get current GPU power settings.
+        /// OmenMon: Cmd.Default, 0x21
         /// </summary>
         public (bool customTgp, bool ppab, int dState)? GetGpuPower()
         {
@@ -436,7 +554,7 @@ namespace OmenCore.Hardware
 
             try
             {
-                var result = ExecuteBiosCommand(CMD_GPU_GET_POWER, new byte[4], 4);
+                var result = SendBiosCommand(BiosCmd.Default, CMD_GPU_GET_POWER, new byte[4], 4);
                 if (result != null && result.Length >= 3)
                 {
                     return (result[0] != 0, result[1] != 0, result[2]);
@@ -451,6 +569,7 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Get GPU mode (Hybrid/Discrete/Optimus).
+        /// OmenMon: Cmd.Legacy, 0x52 (returns BIOS error 4 on unsupported)
         /// </summary>
         public GpuMode? GetGpuMode()
         {
@@ -458,7 +577,8 @@ namespace OmenCore.Hardware
 
             try
             {
-                var result = ExecuteBiosCommand(CMD_GPU_GET_MODE, new byte[4], 4);
+                // Use Legacy command for GPU mode get (OmenMon)
+                var result = SendBiosCommand(BiosCmd.Legacy, CMD_GPU_GET_MODE, null, 4);
                 if (result != null && result.Length >= 1)
                 {
                     return (GpuMode)result[0];
@@ -473,6 +593,7 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Set GPU mode (requires reboot to take effect).
+        /// OmenMon: Cmd.GpuMode, 0x52
         /// </summary>
         public bool SetGpuMode(GpuMode mode)
         {
@@ -487,7 +608,8 @@ namespace OmenCore.Hardware
                 var data = new byte[4];
                 data[0] = (byte)mode;
 
-                var result = ExecuteBiosCommand(CMD_GPU_SET_MODE, data, 4);
+                // Use GpuMode command for setting (OmenMon)
+                var result = SendBiosCommand(BiosCmd.GpuMode, CMD_GPU_SET_MODE, data, 0);
                 if (result != null)
                 {
                     _logging?.Info($"✓ GPU mode set to: {mode} (reboot required)");
@@ -503,6 +625,7 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Set keyboard backlight on/off.
+        /// OmenMon: Cmd.Keyboard, 0x05
         /// </summary>
         public bool SetBacklight(bool enabled)
         {
@@ -517,7 +640,7 @@ namespace OmenCore.Hardware
                 var data = new byte[4];
                 data[0] = (byte)(enabled ? 0xE4 : 0x64);
 
-                var result = ExecuteBiosCommand(CMD_BACKLIGHT_SET, data, 4);
+                var result = SendBiosCommand(BiosCmd.Keyboard, CMD_BACKLIGHT_SET, data, 0);
                 if (result != null)
                 {
                     _logging?.Info($"✓ Keyboard backlight: {(enabled ? "on" : "off")}");
@@ -533,6 +656,7 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Set idle mode (affects power management).
+        /// OmenMon: Cmd.Default, 0x31
         /// </summary>
         public bool SetIdleMode(bool enabled)
         {
@@ -547,7 +671,7 @@ namespace OmenCore.Hardware
                 var data = new byte[4];
                 data[0] = (byte)(enabled ? 1 : 0);
 
-                var result = ExecuteBiosCommand(CMD_IDLE_SET, data, 4);
+                var result = SendBiosCommand(BiosCmd.Default, CMD_IDLE_SET, data, 4);
                 if (result != null)
                 {
                     _logging?.Info($"✓ Idle mode: {(enabled ? "enabled" : "disabled")}");
@@ -562,117 +686,94 @@ namespace OmenCore.Hardware
         }
 
         /// <summary>
-        /// Execute a BIOS command via WMI using embedded WMI object format.
-        /// HP WMI expects hpqBDataIn embedded object, not a raw byte array.
+        /// Send a command to the BIOS via CIM/WMI using OmenMon's exact implementation.
         /// </summary>
-        private byte[]? ExecuteBiosCommand(int command, byte[] inputData, int outputSize)
+        /// <param name="command">The BIOS command class (Default, Keyboard, Legacy, GpuMode)</param>
+        /// <param name="commandType">The specific command type/ID</param>
+        /// <param name="inData">Input data bytes (can be null)</param>
+        /// <param name="outDataSize">Expected output size: 0, 4, 128, 1024, or 4096</param>
+        /// <returns>Output data bytes or empty array on success, null on failure</returns>
+        private byte[]? SendBiosCommand(BiosCmd command, uint commandType, byte[]? inData, byte outDataSize)
         {
-            if (_biosInterface == null || _wmiCommandsDisabled)
+            if (_cimSession == null || _biosMethods == null || _wmiCommandsDisabled)
                 return null;
-
-            // Try embedded object format first, fall back to legacy if needed
-            var result = ExecuteBiosCommandEmbedded(command, inputData, outputSize);
-            if (result != null)
-            {
-                _consecutiveFailures = 0; // Reset on success
-                return result;
-            }
                 
-            // Fallback to legacy raw byte array format
-            result = ExecuteBiosCommandLegacy(command, inputData, outputSize);
-            if (result != null)
-            {
-                _consecutiveFailures = 0;
-                return result;
-            }
+            // Initialize the output variable
+            var outData = new byte[outDataSize];
             
-            // Track failures and disable if too many
-            _consecutiveFailures++;
-            if (_consecutiveFailures >= MaxConsecutiveFailures && !_wmiCommandsDisabled)
-            {
-                _wmiCommandsDisabled = true;
-                _logging?.Warn($"WMI BIOS commands disabled after {MaxConsecutiveFailures} consecutive failures. " +
-                    "This HP system may require different command format or WinRing0 driver for fan control.");
-            }
-            
-            return null;
-        }
-        
-        /// <summary>
-        /// Execute BIOS command using embedded WMI object (newer HP systems).
-        /// </summary>
-        private byte[]? ExecuteBiosCommandEmbedded(int command, byte[] inputData, int outputSize)
-        {
-            if (_biosInterface == null)
-                return null;
-
             try
             {
-                // Create the embedded hpqBDataIn WMI object using the proper path
-                using var inputClass = new ManagementClass(WmiNamespace, "hpqBDataIn", null);
-                var inputInstance = inputClass.CreateInstance();
-                
-                // Build data buffer (128 bytes for hpqBIOSInt128)
-                var dataBuffer = new byte[128];
-                if (inputData != null && inputData.Length > 0)
+                using (CimInstance input = new CimInstance(_biosData!))
                 {
-                    Array.Copy(inputData, 0, dataBuffer, 0, Math.Min(inputData.Length, 128));
-                }
-
-                // Set properties according to HP WMI schema
-                inputInstance["Command"] = (uint)command;
-                inputInstance["CommandType"] = (uint)0;  // Standard command
-                inputInstance["Size"] = (uint)(inputData?.Length ?? 0);
-                inputInstance["hpqBData"] = dataBuffer;
-                inputInstance["Sign"] = new byte[256];  // Signature (not used but required)
-
-                // Get method parameters
-                var inParams = _biosInterface.GetMethodParameters("hpqBIOSInt128");
-                if (inParams == null)
-                {
-                    return null;
-                }
-                
-                // The InData parameter expects the embedded object
-                // ManagementObject.InvokeMethod with embedded objects requires setting the embedded instance
-                inParams["InData"] = inputInstance;
-                
-                var outParams = _biosInterface.InvokeMethod("hpqBIOSInt128", inParams, null);
-                if (outParams != null)
-                {
-                    // Try to get output as embedded object first
-                    var outDataObj = outParams["OutData"] as ManagementBaseObject;
-                    if (outDataObj != null)
+                    // Define the input arguments for the request
+                    input.CimInstanceProperties["Command"].Value = command;
+                    input.CimInstanceProperties["CommandType"].Value = commandType;
+                    
+                    if (inData == null)
                     {
-                        // hpqBDataOut128 has 'Data' property (not 'hpqBData')
-                        var outputBuffer = outDataObj["Data"] as byte[];
-                        var returnCode = Convert.ToInt32(outDataObj["rwReturnCode"] ?? -1);
-                        
-                        if (returnCode == 0 && outputBuffer != null && outputBuffer.Length > 0)
+                        // Allow for a call with no data payload
+                        input.CimInstanceProperties["Size"].Value = 0;
+                    }
+                    else
+                    {
+                        input.CimInstanceProperties[BIOS_DATA_FIELD].Value = inData;
+                        input.CimInstanceProperties["Size"].Value = inData.Length;
+                    }
+                    
+                    // Prepare the method parameters
+                    CimMethodParametersCollection methodParams = new();
+                    methodParams.Add(CimMethodParameter.Create("InData", input, Microsoft.Management.Infrastructure.CimType.Instance, CimFlags.In));
+                    
+                    // Call the pertinent method depending on the data size
+                    CimMethodResult result = _cimSession.InvokeMethod(
+                        _biosMethods, BIOS_METHOD + Convert.ToString(outDataSize), methodParams);
+                    
+                    // Retrieve the resulting data
+                    using (CimInstance? resultData = result.OutParameters["OutData"].Value as CimInstance)
+                    {
+                        if (resultData != null)
                         {
-                            _errorCount = 0; // Reset error count on success
-                            var result = new byte[Math.Min(outputSize, outputBuffer.Length)];
-                            Array.Copy(outputBuffer, 0, result, 0, result.Length);
-                            return result;
+                            // Populate the output data variable
+                            if (outDataSize != 0)
+                            {
+                                outData = resultData.CimInstanceProperties["Data"].Value as byte[] ?? outData;
+                            }
+                            
+                            // Get return code
+                            var returnCode = Convert.ToInt32(resultData.CimInstanceProperties[BIOS_RETURN_CODE_FIELD].Value);
+                            
+                            if (returnCode == 0)
+                            {
+                                _consecutiveFailures = 0; // Reset on success
+                                return outData;
+                            }
+                            else
+                            {
+                                // Log error but don't spam
+                                LogThrottledError($"BIOS command {command}:{commandType:X2} returned code {returnCode}");
+                            }
                         }
                     }
                 }
             }
-            catch (ManagementException ex) when (ex.ErrorCode == ManagementStatus.InvalidParameter ||
-                                                  ex.ErrorCode == ManagementStatus.TypeMismatch)
+            catch (CimException ex)
             {
-                // Expected for systems that don't support embedded object format
-                // Will fall through to legacy format - don't log this
-            }
-            catch (ManagementException ex)
-            {
-                LogThrottledError($"WMI embedded method failed: {ex.Message}");
+                LogThrottledError($"CIM command failed: {ex.Message}");
+                _consecutiveFailures++;
             }
             catch (Exception ex)
             {
-                LogThrottledError($"BIOS embedded command failed: {ex.Message}");
+                LogThrottledError($"BIOS command failed: {ex.Message}");
+                _consecutiveFailures++;
             }
-
+            
+            // Check if we should disable WMI commands
+            if (_consecutiveFailures >= MaxConsecutiveFailures && !_wmiCommandsDisabled)
+            {
+                _wmiCommandsDisabled = true;
+                _logging?.Warn($"WMI BIOS commands disabled after {MaxConsecutiveFailures} consecutive failures.");
+            }
+            
             return null;
         }
         
@@ -697,77 +798,15 @@ namespace OmenCore.Hardware
                 _errorCount = 0;
             }
         }
-        
-        /// <summary>
-        /// Legacy BIOS command format for older HP systems that use raw byte arrays.
-        /// </summary>
-        private byte[]? ExecuteBiosCommandLegacy(int command, byte[] inputData, int outputSize)
-        {
-            if (_biosInterface == null)
-                return null;
-
-            try
-            {
-                // Build input buffer: 4-byte signature + 4-byte command + data
-                var inputBuffer = new byte[128];
-                
-                // HP BIOS signature "HNMO"
-                inputBuffer[0] = 0x48; // H
-                inputBuffer[1] = 0x4E; // N
-                inputBuffer[2] = 0x4D; // M
-                inputBuffer[3] = 0x4F; // O
-                
-                // Command ID
-                inputBuffer[4] = (byte)(command & 0xFF);
-                inputBuffer[5] = (byte)((command >> 8) & 0xFF);
-                inputBuffer[6] = (byte)((command >> 16) & 0xFF);
-                inputBuffer[7] = (byte)((command >> 24) & 0xFF);
-
-                // Copy input data
-                if (inputData != null && inputData.Length > 0)
-                {
-                    Array.Copy(inputData, 0, inputBuffer, 8, Math.Min(inputData.Length, 120));
-                }
-
-                var inParams = _biosInterface.GetMethodParameters("hpqBIOSInt128");
-                if (inParams != null)
-                {
-                    inParams["InData"] = inputBuffer;
-                    
-                    var outParams = _biosInterface.InvokeMethod("hpqBIOSInt128", inParams, null);
-                    if (outParams != null)
-                    {
-                        var outputBuffer = outParams["OutData"] as byte[];
-                        if (outputBuffer != null && outputBuffer.Length >= 8)
-                        {
-                            var returnCode = BitConverter.ToInt32(outputBuffer, 0);
-                            if (returnCode == 0)
-                            {
-                                var result = new byte[outputSize];
-                                Array.Copy(outputBuffer, 4, result, 0, Math.Min(outputSize, outputBuffer.Length - 4));
-                                return result;
-                            }
-                        }
-                    }
-                }
-            }
-            catch (ManagementException)
-            {
-                // Silently fail - will be tracked by ExecuteBiosCommand
-            }
-            catch (Exception)
-            {
-                // Silently fail - will be tracked by ExecuteBiosCommand
-            }
-
-            return null;
-        }
 
         public void Dispose()
         {
             if (!_disposed)
             {
-                _biosInterface?.Dispose();
+                StopHeartbeat();
+                _biosData?.Dispose();
+                _biosMethods?.Dispose();
+                _cimSession?.Dispose();
                 _disposed = true;
             }
         }

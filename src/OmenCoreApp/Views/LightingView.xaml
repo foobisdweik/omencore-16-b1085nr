@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:controls="clr-namespace:OmenCore.Controls"
+             xmlns:utils="clr-namespace:OmenCore.Utils"
              mc:Ignorable="d" 
              d:DesignHeight="700" d:DesignWidth="1000">
     <Grid>
@@ -18,7 +19,7 @@
                    Foreground="{StaticResource TextPrimaryBrush}" 
                    Margin="0,0,0,16"/>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="1" Style="{StaticResource SmoothScrollViewer}" utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="2.5">
             <StackPanel>
                 <!-- Corsair Devices Section -->
                 <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16">
@@ -344,13 +345,13 @@
                     <StackPanel>
                         <TextBlock Text="HP OMEN Keyboard" FontSize="20" FontWeight="SemiBold" 
                                    Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
-                        <TextBlock Text="Control your laptop's built-in 4-zone RGB keyboard" 
+                        <TextBlock Text="Your laptop's built-in 4-zone RGB keyboard" 
                                    FontSize="12" 
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    Margin="0,0,0,16"/>
 
-                        <!-- Zone Toggles -->
-                        <TextBlock Text="LIGHTING ZONES" 
+                        <!-- Keyboard Zone Display -->
+                        <TextBlock Text="KEYBOARD ZONES" 
                                    Style="{StaticResource Label}" 
                                    Margin="0,0,0,12"/>
                         <Grid Margin="0,0,0,16">
@@ -422,10 +423,11 @@
                             </Border>
                         </Grid>
 
-                        <TextBlock Text="Note: Zone colors can be configured in the Lighting Profiles section" 
+                        <TextBlock Text="Note: Per-zone keyboard color control requires OMEN Gaming Hub. OmenCore displays zone information but cannot modify keyboard lighting directly due to HP's proprietary interface." 
                                    FontSize="11" 
                                    Foreground="{StaticResource TextTertiaryBrush}"
-                                   FontStyle="Italic"/>
+                                   FontStyle="Italic"
+                                   TextWrapping="Wrap"/>
                     </StackPanel>
                 </Border>
 

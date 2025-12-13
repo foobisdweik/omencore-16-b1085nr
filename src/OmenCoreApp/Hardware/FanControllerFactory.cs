@@ -26,12 +26,12 @@ namespace OmenCore.Hardware
 
     /// <summary>
     /// Factory for creating fan controllers with automatic backend selection.
-    /// Prioritizes WMI BIOS (no driver required) over OGH proxy over EC access (requires WinRing0).
+    /// Prioritizes WMI BIOS (no driver required) over OGH proxy over EC access (requires an EC-access backend like PawnIO/WinRing0).
     /// 
     /// For 2023+ OMEN laptops with Secure Boot, the selection order is:
     /// 1. OGH Proxy (requires OGH services running) - best for newer models
     /// 2. WMI BIOS (requires HP WMI classes) - works if BIOS responds
-    /// 3. EC Access (requires WinRing0 driver) - requires Secure Boot disabled
+    /// 3. EC Access (requires PawnIO or WinRing0) - WinRing0 may require Secure Boot/Mem Integrity disabled
     /// 4. Fallback (monitoring only)
     /// </summary>
     public class FanControllerFactory
@@ -153,7 +153,7 @@ namespace OmenCore.Hardware
             if (ecController != null)
             {
                 ActiveBackend = "EC Direct";
-                _logging?.Info("✓ Using EC-based fan controller (requires WinRing0 driver)");
+                _logging?.Info("✓ Using EC-based fan controller (requires PawnIO/WinRing0 backend)");
                 return ecController;
             }
 
@@ -319,6 +319,11 @@ namespace OmenCore.Hardware
 
         public bool SetPerformanceMode(string modeName)
         {
+            // First try the new comprehensive performance policy method
+            if (_proxy.SetPerformancePolicy(modeName))
+                return true;
+                
+            // Fallback to thermal policy mapping
             var policy = MapModeNameToPolicy(modeName);
             return _proxy.SetThermalPolicy(policy);
         }

@@ -1,4 +1,6 @@
+using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using OmenCore.Hardware;
@@ -16,7 +18,10 @@ namespace OmenCore.ViewModels
         private readonly SystemRestoreService _restoreService;
         private readonly GpuSwitchService _gpuSwitchService;
         private readonly LoggingService _logging;
+        private readonly ConfigurationService _configService;
         private readonly HpWmiBios? _wmiBios;
+        private readonly OghServiceProxy? _oghProxy;
+        private WinRing0MsrAccess? _msrAccess;
 
         private PerformanceMode? _selectedPerformanceMode;
         private UndervoltStatus _undervoltStatus = UndervoltStatus.CreateUnknown();
@@ -182,6 +187,44 @@ namespace OmenCore.ViewModels
         
         public ObservableCollection<string> GpuPowerBoostLevels { get; } = new() { "Minimum", "Medium", "Maximum" };
         
+        // TCC Offset (CPU Temperature Limit)
+        private TccOffsetStatus _tccStatus = TccOffsetStatus.CreateUnsupported();
+        public TccOffsetStatus TccStatus
+        {
+            get => _tccStatus;
+            private set
+            {
+                _tccStatus = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(TccStatusText));
+                OnPropertyChanged(nameof(TccEffectiveLimit));
+                OnPropertyChanged(nameof(TccSliderMaximum));
+            }
+        }
+        
+        private int _requestedTccOffset;
+        public int RequestedTccOffset
+        {
+            get => _requestedTccOffset;
+            set
+            {
+                if (_requestedTccOffset != value)
+                {
+                    _requestedTccOffset = Math.Clamp(value, 0, 63);
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(RequestedTempLimit));
+                }
+            }
+        }
+        
+        public int RequestedTempLimit => TccStatus.TjMax - RequestedTccOffset;
+        public string TccStatusText => TccStatus.StatusMessage;
+        public int TccEffectiveLimit => TccStatus.EffectiveLimit;
+        public int TccSliderMaximum => TccStatus.TjMax > 0 ? TccStatus.TjMax - 50 : 50; // Don't allow limiting below 50°C
+        
+        public ICommand ApplyTccOffsetCommand { get; private set; } = null!;
+        public ICommand ResetTccOffsetCommand { get; private set; } = null!;
+        
         public ObservableCollection<GpuSwitchMode> GpuSwitchModes { get; } = new();
         public GpuSwitchMode? SelectedGpuMode { get; set; }
         public bool CleanupUninstallApp { get; set; } = true;
@@ -236,7 +279,9 @@ namespace OmenCore.ViewModels
             SystemRestoreService restoreService,
             GpuSwitchService gpuSwitchService,
             LoggingService logging,
-            HpWmiBios? wmiBios = null)
+            ConfigurationService configService,
+            HpWmiBios? wmiBios = null,
+            OghServiceProxy? oghProxy = null)
         {
             _undervoltService = undervoltService;
             _performanceModeService = performanceModeService;
@@ -244,7 +289,9 @@ namespace OmenCore.ViewModels
             _restoreService = restoreService;
             _gpuSwitchService = gpuSwitchService;
             _logging = logging;
+            _configService = configService;
             _wmiBios = wmiBios;
+            _oghProxy = oghProxy;
 
             _undervoltService.StatusChanged += (s, status) => 
             {
@@ -262,12 +309,25 @@ namespace OmenCore.ViewModels
             CreateRestorePointCommand = new AsyncRelayCommand(_ => CreateRestorePointAsync());
             SwitchGpuModeCommand = new AsyncRelayCommand(_ => SwitchGpuModeAsync());
             ApplyGpuPowerBoostCommand = new RelayCommand(_ => ApplyGpuPowerBoost(), _ => GpuPowerBoostAvailable);
+            ApplyTccOffsetCommand = new RelayCommand(_ => ApplyTccOffset(), _ => TccStatus.IsSupported);
+            ResetTccOffsetCommand = new RelayCommand(_ => ResetTccOffset(), _ => TccStatus.IsSupported);
 
             // Initialize performance modes
             PerformanceModes.Add(new PerformanceMode { Name = "Balanced" });
             PerformanceModes.Add(new PerformanceMode { Name = "Performance" });
             PerformanceModes.Add(new PerformanceMode { Name = "Quiet" });
-            SelectedPerformanceMode = PerformanceModes.FirstOrDefault();
+            
+            // Restore last selected performance mode from config, or default to first
+            var savedModeName = _configService.Config.LastPerformanceModeName;
+            var savedMode = !string.IsNullOrEmpty(savedModeName) 
+                ? PerformanceModes.FirstOrDefault(m => m.Name == savedModeName) 
+                : null;
+            SelectedPerformanceMode = savedMode ?? PerformanceModes.FirstOrDefault();
+            
+            if (savedMode != null)
+            {
+                _logging.Info($"Restored last performance mode: {savedModeName}");
+            }
 
             // Initialize GPU modes
             GpuSwitchModes.Add(GpuSwitchMode.Hybrid);
@@ -280,11 +340,82 @@ namespace OmenCore.ViewModels
             // Detect GPU Power Boost availability
             DetectGpuPowerBoost();
             
+            // Initialize TCC offset (Intel CPU temperature limit)
+            InitializeTccOffset();
+            
             // Initial undervolt status will be set via StatusChanged event
+        }
+        
+        private void InitializeTccOffset()
+        {
+            try
+            {
+                _msrAccess = new WinRing0MsrAccess();
+                if (_msrAccess.IsAvailable)
+                {
+                    var tjMax = _msrAccess.ReadTjMax();
+                    var currentOffset = _msrAccess.ReadTccOffset();
+                    TccStatus = TccOffsetStatus.CreateSupported(tjMax, currentOffset);
+                    RequestedTccOffset = currentOffset;
+                    _logging.Info($"TCC offset available: TjMax={tjMax}°C, Current offset={currentOffset}°C, Effective limit={tjMax - currentOffset}°C");
+                }
+                else
+                {
+                    TccStatus = TccOffsetStatus.CreateUnsupported("WinRing0 driver not available");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"TCC offset not available: {ex.Message}");
+                TccStatus = TccOffsetStatus.CreateUnsupported($"Not supported: {ex.Message}");
+                _msrAccess = null;
+            }
+        }
+        
+        private void ApplyTccOffset()
+        {
+            if (_msrAccess == null || !TccStatus.IsSupported)
+                return;
+                
+            try
+            {
+                _msrAccess.SetTccOffset(RequestedTccOffset);
+                var newLimit = TccStatus.TjMax - RequestedTccOffset;
+                _logging.Info($"TCC offset set to {RequestedTccOffset}°C (effective limit: {newLimit}°C)");
+                
+                // Refresh status
+                var currentOffset = _msrAccess.ReadTccOffset();
+                TccStatus = TccOffsetStatus.CreateSupported(TccStatus.TjMax, currentOffset);
+            }
+            catch (Exception ex)
+            {
+                _logging.Error($"Failed to apply TCC offset: {ex.Message}", ex);
+            }
+        }
+        
+        private void ResetTccOffset()
+        {
+            if (_msrAccess == null || !TccStatus.IsSupported)
+                return;
+                
+            try
+            {
+                _msrAccess.SetTccOffset(0);
+                RequestedTccOffset = 0;
+                _logging.Info("TCC offset reset to 0 (no temperature limit)");
+                
+                // Refresh status
+                TccStatus = TccOffsetStatus.CreateSupported(TccStatus.TjMax, 0);
+            }
+            catch (Exception ex)
+            {
+                _logging.Error($"Failed to reset TCC offset: {ex.Message}", ex);
+            }
         }
         
         private void DetectGpuPowerBoost()
         {
+            // Try WMI BIOS first (preferred)
             if (_wmiBios != null && _wmiBios.IsAvailable)
             {
                 GpuPowerBoostAvailable = true;
@@ -312,47 +443,90 @@ namespace OmenCore.ViewModels
                     GpuPowerBoostStatus = "Could not read current setting";
                 }
                 _logging.Info($"✓ GPU Power Boost available via WMI BIOS. Current: {GpuPowerBoostStatus}");
+                return;
             }
-            else
+            
+            // Fallback: Try OGH proxy (for systems where WMI BIOS commands fail)
+            if (_oghProxy != null && _oghProxy.Status.WmiAvailable)
             {
-                GpuPowerBoostAvailable = false;
-                GpuPowerBoostStatus = "Not available (WMI BIOS interface not detected)";
-                _logging.Info("GPU Power Boost: HP WMI BIOS interface not available");
+                var (success, level, levelName) = _oghProxy.GetGpuPowerLevel();
+                if (success)
+                {
+                    GpuPowerBoostAvailable = true;
+                    GpuPowerBoostLevel = levelName;
+                    GpuPowerBoostStatus = $"{levelName} (via OGH)";
+                    _logging.Info($"✓ GPU Power Boost available via OGH. Current: {GpuPowerBoostStatus}");
+                    return;
+                }
+                
+                // OGH WMI exists but GPU power commands failed - don't enable if commands don't work
+                _logging.Warn("GPU Power Boost: OGH WMI exists but GetGpuPowerLevel() failed");
             }
+            
+            // Neither backend functional - provide detailed explanation
+            GpuPowerBoostAvailable = false;
+            var modelNotSupportedMsg = @"Not available - This OMEN model does not support WMI GPU power commands.
+
+The HP WMI BIOS interface exists but GPU power commands return empty results. " +
+                "This is a known limitation on some newer OMEN models (17-ck2xxx series and others).";
+            GpuPowerBoostStatus = modelNotSupportedMsg;
+            _logging.Info("GPU Power Boost: HP WMI BIOS interface not available, OGH not functional");
         }
         
         private void ApplyGpuPowerBoost()
         {
-            if (_wmiBios == null || !_wmiBios.IsAvailable)
+            // Try WMI BIOS first (preferred)
+            if (_wmiBios != null && _wmiBios.IsAvailable)
             {
-                _logging.Warn("Cannot apply GPU Power Boost: WMI BIOS not available");
-                return;
-            }
-
-            var level = GpuPowerBoostLevel switch
-            {
-                "Minimum" => HpWmiBios.GpuPowerLevel.Minimum,
-                "Medium" => HpWmiBios.GpuPowerLevel.Medium,
-                "Maximum" => HpWmiBios.GpuPowerLevel.Maximum,
-                _ => HpWmiBios.GpuPowerLevel.Medium
-            };
-
-            if (_wmiBios.SetGpuPower(level))
-            {
-                GpuPowerBoostStatus = GpuPowerBoostLevel switch
+                var level = GpuPowerBoostLevel switch
                 {
-                    "Minimum" => "✓ Minimum (Base TGP only)",
-                    "Medium" => "✓ Medium (Custom TGP enabled)",
-                    "Maximum" => "✓ Maximum (Custom TGP + Dynamic Boost +15W)",
-                    _ => "Applied"
+                    "Minimum" => HpWmiBios.GpuPowerLevel.Minimum,
+                    "Medium" => HpWmiBios.GpuPowerLevel.Medium,
+                    "Maximum" => HpWmiBios.GpuPowerLevel.Maximum,
+                    _ => HpWmiBios.GpuPowerLevel.Medium
                 };
-                _logging.Info($"✓ GPU Power Boost set to: {GpuPowerBoostLevel}");
+
+                if (_wmiBios.SetGpuPower(level))
+                {
+                    GpuPowerBoostStatus = GpuPowerBoostLevel switch
+                    {
+                        "Minimum" => "✓ Minimum (Base TGP only)",
+                        "Medium" => "✓ Medium (Custom TGP enabled)",
+                        "Maximum" => "✓ Maximum (Custom TGP + Dynamic Boost +15W)",
+                        _ => "Applied"
+                    };
+                    _logging.Info($"✓ GPU Power Boost set to: {GpuPowerBoostLevel} via WMI BIOS");
+                    return;
+                }
             }
-            else
+            
+            // Fallback: Try OGH proxy
+            if (_oghProxy != null && _oghProxy.Status.WmiAvailable)
             {
-                GpuPowerBoostStatus = "Failed to apply setting";
-                _logging.Warn($"Failed to set GPU Power Boost to: {GpuPowerBoostLevel}");
+                var levelValue = GpuPowerBoostLevel switch
+                {
+                    "Minimum" => 0,
+                    "Medium" => 1,
+                    "Maximum" => 2,
+                    _ => 1
+                };
+                
+                if (_oghProxy.SetGpuPowerLevel(levelValue))
+                {
+                    GpuPowerBoostStatus = GpuPowerBoostLevel switch
+                    {
+                        "Minimum" => "✓ Minimum (Base TGP only, via OGH)",
+                        "Medium" => "✓ Medium (Custom TGP, via OGH)",
+                        "Maximum" => "✓ Maximum (Dynamic Boost, via OGH)",
+                        _ => "Applied via OGH"
+                    };
+                    _logging.Info($"✓ GPU Power Boost set to: {GpuPowerBoostLevel} via OGH");
+                    return;
+                }
             }
+            
+            GpuPowerBoostStatus = "Failed - WMI GPU power commands not supported on this model";
+            _logging.Warn($"Failed to set GPU Power Boost to: {GpuPowerBoostLevel} - WMI commands not functional on this OMEN model");
         }
         
         private void DetectGpuMode()
@@ -382,6 +556,13 @@ namespace OmenCore.ViewModels
             {
                 _performanceModeService.Apply(SelectedPerformanceMode);
                 _logging.Info($"Performance mode applied: {SelectedPerformanceMode.Name}");
+                
+                // Save the selected mode to config for persistence
+                var config = _configService.Config;
+                config.LastPerformanceModeName = SelectedPerformanceMode.Name;
+                _configService.Save(config);
+                _logging.Info($"Performance mode saved to config: {SelectedPerformanceMode.Name}");
+                
                 OnPropertyChanged(nameof(CurrentPerformanceModeName));
                 OnPropertyChanged(nameof(SelectedPerformanceMode));
             }
@@ -437,6 +618,29 @@ namespace OmenCore.ViewModels
                 _logging.Warn("No GPU mode selected");
                 return;
             }
+            
+            // Check if GPU mode switching is supported BEFORE attempting
+            if (!_gpuSwitchService.IsSupported)
+            {
+                var reason = _gpuSwitchService.UnsupportedReason;
+                _logging.Warn($"GPU mode switching not available: {reason}");
+                System.Windows.MessageBox.Show(
+                    $"GPU mode switching is not available on this system.\n\n" +
+                    $"Reason: {reason}\n\n" +
+                    "This feature requires:\n" +
+                    "• HP OMEN laptop with BIOS GPU mode support\n" +
+                    "• HP WMI BIOS interface for GPU settings\n\n" +
+                    "Note: HP Transcend, Victus, and some other HP models\n" +
+                    "do not support this feature through OmenCore.\n\n" +
+                    "To change GPU modes on unsupported systems:\n" +
+                    "• Use NVIDIA Control Panel (for Optimus)\n" +
+                    "• Check BIOS settings directly\n" +
+                    "• Use manufacturer's control software",
+                    "GPU Mode Switching Not Supported - OmenCore",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+                return;
+            }
 
             await ExecuteWithLoadingAsync(async () =>
             {
@@ -472,17 +676,18 @@ namespace OmenCore.ViewModels
                 }
                 else
                 {
-                    _logging.Warn($"⚠️ GPU mode switching not supported on this system or failed. Current mode: {CurrentGpuMode}");
+                    _logging.Warn($"⚠️ GPU mode switching failed. Current mode: {CurrentGpuMode}");
                     System.Windows.MessageBox.Show(
-                        "GPU mode switching is not supported on this system.\n\n" +
-                        "This feature requires:\n" +
-                        "• HP Omen Command Center BIOS support\n" +
-                        "• NVIDIA Advanced Optimus or AMD Switchable Graphics\n" +
-                        "• Compatible laptop model with MUX switch\n\n" +
-                        $"Current detected mode: {CurrentGpuMode}",
-                        "Not Supported - OmenCore",
+                        "GPU mode switching failed.\n\n" +
+                        "The HP BIOS did not accept the mode change.\n" +
+                        "This can happen if:\n" +
+                        "• Your BIOS doesn't have this setting\n" +
+                        "• A BIOS password is set\n" +
+                        "• The BIOS version doesn't support WMI control\n\n" +
+                        "Try changing GPU mode directly in BIOS settings.",
+                        "GPU Mode Switch Failed - OmenCore",
                         System.Windows.MessageBoxButton.OK,
-                        System.Windows.MessageBoxImage.Information);
+                        System.Windows.MessageBoxImage.Warning);
                 }
                 
                 await Task.CompletedTask;
@@ -493,6 +698,20 @@ namespace OmenCore.ViewModels
         {
             CleanupInProgress = true;
             CleanupStatus = "Running cleanup...";
+            OmenCleanupSteps.Clear();
+            
+            // Subscribe to real-time progress updates
+            void OnStepCompleted(string step)
+            {
+                System.Windows.Application.Current?.Dispatcher?.BeginInvoke(() =>
+                {
+                    OmenCleanupSteps.Add(step);
+                    CleanupStatus = step;
+                });
+            }
+            
+            _cleanupService.StepCompleted += OnStepCompleted;
+            
             try
             {
                 await ExecuteWithLoadingAsync(async () =>
@@ -509,11 +728,12 @@ namespace OmenCore.ViewModels
                         PreserveFirewallRules = true
                     };
                     var result = await _cleanupService.CleanupAsync(options);
-                    CleanupStatus = result.Success ? "Cleanup complete" : "Cleanup failed";
+                    CleanupStatus = result.Success ? "✓ Cleanup complete" : "⚠ Cleanup failed";
                 }, "Running HP Omen cleanup...");
             }
             finally
             {
+                _cleanupService.StepCompleted -= OnStepCompleted;
                 CleanupInProgress = false;
             }
         }

@@ -58,71 +58,94 @@ namespace OmenCore.Utils
         {
             var contextMenu = new ContextMenu();
 
-            // Set dark background with light text
-            var darkBg = new SolidColorBrush(Color.FromRgb(21, 25, 43)); // SurfaceMediumBrush
-            var borderBrush = new SolidColorBrush(Color.FromRgb(47, 52, 72)); // BorderBrush
+            // Modern dark theme colors
+            var surfaceDark = new SolidColorBrush(Color.FromRgb(15, 17, 28)); // Darker base
+            var surfaceMedium = new SolidColorBrush(Color.FromRgb(21, 25, 43)); // Card background
+            var accentPrimary = new SolidColorBrush(Color.FromRgb(255, 0, 92)); // OMEN Red/Pink
+            var accentSecondary = new SolidColorBrush(Color.FromRgb(0, 200, 200)); // Cyan accent
+            var borderBrush = new SolidColorBrush(Color.FromRgb(60, 65, 90)); // Subtle border
+            var hoverBrush = new SolidColorBrush(Color.FromRgb(40, 45, 65)); // Hover state
+            var textPrimary = new SolidColorBrush(Color.FromRgb(240, 240, 245)); // Bright white
+            var textSecondary = new SolidColorBrush(Color.FromRgb(160, 165, 180)); // Muted text
             
-            contextMenu.Background = darkBg;
-            contextMenu.Foreground = Brushes.White;
+            // Gradient background for modern look
+            var gradientBg = new LinearGradientBrush(
+                Color.FromRgb(18, 20, 35),
+                Color.FromRgb(25, 28, 48),
+                new Point(0, 0),
+                new Point(0, 1));
+            
+            contextMenu.Background = gradientBg;
+            contextMenu.Foreground = textPrimary;
             contextMenu.BorderBrush = borderBrush;
             contextMenu.BorderThickness = new Thickness(1);
+            contextMenu.Padding = new Thickness(4);
 
-            // Add resources to style submenu popups (removes white icon gutter)
-            contextMenu.Resources.Add(SystemColors.MenuBarBrushKey, darkBg);
-            contextMenu.Resources.Add(SystemColors.MenuBrushKey, darkBg);
-            contextMenu.Resources.Add(SystemColors.MenuTextBrushKey, Brushes.White);
-            contextMenu.Resources.Add(SystemColors.HighlightBrushKey, new SolidColorBrush(Color.FromRgb(47, 52, 72)));
+            // Override system colors for proper dark theme in submenus
+            contextMenu.Resources.Add(SystemColors.MenuBarBrushKey, surfaceDark);
+            contextMenu.Resources.Add(SystemColors.MenuBrushKey, surfaceDark);
+            contextMenu.Resources.Add(SystemColors.MenuTextBrushKey, textPrimary);
+            contextMenu.Resources.Add(SystemColors.HighlightBrushKey, hoverBrush);
             contextMenu.Resources.Add(SystemColors.HighlightTextBrushKey, Brushes.White);
-            contextMenu.Resources.Add(SystemColors.MenuHighlightBrushKey, new SolidColorBrush(Color.FromRgb(47, 52, 72)));
+            contextMenu.Resources.Add(SystemColors.MenuHighlightBrushKey, hoverBrush);
 
-            // Status header
+            // Create styles
+            var darkMenuItemStyle = CreateDarkMenuItemStyle();
+            var disabledStyle = CreateDisabledMenuItemStyle();
+
+            // ═══ HEADER ═══
+            var headerPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+            headerPanel.Children.Add(new TextBlock { Text = "🎮", FontSize = 14, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+            headerPanel.Children.Add(new TextBlock { Text = "OmenCore", FontWeight = FontWeights.Bold, FontSize = 13, Foreground = accentPrimary, VerticalAlignment = VerticalAlignment.Center });
+            headerPanel.Children.Add(new TextBlock { Text = " v1.1.1", FontSize = 11, Foreground = textSecondary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 1, 0, 0) });
+            
             var headerItem = new MenuItem
             {
-                Header = "🎮 OmenCore Status",
+                Header = headerPanel,
                 IsEnabled = false,
-                Foreground = new SolidColorBrush(Color.FromRgb(255, 0, 92)), // AccentBrush
-                FontWeight = FontWeights.Bold
+                IsHitTestVisible = false,
+                Padding = new Thickness(8, 6, 8, 6)
             };
             contextMenu.Items.Add(headerItem);
 
-            contextMenu.Items.Add(new Separator());
+            // Styled separator
+            contextMenu.Items.Add(CreateStyledSeparator(borderBrush));
 
-            // CPU Temperature
+            // ═══ MONITORING SECTION ═══
             _cpuTempMenuItem = new MenuItem
             {
-                Header = "🔥 CPU: --°C (--%)  ",
+                Header = CreateMonitoringItem("🔥", "CPU", "--°C", "--%", Color.FromRgb(255, 100, 100)),
                 IsEnabled = false,
-                Foreground = Brushes.White
+                IsHitTestVisible = false,
+                Padding = new Thickness(8, 4, 8, 4)
             };
             contextMenu.Items.Add(_cpuTempMenuItem);
 
-            // GPU Temperature
             _gpuTempMenuItem = new MenuItem
             {
-                Header = "🎯 GPU: --°C (--%)  ",
+                Header = CreateMonitoringItem("🎯", "GPU", "--°C", "--%", Color.FromRgb(100, 200, 255)),
                 IsEnabled = false,
-                Foreground = Brushes.White
+                IsHitTestVisible = false,
+                Padding = new Thickness(8, 4, 8, 4)
             };
             contextMenu.Items.Add(_gpuTempMenuItem);
 
-            contextMenu.Items.Add(new Separator());
+            contextMenu.Items.Add(CreateStyledSeparator(borderBrush));
 
-            // Create dark style for submenu items
-            var darkMenuItemStyle = CreateDarkMenuItemStyle();
-
-            // Fan Mode submenu
+            // ═══ CONTROL SECTION ═══
             _fanModeMenuItem = new MenuItem
             {
-                Header = "🌀 Fan: Auto",
-                Foreground = Brushes.White,
-                Style = darkMenuItemStyle
+                Header = CreateControlItem("🌀", "Fan Mode", "Auto", accentSecondary),
+                Foreground = textPrimary,
+                Style = darkMenuItemStyle,
+                Padding = new Thickness(8, 6, 8, 6)
             };
             
-            var fanAuto = new MenuItem { Header = "Auto", Foreground = Brushes.White, Style = darkMenuItemStyle };
+            var fanAuto = CreateSubMenuItem("⚡", "Auto", "Automatic fan control", darkMenuItemStyle);
             fanAuto.Click += (s, e) => SetFanMode("Auto");
-            var fanMax = new MenuItem { Header = "Max Cooling", Foreground = Brushes.White, Style = darkMenuItemStyle };
+            var fanMax = CreateSubMenuItem("🔥", "Max Cooling", "Maximum fan speed", darkMenuItemStyle);
             fanMax.Click += (s, e) => SetFanMode("Max");
-            var fanQuiet = new MenuItem { Header = "Quiet", Foreground = Brushes.White, Style = darkMenuItemStyle };
+            var fanQuiet = CreateSubMenuItem("🤫", "Quiet", "Silent operation", darkMenuItemStyle);
             fanQuiet.Click += (s, e) => SetFanMode("Quiet");
             
             _fanModeMenuItem.Items.Add(fanAuto);
@@ -130,19 +153,19 @@ namespace OmenCore.Utils
             _fanModeMenuItem.Items.Add(fanQuiet);
             contextMenu.Items.Add(_fanModeMenuItem);
 
-            // Performance Mode submenu
             _performanceModeMenuItem = new MenuItem
             {
-                Header = "⚡ Performance: Balanced",
-                Foreground = Brushes.White,
-                Style = darkMenuItemStyle
+                Header = CreateControlItem("⚡", "Performance", "Balanced", accentPrimary),
+                Foreground = textPrimary,
+                Style = darkMenuItemStyle,
+                Padding = new Thickness(8, 6, 8, 6)
             };
             
-            var perfBalanced = new MenuItem { Header = "Balanced", Foreground = Brushes.White, Style = darkMenuItemStyle };
+            var perfBalanced = CreateSubMenuItem("⚖️", "Balanced", "Balance power & performance", darkMenuItemStyle);
             perfBalanced.Click += (s, e) => SetPerformanceMode("Balanced");
-            var perfPerformance = new MenuItem { Header = "Performance", Foreground = Brushes.White, Style = darkMenuItemStyle };
+            var perfPerformance = CreateSubMenuItem("🚀", "Performance", "Maximum performance", darkMenuItemStyle);
             perfPerformance.Click += (s, e) => SetPerformanceMode("Performance");
-            var perfQuiet = new MenuItem { Header = "Quiet", Foreground = Brushes.White, Style = darkMenuItemStyle };
+            var perfQuiet = CreateSubMenuItem("🔋", "Quiet", "Power saving mode", darkMenuItemStyle);
             perfQuiet.Click += (s, e) => SetPerformanceMode("Quiet");
             
             _performanceModeMenuItem.Items.Add(perfBalanced);
@@ -150,28 +173,103 @@ namespace OmenCore.Utils
             _performanceModeMenuItem.Items.Add(perfQuiet);
             contextMenu.Items.Add(_performanceModeMenuItem);
 
-            contextMenu.Items.Add(new Separator());
+            contextMenu.Items.Add(CreateStyledSeparator(borderBrush));
 
-            // Show Window
+            // ═══ ACTIONS SECTION ═══
             var showItem = new MenuItem
             {
-                Header = "📺 Show OmenCore",
-                Foreground = Brushes.White,
-                FontWeight = FontWeights.SemiBold
+                Header = CreateActionItem("📺", "Open Dashboard"),
+                Foreground = textPrimary,
+                FontWeight = FontWeights.SemiBold,
+                Style = darkMenuItemStyle,
+                Padding = new Thickness(8, 6, 8, 6)
             };
             showItem.Click += (s, e) => _showMainWindow();
             contextMenu.Items.Add(showItem);
 
-            // Exit
             var exitItem = new MenuItem
             {
-                Header = "❌ Exit",
-                Foreground = Brushes.White
+                Header = CreateActionItem("❌", "Exit"),
+                Foreground = textSecondary,
+                Style = darkMenuItemStyle,
+                Padding = new Thickness(8, 6, 8, 6)
             };
             exitItem.Click += (s, e) => _shutdownApp();
             contextMenu.Items.Add(exitItem);
 
             _trayIcon.ContextMenu = contextMenu;
+        }
+
+        private static Separator CreateStyledSeparator(Brush borderBrush)
+        {
+            return new Separator
+            {
+                Margin = new Thickness(8, 4, 8, 4),
+                Background = borderBrush,
+                Height = 1
+            };
+        }
+
+        private static StackPanel CreateMonitoringItem(string icon, string label, string temp, string load, Color accentColor)
+        {
+            var panel = new StackPanel { Orientation = Orientation.Horizontal };
+            panel.Children.Add(new TextBlock { Text = icon, FontSize = 12, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+            panel.Children.Add(new TextBlock { Text = label + ":", FontSize = 12, Width = 32, Foreground = new SolidColorBrush(Color.FromRgb(160, 165, 180)), VerticalAlignment = VerticalAlignment.Center });
+            panel.Children.Add(new TextBlock { Text = temp, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(accentColor), MinWidth = 45, VerticalAlignment = VerticalAlignment.Center });
+            panel.Children.Add(new TextBlock { Text = $"({load})", FontSize = 11, Foreground = new SolidColorBrush(Color.FromRgb(130, 135, 150)), VerticalAlignment = VerticalAlignment.Center });
+            return panel;
+        }
+
+        private static StackPanel CreateControlItem(string icon, string label, string value, Brush accentBrush)
+        {
+            var panel = new StackPanel { Orientation = Orientation.Horizontal };
+            panel.Children.Add(new TextBlock { Text = icon, FontSize = 12, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+            panel.Children.Add(new TextBlock { Text = label + ":", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(200, 205, 215)), VerticalAlignment = VerticalAlignment.Center });
+            panel.Children.Add(new TextBlock { Text = " " + value, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = accentBrush, VerticalAlignment = VerticalAlignment.Center });
+            panel.Children.Add(new TextBlock { Text = " ▸", FontSize = 10, Foreground = new SolidColorBrush(Color.FromRgb(100, 105, 120)), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) });
+            return panel;
+        }
+
+        private static StackPanel CreateActionItem(string icon, string label)
+        {
+            var panel = new StackPanel { Orientation = Orientation.Horizontal };
+            panel.Children.Add(new TextBlock { Text = icon, FontSize = 12, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center });
+            panel.Children.Add(new TextBlock { Text = label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+            return panel;
+        }
+
+        private static MenuItem CreateSubMenuItem(string icon, string label, string description, Style style)
+        {
+            var panel = new StackPanel { Orientation = Orientation.Vertical };
+            
+            var mainRow = new StackPanel { Orientation = Orientation.Horizontal };
+            mainRow.Children.Add(new TextBlock { Text = icon, FontSize = 11, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+            mainRow.Children.Add(new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeights.Medium, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center });
+            panel.Children.Add(mainRow);
+            
+            panel.Children.Add(new TextBlock 
+            { 
+                Text = description, 
+                FontSize = 10, 
+                Foreground = new SolidColorBrush(Color.FromRgb(120, 125, 140)),
+                Margin = new Thickness(17, 1, 0, 0)
+            });
+            
+            return new MenuItem
+            {
+                Header = panel,
+                Style = style,
+                Padding = new Thickness(8, 4, 16, 4)
+            };
+        }
+
+        private static Style CreateDisabledMenuItemStyle()
+        {
+            var style = new Style(typeof(MenuItem));
+            var darkBg = new SolidColorBrush(Color.FromRgb(21, 25, 43));
+            style.Setters.Add(new Setter(MenuItem.BackgroundProperty, Brushes.Transparent));
+            style.Setters.Add(new Setter(MenuItem.ForegroundProperty, Brushes.White));
+            return style;
         }
 
         public void UpdateMonitoringSample(MonitoringSample sample)
@@ -200,7 +298,7 @@ namespace OmenCore.Utils
                 var memTotalGb = _latestSample.RamTotalGb;
                 var memPercent = memTotalGb > 0 ? (memUsedGb * 100.0 / memTotalGb) : 0;
                 
-                _trayIcon.ToolTipText = $"🎮 OmenCore v1.1.0\n" +
+                _trayIcon.ToolTipText = $"🎮 OmenCore v1.1.1\n" +
                                        $"━━━━━━━━━━━━━━━━━━\n" +
                                        $"🔥 CPU: {cpuTemp:F0}°C @ {cpuLoad:F0}%\n" +
                                        $"🎯 GPU: {gpuTemp:F0}°C @ {gpuLoad:F0}%\n" +
@@ -209,15 +307,15 @@ namespace OmenCore.Utils
                                        $"━━━━━━━━━━━━━━━━━━\n" +
                                        $"Left-click to open dashboard";
 
-                // Update context menu items
+                // Update context menu items with styled panels
                 if (_cpuTempMenuItem != null)
                 {
-                    _cpuTempMenuItem.Header = $"🔥 CPU: {cpuTemp:F0}°C ({cpuLoad:F0}%)  ";
+                    _cpuTempMenuItem.Header = CreateMonitoringItem("🔥", "CPU", $"{cpuTemp:F0}°C", $"{cpuLoad:F0}%", Color.FromRgb(255, 100, 100));
                 }
 
                 if (_gpuTempMenuItem != null)
                 {
-                    _gpuTempMenuItem.Header = $"🎯 GPU: {gpuTemp:F0}°C ({gpuLoad:F0}%)  ";
+                    _gpuTempMenuItem.Header = CreateMonitoringItem("🎯", "GPU", $"{gpuTemp:F0}°C", $"{gpuLoad:F0}%", Color.FromRgb(100, 200, 255));
                 }
 
                 // Update tray icon with CPU temperature badge
@@ -238,7 +336,7 @@ namespace OmenCore.Utils
             _currentFanMode = mode;
             if (_fanModeMenuItem != null)
             {
-                _fanModeMenuItem.Header = $"🌀 Fan: {mode}";
+                _fanModeMenuItem.Header = CreateControlItem("🌀", "Fan Mode", mode, new SolidColorBrush(Color.FromRgb(0, 200, 200)));
             }
             FanModeChangeRequested?.Invoke(mode);
             App.Logging.Info($"Fan mode changed from tray: {mode}");
@@ -249,7 +347,7 @@ namespace OmenCore.Utils
             _currentPerformanceMode = mode;
             if (_performanceModeMenuItem != null)
             {
-                _performanceModeMenuItem.Header = $"⚡ Performance: {mode}";
+                _performanceModeMenuItem.Header = CreateControlItem("⚡", "Performance", mode, new SolidColorBrush(Color.FromRgb(255, 0, 92)));
             }
             PerformanceModeChangeRequested?.Invoke(mode);
             App.Logging.Info($"Performance mode changed from tray: {mode}");
@@ -262,7 +360,7 @@ namespace OmenCore.Utils
             {
                 if (_fanModeMenuItem != null)
                 {
-                    _fanModeMenuItem.Header = $"🌀 Fan: {mode}";
+                    _fanModeMenuItem.Header = CreateControlItem("🌀", "Fan Mode", mode, new SolidColorBrush(Color.FromRgb(0, 200, 200)));
                 }
             });
         }
@@ -274,7 +372,7 @@ namespace OmenCore.Utils
             {
                 if (_performanceModeMenuItem != null)
                 {
-                    _performanceModeMenuItem.Header = $"⚡ Performance: {mode}";
+                    _performanceModeMenuItem.Header = CreateControlItem("⚡", "Performance", mode, new SolidColorBrush(Color.FromRgb(255, 0, 92)));
                 }
             });
         }

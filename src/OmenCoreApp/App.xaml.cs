@@ -58,31 +58,57 @@ namespace OmenCore
         {
             try
             {
-                var devicePath = "\\\\.\\WinRing0_1_2";
-                var handle = NativeMethods.CreateFile(
-                    devicePath,
-                    0, // GENERIC_READ
-                    0,
-                    IntPtr.Zero,
-                    3, // OPEN_EXISTING
-                    0,
-                    IntPtr.Zero);
+                // Try multiple device paths for different WinRing0 builds
+                var devicePaths = new[] { "\\\\.\\WinRing0_1_2_0", "\\\\.\\WinRing0_1_2", "\\\\.\\WinRing0" };
+                var winRing0Detected = false;
 
-                if (handle.IsInvalid || handle.IsClosed)
+                foreach (var devicePath in devicePaths)
                 {
-                    Logging.Warn("⚠️ WinRing0 driver not detected - fan control and undervolt will be disabled");
-                    Logging.Info("💡 To enable fan control: Install LibreHardwareMonitor or see docs/WINRING0_SETUP.md");
-                    
+                    var handle = NativeMethods.CreateFile(
+                        devicePath,
+                        NativeMethods.GENERIC_READ,
+                        NativeMethods.FILE_SHARE_READ | NativeMethods.FILE_SHARE_WRITE,
+                        IntPtr.Zero,
+                        NativeMethods.OPEN_EXISTING,
+                        0,
+                        IntPtr.Zero);
+
+                    if (!handle.IsInvalid && !handle.IsClosed)
+                    {
+                        winRing0Detected = true;
+                        handle.Close();
+                        break;
+                    }
+
+                    handle.Close();
+                }
+
+                if (!winRing0Detected)
+                {
+                    var secureBootEnabled = IsSecureBootEnabled();
+                    var memoryIntegrityEnabled = IsMemoryIntegrityEnabled();
+
+                    Logging.Warn("⚠️ WinRing0 driver not detected - some features may be unavailable");
+                    Logging.Info("💡 Fan control may still work via WMI/OGH without WinRing0; MSR-based undervolting/TCC and direct EC access require a driver backend.");
+
+                    if (secureBootEnabled || memoryIntegrityEnabled)
+                    {
+                        Logging.Info("💡 Windows security features may block WinRing0. Consider PawnIO (Secure Boot compatible) from https://pawnio.eu/");
+                    }
+                    else
+                    {
+                        Logging.Info("💡 To use WinRing0-dependent features: install/run LibreHardwareMonitor as Administrator or see docs/WINRING0_SETUP.md");
+                    }
+
                     // Prompt user only on first startup if driver missing
                     if (!Configuration.Config.FirstRunCompleted)
                     {
-                        Dispatcher.Invoke(() => PromptDriverInstallation());
+                        Dispatcher.Invoke(() => PromptDriverInstallation(secureBootEnabled, memoryIntegrityEnabled));
                     }
                 }
                 else
                 {
-                    Logging.Info("✓ WinRing0 driver detected - full hardware control available");
-                    handle.Close();
+                    Logging.Info("✓ WinRing0 driver detected - WinRing0-dependent features available");
                 }
             }
             catch (Exception ex)
@@ -146,6 +172,15 @@ namespace OmenCore
                         _trayIconService?.UpdatePerformanceMode(mainViewModel.CurrentPerformanceMode);
                     }
                 };
+
+                // Initial sync: force access to SystemControl/Dashboard to load saved modes,
+                // then sync to tray immediately AFTER subscriptions are set up
+                var _ = mainViewModel.Dashboard; // Trigger lazy load
+                var __ = mainViewModel.SystemControl; // Trigger lazy load
+                
+                // Now sync to tray with actual values
+                _trayIconService?.UpdateFanMode(mainViewModel.CurrentFanMode);
+                _trayIconService?.UpdatePerformanceMode(mainViewModel.CurrentPerformanceMode);
             }
         }
 
@@ -166,17 +201,26 @@ namespace OmenCore
             }
         }
 
-        private void PromptDriverInstallation()
+        private void PromptDriverInstallation(bool secureBootEnabled, bool memoryIntegrityEnabled)
         {
+            var recommendPawnIo = secureBootEnabled || memoryIntegrityEnabled;
+            var recommendedBackend = recommendPawnIo
+                ? "PawnIO (recommended on Secure Boot/Memory Integrity systems)"
+                : "LibreHardwareMonitor (provides WinRing0)";
+
             var result = MessageBox.Show(
-                "OmenCore requires the WinRing0 driver for fan control and undervolting.\n\n" +
-                "The easiest way to install this driver is through LibreHardwareMonitor.\n\n" +
-                "Without this driver, these features are disabled:\n" +
-                "• Manual fan curve control\n" +
-                "• CPU undervolting\n" +
-                "• Direct EC register access\n\n" +
-                "Click YES to download LibreHardwareMonitor (recommended)\n" +
-                "Click NO to continue without these features",
+                "Some hardware-control features require a driver backend.\n\n" +
+                "Depending on your system, you can use:\n" +
+                "• PawnIO (Secure Boot compatible)\n" +
+                "• WinRing0 (often provided by LibreHardwareMonitor)\n\n" +
+                "Without a supported driver backend, these features may be disabled:\n" +
+                "• Direct EC fan control (some models)\n" +
+                "• CPU undervolting and TCC offset (Intel MSR)\n\n" +
+                $"Recommended: {recommendedBackend}\n\n" +
+                (recommendPawnIo
+                    ? "Click YES to open PawnIO download page\n"
+                    : "Click YES to download LibreHardwareMonitor now\n") +
+                "Click NO to continue without driver-dependent features",
                 "Driver Required - OmenCore",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
@@ -187,14 +231,68 @@ namespace OmenCore
 
             if (result == MessageBoxResult.Yes)
             {
-                DownloadAndInstallLibreHardwareMonitor();
+                if (recommendPawnIo)
+                {
+                    OpenPawnIODownloadPage();
+                }
+                else
+                {
+                    DownloadAndInstallLibreHardwareMonitor();
+                }
+            }
+        }
+
+        private static void OpenPawnIODownloadPage()
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "https://pawnio.eu/",
+                    UseShellExecute = true
+                });
+            }
+            catch
+            {
+                // Ignore
+            }
+        }
+
+        private static bool IsSecureBootEnabled()
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\SecureBoot\State");
+                var value = key?.GetValue("UEFISecureBootEnabled");
+                return value != null && Convert.ToInt32(value) == 1;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsMemoryIntegrityEnabled()
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                    @"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity");
+                var value = key?.GetValue("Enabled");
+                return value != null && Convert.ToInt32(value) == 1;
+            }
+            catch
+            {
+                return false;
             }
         }
 
         private async void DownloadAndInstallLibreHardwareMonitor()
         {
             const string downloadUrl = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.3/LibreHardwareMonitor-net472.zip";
-            var tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "OmenCore_LHM");
+            // Use a unique temp folder with timestamp to avoid file-in-use conflicts
+            var uniqueId = DateTime.Now.Ticks.ToString();
+            var tempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"OmenCore_LHM_{uniqueId}");
             var zipPath = System.IO.Path.Combine(tempDir, "LibreHardwareMonitor.zip");
             var extractPath = System.IO.Path.Combine(tempDir, "LibreHardwareMonitor");
 
@@ -203,7 +301,7 @@ namespace OmenCore
                 // Show progress dialog
                 Logging.Info("📥 Downloading LibreHardwareMonitor...");
 
-                // Create temp directory
+                // Create temp directory (unique, so no conflicts)
                 System.IO.Directory.CreateDirectory(tempDir);
 
                 // Download the ZIP file
@@ -219,10 +317,7 @@ namespace OmenCore
 
                 Logging.Info("✓ Download complete, extracting...");
 
-                // Extract ZIP
-                if (System.IO.Directory.Exists(extractPath))
-                    System.IO.Directory.Delete(extractPath, true);
-                
+                // Extract ZIP (no need to delete - unique folder)
                 System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, extractPath);
 
                 // Find and run LibreHardwareMonitor.exe
@@ -303,6 +398,11 @@ namespace OmenCore
 
         private static class NativeMethods
         {
+            public const uint GENERIC_READ = 0x80000000;
+            public const uint FILE_SHARE_READ = 0x00000001;
+            public const uint FILE_SHARE_WRITE = 0x00000002;
+            public const uint OPEN_EXISTING = 3;
+
             [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
             public static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFile(
                 string lpFileName,

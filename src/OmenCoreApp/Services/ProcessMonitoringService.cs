@@ -20,6 +20,20 @@ namespace OmenCore.Services
         private readonly object _trackedLock = new();
         private bool _isMonitoring;
 
+        private static string NormalizeProcessName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return string.Empty;
+
+            name = name.Trim();
+            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                name = name.Substring(0, name.Length - 4);
+            }
+
+            return name.ToLowerInvariant();
+        }
+
         /// <summary>
         /// Fired when a tracked process is detected (game launch).
         /// </summary>
@@ -52,7 +66,11 @@ namespace OmenCore.Services
 
             lock (_trackedLock)
             {
-                _trackedProcesses.Add(executableName.ToLowerInvariant());
+                var normalized = NormalizeProcessName(executableName);
+                if (!string.IsNullOrEmpty(normalized))
+                {
+                    _trackedProcesses.Add(normalized);
+                }
             }
             _logging.Info($"Now tracking process: {executableName}");
         }
@@ -67,7 +85,7 @@ namespace OmenCore.Services
 
             lock (_trackedLock)
             {
-                _trackedProcesses.Remove(executableName.ToLowerInvariant());
+                _trackedProcesses.Remove(NormalizeProcessName(executableName));
             }
             _logging.Info($"Stopped tracking process: {executableName}");
         }
@@ -136,7 +154,7 @@ namespace OmenCore.Services
                 {
                     try
                     {
-                        if (trackedCopy.Contains(p.ProcessName.ToLowerInvariant()))
+                        if (trackedCopy.Contains(NormalizeProcessName(p.ProcessName)))
                         {
                             runningProcesses[p.Id] = p;
                         }
