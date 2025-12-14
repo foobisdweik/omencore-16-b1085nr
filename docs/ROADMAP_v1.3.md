@@ -192,17 +192,55 @@ Compact popup near tray for fast settings:
 
 ---
 
-## 🐛 Priority Bug Fixes (v1.2.2)
+## 🐛 Priority Bug Fixes (v1.3)
 
-### Critical
+> **Note:** No v1.2.2 hotfix - all fixes coming in v1.3
 
-1. **Installer Post-Install Launch Error (Code 740)**
+### Critical (From GitHub Issue #7)
+
+1. **ACPI.sys DPC Latency Spikes (Performance Killer)**
+   - **Issue:** LatencyMon shows 1265μs DPC latency from ACPI.sys
+   - **Comparison:** OGH only reaches 300-400μs maximum
+   - **Symptoms:** Audio dropouts, clicks, pops, system stutters
+   - **Cause:** Excessive/inefficient WMI BIOS queries triggering ACPI overhead
+   - **Fix Required:**
+     - Reduce WMI polling frequency significantly
+     - Cache temperature/fan readings
+     - Use async WMI queries instead of blocking
+     - Implement "Low Resource Mode" with minimal polling
+     - Only poll when UI is visible
+   - **Status:** 🔴 Critical
+
+2. **Fan Curves Don't Align With Actual RPM**
+   - **Issue:** Curve shows ~63% at 80°C but actual fan behavior doesn't match
+   - **Evidence:** Screenshot shows curve set but RPM doesn't follow
+   - **Cause:** HP BIOS ignores SetFanLevel on many models; only thermal policy works
+   - **Root Cause:** OmenCore sets curve visually but WMI command has no effect
+   - **Fix Required:**
+     - Implement continuous fan program loop (like OmenMon)
+     - Fall back to EC direct writes via PawnIO
+     - Detect if SetFanLevel actually works on user's model
+     - Show warning if custom curves not supported
+   - **Status:** 🔴 Critical
+
+3. **Cannot Switch Back From MAX Mode**
+   - **Issue:** After setting MAX, fans stay at max even when changing modes
+   - **Reported:** Still broken in v1.2.1 despite attempted fix
+   - **Cause:** SetFanMax(false) + delay not sufficient on all models
+   - **Fix Required:**
+     - Reset thermal policy before changing modes
+     - Use EC countdown reset
+     - Force SetFanLevel(0,0) before mode change
+     - May need full BIOS thermal policy reset sequence
+   - **Status:** 🔴 Critical
+
+4. **Installer Post-Install Launch Error (Code 740)**
    - **Issue:** First launch after install shows "CreateProcess failed; code 740" (elevation required)
    - **Cause:** Inno Setup Run section doesn't request elevation for post-install launch
    - **Fix:** Add `Verb: runas` to the Run section for elevated launch
    - **Status:** ✅ Fixed in installer
 
-2. **Start Minimized to Tray Not Working**
+5. **Start Minimized to Tray Not Working**
    - **Issue:** App opens visibly on Windows startup despite setting
    - **Cause:** Window visibility may be set before minimize logic runs
    - **Fix:** Check startup logic order; ensure `ShowInTaskbar=false` and `Visibility=Hidden` before window loads
@@ -595,9 +633,11 @@ A real-time overlay showing system stats during gaming:
 - CPU usage optimization
 
 ### v1.3.0-beta1 - January 2025
+- **Fix DPC latency issue** (reduce WMI polling)
+- **Fix fan curves not working** (continuous loop + EC fallback)
+- **Fix MAX mode stuck** (proper reset sequence)
 - OSD overlay (transparent window)
 - Advanced fan control with hysteresis
-- AMD PBO basic support
 
 ### v1.3.0-beta2 - February 2025
 - GPU clock offset (NVIDIA)
