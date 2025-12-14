@@ -134,7 +134,65 @@ Compact popup near tray for fast settings:
 
 ---
 
-## �🐛 Priority Bug Fixes (v1.2.2)
+## 📣 Community Feedback (v1.3 Priority)
+
+### From: Omen 16 wf0118nf User (France)
+
+> *"Extremely satisfied with the application! I deleted the Omen Gaming Hub app. The PC became quieter and I gained 1 GB of RAM."*
+
+**Reported Issues:**
+
+1. **Start Minimized to Tray Not Working**
+   - Windows 11 startup: app opens visibly despite "start minimized" setting
+   - Expected: App should start in tray only, no visible window
+   - **Priority:** High (UX issue on every boot)
+
+2. **GPU Power Boost (TGP) Resets on Startup**
+   - GPU Boost resets to minimum every Windows startup
+   - Need: Persist setting OR add quick-toggle in tray menu
+   - **Priority:** High (performance loss on every boot)
+
+3. **RGB Keyboard 4-Zone Colors Not Changing**
+   - App detects 4 color zones correctly
+   - Cannot change zone colors (worked in OmenMon)
+   - **Priority:** Medium (feature regression)
+
+### From: Reddit Community Feedback
+
+1. **Overlay Must Be Fully Disableable**
+   - *"Having an overlay is good, I just want the option to disable it entirely"*
+   - Unlike OGH where overlay is always on
+   - **Priority:** High (respect user choice)
+
+2. **Per-Core Undervolting (Not Just All-Core)**
+   - *"Working undervolting per core for people who really wanna fine tune"*
+   - Individual core voltage offsets
+   - **Priority:** Medium (advanced users)
+
+3. **Minimal Background Presence**
+   - *"As little background presence (services etc) as possible"*
+   - *"Option to disable without breaking stuff"*
+   - *"I don't need Corsair/Logitech devices being detected, or gaming profiles"*
+   - Modular feature toggles
+   - **Priority:** High (resource efficiency)
+
+4. **Settings Persist After Exit**
+   - *"Closing the UI entirely (exiting on taskbar icon too) shouldn't revert settings"*
+   - Fan curves, GPU boost, etc. should stick
+   - **Priority:** Critical (core functionality)
+
+5. **Per-Zone RGB Keyboard Control**
+   - Individual zone color control
+   - **Priority:** Medium
+
+6. **Omen Key "Injector"**
+   - *"Pressing the Omen key launches the program"*
+   - Intercept Omen key to show OmenCore
+   - **Priority:** Medium (already planned)
+
+---
+
+## 🐛 Priority Bug Fixes (v1.2.2)
 
 ### Critical
 
@@ -144,7 +202,25 @@ Compact popup near tray for fast settings:
    - **Fix:** Add `Verb: runas` to the Run section for elevated launch
    - **Status:** ✅ Fixed in installer
 
-2. **Fan Presets Not Working (Only MAX Works)**
+2. **Start Minimized to Tray Not Working**
+   - **Issue:** App opens visibly on Windows startup despite setting
+   - **Cause:** Window visibility may be set before minimize logic runs
+   - **Fix:** Check startup logic order; ensure `ShowInTaskbar=false` and `Visibility=Hidden` before window loads
+   - **Status:** 🔍 To investigate
+
+3. **GPU TGP Resets on Startup**
+   - **Issue:** GPU Power Boost resets to minimum on every Windows boot
+   - **Cause:** Setting not persisted or not reapplied on startup
+   - **Fix:** Save to config, reapply on service start
+   - **Status:** 🔍 To investigate
+
+4. **RGB Zone Colors Not Changing**
+   - **Issue:** 4-zone keyboard detected but colors don't change
+   - **Cause:** Zone color WMI commands may differ from OmenMon implementation
+   - **Fix:** Compare WMI calls with OmenMon, test zone-specific commands
+   - **Status:** 🔍 To investigate
+
+5. **Fan Presets Not Working (Only MAX Works)**
    - **Issue:** Users report only MAX preset affects fans; other presets don't align with curves
    - **Cause:** HP BIOS thermal policy overrides custom fan levels on many models
    - **Investigation Needed:**
@@ -175,6 +251,8 @@ Compact popup near tray for fast settings:
 **Priority:** High  
 **Complexity:** High
 
+> ⚠️ **User Request:** *"I just want the option to disable it entirely if I don't need it, as opposed to OGH where it's always on."*
+
 A real-time overlay showing system stats during gaming:
 
 ```
@@ -184,6 +262,11 @@ A real-time overlay showing system stats during gaming:
 │ Fan: 65%   RAM: 8.2 GB  │
 └─────────────────────────┘
 ```
+
+**Critical Features:**
+- [ ] **Master toggle to disable entirely**
+- [ ] **No background process when disabled**
+- [ ] Remembers disabled state across restarts
 
 **Implementation Options:**
 - **Option A: Transparent WPF Window** (Simplest)
@@ -218,6 +301,9 @@ A real-time overlay showing system stats during gaming:
 
 #### Intel Undervolting (Existing - Enhance)
 - [ ] Detect locked/unlocked BIOS automatically
+- [ ] **Per-core voltage offsets** (not just all-core)
+  - Individual core UV for fine-tuning
+  - Best-core identification
 - [ ] Per-core P-state modification
 - [ ] Turbo ratio limits adjustment
 - [ ] Power limit (PL1/PL2) modification
@@ -226,7 +312,7 @@ A real-time overlay showing system stats during gaming:
 
 #### AMD Ryzen Undervolting (New)
 - [ ] **Curve Optimizer** via PawnIO SMU
-  - Per-core curve offset (-30 to +30)
+  - **Per-core curve offset** (-30 to +30)
   - Best-core detection
   - Auto-tuning wizard
 - [ ] **PPT/TDC/EDC Limits**
@@ -391,22 +477,54 @@ A real-time overlay showing system stats during gaming:
 **Priority:** Low  
 **Complexity:** High
 
-#### Corsair iCUE
+> ⚠️ **Note:** Make these OPTIONAL modules that users can disable entirely to minimize background presence.
+
+#### Corsair iCUE (Optional Module)
 - [ ] Full iCUE SDK integration
 - [ ] Device lighting control
 - [ ] DPI stage configuration
 - [ ] Macro playback
+- [ ] **Toggle:** Enable/disable in settings
 
-#### Logitech G HUB
+#### Logitech G HUB (Optional Module)
 - [ ] Full Logitech SDK integration
 - [ ] Device lighting sync
 - [ ] DPI/sensitivity control
+- [ ] **Toggle:** Enable/disable in settings
 
-#### Razer Chroma
+#### Razer Chroma (Optional Module)
 - [ ] Chroma SDK integration
 - [ ] Sync with keyboard lighting
+- [ ] **Toggle:** Enable/disable in settings
 
-### 10. 📊 Advanced Monitoring
+### 10. 🎛️ Modular Feature System (NEW)
+
+**Priority:** High  
+**Complexity:** Medium
+
+> *"I want it to have as little background presence as possible and the option to disable them without breaking stuff"*
+
+- [ ] **Feature Toggles in Settings:**
+  - Corsair SDK: On/Off
+  - Logitech SDK: On/Off  
+  - Game Profile Detection: On/Off
+  - Auto-Switch on Game Launch: On/Off
+  - In-Game Overlay: On/Off
+  - Tray Monitoring: On/Off
+  
+- [ ] **Minimal Mode:**
+  - Only core features active (fan control, power modes)
+  - No peripheral scanning
+  - No game detection
+  - Minimal memory footprint
+
+- [ ] **Settings Persist After Exit:**
+  - Fan curves stay applied (via EC/WMI persistence)
+  - GPU TGP doesn't revert
+  - Undervolt stays active (if safe)
+  - Only monitoring stops, not settings
+
+### 11. 📊 Advanced Monitoring
 
 **Priority:** Medium  
 **Complexity:** Low
@@ -499,12 +617,20 @@ Tracking feature requests from GitHub Issues and community feedback:
 
 | Request | Votes | Status | Notes |
 |---------|-------|--------|-------|
-| In-game OSD | ⭐⭐⭐⭐⭐ | Planned v1.3 | Top requested |
+| In-game OSD (disableable) | ⭐⭐⭐⭐⭐ | Planned v1.3 | Top requested, with OFF toggle |
+| Start minimized to tray | ⭐⭐⭐⭐⭐ | Bug fix v1.2.2 | Not working on Win11 |
+| GPU TGP persist on boot | ⭐⭐⭐⭐⭐ | Bug fix v1.2.2 | Resets every startup |
+| Settings persist after exit | ⭐⭐⭐⭐⭐ | Planned v1.3 | Core feature |
+| Per-core undervolting | ⭐⭐⭐⭐ | Planned v1.3 | Fine-tune individual cores |
 | AMD Curve Optimizer | ⭐⭐⭐⭐ | Planned v1.3 | Via PawnIO SMU |
+| Minimal mode / disable features | ⭐⭐⭐⭐ | Planned v1.3 | Toggle Corsair/Logitech/etc |
+| RGB 4-zone colors | ⭐⭐⭐ | Bug fix v1.2.2 | Not changing |
 | Battery charge limit | ⭐⭐⭐ | Planned v1.3 | If BIOS supports |
 | GPU overclocking | ⭐⭐⭐ | Planned v1.3 | NVAPI integration |
+| Omen key launcher | ⭐⭐⭐ | Planned v1.3 | Key interception |
 | Per-key RGB | ⭐⭐ | Investigating | Hardware dependent |
 | Custom fan tables | ⭐⭐ | Planned v1.3 | WMI SetFanTable |
+| Tray quick TGP toggle | ⭐⭐ | Planned v1.3 | Quick access menu |
 
 ---
 
