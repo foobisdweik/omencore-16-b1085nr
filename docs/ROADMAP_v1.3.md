@@ -17,7 +17,124 @@ OmenCore v1.3 will be a **complete, self-contained gaming laptop control center*
 
 ---
 
-## 🐛 Priority Bug Fixes (v1.2.2)
+## � Features from OmenMon to Integrate
+
+### 1. **Continuous Fan Programs** (OmenMon's Core Feature)
+OmenMon's fan programs are fundamentally different from static presets - they **actively monitor temperature and adjust fan speeds in real-time**.
+
+**How it works:**
+1. Set thermal policy (Performance `0x31`, Default `0x30`, Cool `0x50`)
+2. Every 15 seconds:
+   - Read current max temperature
+   - Find matching temperature level in curve
+   - Set fan levels (in krpm) via WMI `SetFanLevel` or EC writes
+3. Continuously extend 120-second timeout to prevent BIOS reset
+
+**Fan Level Values (krpm):**
+- `20` = ~2000 RPM (minimum)
+- `40` = ~4000 RPM (medium)
+- `55` = ~5500 RPM (CPU max)
+- `57` = ~5700 RPM (GPU max)
+- `00` = Fan off (caution!)
+
+**Implementation:**
+```xml
+<Program Name="Power">
+    <FanMode>Performance</FanMode>
+    <GpuPower>Maximum</GpuPower>
+    <Level Temperature="45"><Cpu>24</Cpu><Gpu>26</Gpu></Level>
+    <Level Temperature="65"><Cpu>36</Cpu><Gpu>40</Gpu></Level>
+    <Level Temperature="85"><Cpu>55</Cpu><Gpu>57</Gpu></Level>
+</Program>
+```
+
+### 2. **EC Direct Fan Level Setting** (FanLevelUseEc)
+- Use Embedded Controller instead of WMI BIOS call for fan levels
+- Fallback when WMI `SetFanLevel` doesn't work on some models
+- **This is likely why users report only MAX preset works!**
+
+### 3. **Fan Countdown Extension** (FanCountdownExtendAlways)
+- Continuously extend HP BIOS 120-second fan timer
+- Keep custom fan settings permanent without active program
+- Write to EC register `XFCD` (0x63) to reset timer
+
+### 4. **Multiple Temperature Sensors**
+- Support up to 9 EC sensors: `CPUT`, `GPTM`, `RTMP`, `TMP1`, `TNT2-5`
+- Plus BIOS temperature sensor
+- Show trend indicators (↑ ascending, ↓ descending)
+- Configure which sensors contribute to "max temp" calculation
+
+### 5. **Advanced Optimus Fix**
+- Detect when NVIDIA switches GPU mode
+- Reapply color profile (fixes color issues)
+- Restart Explorer shell (fixes stutter)
+- Restart NVIDIA Display Container service
+
+### 6. **Omen Key Interception & Custom Actions**
+- Intercept physical Omen key press
+- Options:
+  - Show/hide main window
+  - Toggle fan program on/off
+  - Cycle through all fan programs
+  - Execute custom command (e.g., turn off display)
+  - Remap to any key combination
+
+### 7. **Display Off (While System Runs)**
+- Turn off display and keyboard backlight
+- System continues running (for downloads, music, etc.)
+- Uses `SendMessage` with `SC_MONITORPOWER`
+
+### 8. **Refresh Rate Presets**
+- Quick switch between high (165Hz) and low (60Hz) rates
+- Configurable preset values
+- From tray menu
+
+### 9. **Color Profile Reload**
+- Reload default display color profile
+- Fixes profile being dropped when display settings change
+
+### 10. **GPU Mode Switching Without Reboot Menu**
+- Toggle Discrete/Optimus from context menu
+- Equivalent to BIOS setting change
+- Prompts for reboot
+
+---
+
+## 🟡 Features from OmenHubLighter to Integrate
+
+### 1. **Quick Popup UI** (Omen Key Press)
+Compact popup near tray for fast settings:
+```
+┌─────────────────────────────────┐
+│  OmenCore Quick Settings        │
+├─────────────────────────────────┤
+│  CPU: 65°C    GPU: 72°C        │
+│  Fans: 3500 / 4200 RPM         │
+├─────────────────────────────────┤
+│  [Auto] [Perf] [Max] [Off]     │
+├─────────────────────────────────┤
+│  [Silent] [Balanced] [Turbo]   │
+└─────────────────────────────────┘
+```
+
+### 2. **Trackpad Lock Key Response**
+- Detect trackpad lock toggle
+- Show OSD notification when toggled
+
+### 3. **Windows Key Lock Response**  
+- Detect Windows key lock toggle
+- Show OSD notification
+
+### 4. **Fan Speed Text Display**
+- Show actual RPM values alongside fan duty %
+
+### 5. **Remap Omen Key to Any Key**
+- Map to single key or hotkey combination
+- Or execute custom programs with arguments
+
+---
+
+## �🐛 Priority Bug Fixes (v1.2.2)
 
 ### Critical
 
