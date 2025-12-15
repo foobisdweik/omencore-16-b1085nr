@@ -7,32 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.0-beta2] - 2025-06
+## [1.4.0-beta] - 2025-12-16
 
 ### Added
 - **🎨 Interactive 4-Zone Keyboard Controls** - Visual zone editor with hex color input and presets
 - **🚀 StartupSequencer Service** - Centralized boot-time reliability with retry logic
 - **🖼️ Splash Screen** - Branded OMEN loading experience with progress tracking
 - **🔔 In-App Notification Center** - Extended notification service with read/unread tracking
+- **Fan Profile UI Redesign** - Card-based preset selector with visual icons
+- **OSD TopCenter/BottomCenter** - New overlay position options
+- **Undervolt Status Messages** - Informative explanations when undervolting unavailable
 
 ### Fixed
+- **TCC Offset Persistence** - CPU temp limit now survives reboots
+- **Thermal Protection Thresholds** - More aggressive fan ramping (80°C warning, 88°C emergency)
+- **Auto-Start Detection** - Correctly detects existing startup entries
 - **SSD Sensor 0°C** - Storage widget hides when no temperature data available
 - **Overlay Hotkey Retry** - Hotkey registration retries when starting minimized
+- **Tray Refresh Rate Display** - Updates immediately after changing
+- **Undervolt Section Visibility** - Hides on unsupported AMD systems
 
-See [CHANGELOG_v1.4.0-beta2.md](docs/CHANGELOG_v1.4.0-beta2.md) for full details.
-
----
-
-## [1.4.0-beta1] - 2025-06
-
-### Fixed
-- **NullReferenceException on startup** - Fixed crash when accessing sensor data before initialization
-- **Fan RPM display showing incorrect values** - Corrected fan sensor reading logic
-- **GPU Power Boost not applying on some models** - Added fallback paths
-- **Config save failure** - Fixed JSON serialization of new settings
-- **Memory leak in monitoring service** - Proper disposal of sensor handles
-
-See [CHANGELOG_v1.4.0-beta1.md](docs/CHANGELOG_v1.4.0-beta1.md) for full details.
+See [CHANGELOG_v1.4.0-beta.md](docs/CHANGELOG_v1.4.0-beta.md) for full details.
 
 ---
 
