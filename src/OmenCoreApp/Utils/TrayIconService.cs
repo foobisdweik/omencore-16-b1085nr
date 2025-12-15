@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using Hardcodet.Wpf.TaskbarNotification;
 using OmenCore.Models;
 using OmenCore.Services;
+using OmenCore.Views;
 
 namespace OmenCore.Utils
 {
@@ -22,6 +23,7 @@ namespace OmenCore.Utils
         private readonly Action _shutdownApp;
         private readonly ImageSource? _baseIconSource;
         private readonly DisplayService _displayService;
+        private QuickPopupWindow? _quickPopup;
         private MenuItem? _cpuTempMenuItem;
         private MenuItem? _gpuTempMenuItem;
         private MenuItem? _fanModeMenuItem;
@@ -328,6 +330,12 @@ namespace OmenCore.Utils
         public void UpdateMonitoringSample(MonitoringSample sample)
         {
             _latestSample = sample;
+            
+            // Also update QuickPopup if visible
+            if (_quickPopup?.IsVisible == true)
+            {
+                _quickPopup.UpdateMonitoringSample(sample);
+            }
         }
 
         private void UpdateTrayDisplay(object? sender, EventArgs e)
@@ -494,12 +502,74 @@ namespace OmenCore.Utils
             });
         }
 
+        /// <summary>
+        /// Shows or hides the quick popup window near the tray.
+        /// </summary>
+        public void ToggleQuickPopup()
+        {
+            Application.Current?.Dispatcher?.BeginInvoke(() =>
+            {
+                if (_quickPopup == null)
+                {
+                    _quickPopup = new QuickPopupWindow();
+                    _quickPopup.FanModeChangeRequested += mode => FanModeChangeRequested?.Invoke(mode);
+                    _quickPopup.PerformanceModeChangeRequested += mode => PerformanceModeChangeRequested?.Invoke(mode);
+                    _quickPopup.Closed += (s, e) => _quickPopup = null;
+                }
+
+                if (_quickPopup.IsVisible)
+                {
+                    _quickPopup.Hide();
+                }
+                else
+                {
+                    _quickPopup.PositionNearTray();
+                    _quickPopup.UpdateFanMode(_currentFanMode);
+                    _quickPopup.UpdatePerformanceMode(_currentPerformanceMode);
+                    if (_latestSample != null)
+                    {
+                        _quickPopup.UpdateMonitoringSample(_latestSample);
+                    }
+                    _quickPopup.Show();
+                    _quickPopup.Activate();
+                }
+            });
+        }
+
+        /// <summary>
+        /// Shows the quick popup window near the tray.
+        /// </summary>
+        public void ShowQuickPopup()
+        {
+            Application.Current?.Dispatcher?.BeginInvoke(() =>
+            {
+                if (_quickPopup == null)
+                {
+                    _quickPopup = new QuickPopupWindow();
+                    _quickPopup.FanModeChangeRequested += mode => FanModeChangeRequested?.Invoke(mode);
+                    _quickPopup.PerformanceModeChangeRequested += mode => PerformanceModeChangeRequested?.Invoke(mode);
+                    _quickPopup.Closed += (s, e) => _quickPopup = null;
+                }
+
+                _quickPopup.PositionNearTray();
+                _quickPopup.UpdateFanMode(_currentFanMode);
+                _quickPopup.UpdatePerformanceMode(_currentPerformanceMode);
+                if (_latestSample != null)
+                {
+                    _quickPopup.UpdateMonitoringSample(_latestSample);
+                }
+                _quickPopup.Show();
+                _quickPopup.Activate();
+            });
+        }
+
         public void Dispose()
         {
             if (!_disposed)
             {
                 _updateTimer.Stop();
                 _updateTimer.Tick -= UpdateTrayDisplay;
+                _quickPopup?.Close();
                 _disposed = true;
             }
         }

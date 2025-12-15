@@ -892,6 +892,206 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Feature Toggles -->
+                <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <TextBlock Text="🧩" FontSize="24" 
+                                       VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <StackPanel>
+                                <TextBlock Text="Feature Modules" FontSize="20" FontWeight="SemiBold" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="Enable/disable features to reduce resource usage" FontSize="12" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Corsair Integration -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Corsair iCUE Integration" FontSize="14" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="Support for Corsair keyboards, mice, headsets" FontSize="12" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1" 
+                                          Style="{StaticResource ModernToggleButton}"
+                                          IsChecked="{Binding CorsairIntegrationEnabled}"/>
+                        </Grid>
+
+                        <!-- Logitech Integration -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Logitech G HUB Integration" FontSize="14" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="Support for Logitech G peripherals" FontSize="12" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1" 
+                                          Style="{StaticResource ModernToggleButton}"
+                                          IsChecked="{Binding LogitechIntegrationEnabled}"/>
+                        </Grid>
+
+                        <!-- Game Profiles -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Game Profile Auto-Switching" FontSize="14" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="Automatically apply profiles when games launch" FontSize="12" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1" 
+                                          Style="{StaticResource ModernToggleButton}"
+                                          IsChecked="{Binding GameProfilesEnabled}"/>
+                        </Grid>
+
+                        <!-- Keyboard Lighting -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Keyboard Backlight Control" FontSize="14" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="OMEN keyboard 4-zone RGB lighting" FontSize="12" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1" 
+                                          Style="{StaticResource ModernToggleButton}"
+                                          IsChecked="{Binding KeyboardLightingEnabled}"/>
+                        </Grid>
+
+                        <!-- Fan Curves -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Custom Fan Curves" FontSize="14" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="Continuous fan speed adjustment (disable for BIOS-only control)" FontSize="12" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1" 
+                                          Style="{StaticResource ModernToggleButton}"
+                                          IsChecked="{Binding FanCurvesEnabled}"/>
+                        </Grid>
+
+                        <!-- Power Automation -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Power Source Automation" FontSize="14" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="Auto-switch profiles when plugging/unplugging AC" FontSize="12" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1" 
+                                          Style="{StaticResource ModernToggleButton}"
+                                          IsChecked="{Binding FeaturePowerAutomationEnabled}"/>
+                        </Grid>
+
+                        <!-- GPU Switching -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="GPU Mode Switching" FontSize="14" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="Control Hybrid/Discrete/Optimus modes" FontSize="12" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1" 
+                                          Style="{StaticResource ModernToggleButton}"
+                                          IsChecked="{Binding GpuSwitchingEnabled}"/>
+                        </Grid>
+
+                        <!-- Undervolt -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="CPU Undervolt Controls" FontSize="14" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="Voltage offset adjustment (requires compatible CPU)" FontSize="12" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1" 
+                                          Style="{StaticResource ModernToggleButton}"
+                                          IsChecked="{Binding UndervoltEnabled}"/>
+                        </Grid>
+
+                        <!-- OMEN Key Section -->
+                        <Border Background="#1A6B4C9A" CornerRadius="8" Padding="16" Margin="0,8,0,0">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="🎮" FontSize="16" Margin="0,0,8,0"/>
+                                            <TextBlock Text="OMEN Key Interception" FontSize="14" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        </StackPanel>
+                                        <TextBlock Text="Capture OMEN key to show OmenCore instead of HP Gaming Hub" FontSize="12" 
+                                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="24,4,0,0"/>
+                                    </StackPanel>
+                                    <ToggleButton Grid.Column="1" 
+                                                  Style="{StaticResource ModernToggleButton}"
+                                                  IsChecked="{Binding OmenKeyInterceptionEnabled}"/>
+                                </Grid>
+                                
+                                <Grid Margin="0,0,0,0" IsEnabled="{Binding OmenKeyInterceptionEnabled}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="150"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="OMEN Key Action" FontSize="13" 
+                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" 
+                                              SelectedItem="{Binding OmenKeyAction, Mode=TwoWay}"
+                                              ItemsSource="{Binding OmenKeyActionOptions}"
+                                              IsEnabled="{Binding OmenKeyInterceptionEnabled}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Note -->
+                        <Border Background="#1F1F1F" CornerRadius="4" Padding="12" Margin="0,16,0,0">
+                            <TextBlock TextWrapping="Wrap" FontSize="12" 
+                                       Foreground="{StaticResource TextSecondaryBrush}">
+                                <Run FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}">💡 Tip:</Run>
+                                Disable unused features to reduce CPU/memory usage. Restart OmenCore for changes to take effect.
+                            </TextBlock>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
                 <!-- Data & Storage -->
                 <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16">
                     <StackPanel>

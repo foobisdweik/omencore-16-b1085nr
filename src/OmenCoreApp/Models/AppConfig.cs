@@ -19,6 +19,7 @@ namespace OmenCore.Models
         public UndervoltPreferences Undervolt { get; set; } = new();
         public MonitoringPreferences Monitoring { get; set; } = new();
         public UpdatePreferences Updates { get; set; } = new();
+        public FeaturePreferences Features { get; set; } = new();
         public bool FirstRunCompleted { get; set; } = false;
         
         /// <summary>

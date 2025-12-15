@@ -655,6 +655,105 @@ namespace OmenCore.Hardware
         }
 
         /// <summary>
+        /// Set keyboard color table for 4-zone keyboards.
+        /// OmenMon: Cmd.Keyboard, 0x03
+        /// 
+        /// Data format (12 bytes for 4 zones, each zone is RGB):
+        /// Zone1: [R, G, B]
+        /// Zone2: [R, G, B]
+        /// Zone3: [R, G, B]
+        /// Zone4: [R, G, B]
+        /// </summary>
+        public bool SetColorTable(byte[] zoneColors)
+        {
+            if (!_isAvailable)
+            {
+                _logging?.Warn("Cannot set color table: WMI BIOS not available");
+                return false;
+            }
+
+            try
+            {
+                // Ensure we have the right data size (12 bytes for 4 zones, 3 bytes each for RGB)
+                var data = new byte[128]; // Larger buffer for safety
+                Array.Copy(zoneColors, 0, data, 0, Math.Min(zoneColors.Length, data.Length));
+
+                var result = SendBiosCommand(BiosCmd.Keyboard, CMD_COLOR_SET, data, 0);
+                if (result != null)
+                {
+                    _logging?.Info($"✓ Keyboard color table set ({zoneColors.Length} bytes)");
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging?.Error($"Failed to set color table: {ex.Message}", ex);
+            }
+            return false;
+        }
+        
+        /// <summary>
+        /// Set a single keyboard zone color.
+        /// </summary>
+        public bool SetZoneColor(int zone, byte r, byte g, byte b)
+        {
+            if (!_isAvailable)
+            {
+                _logging?.Warn("Cannot set zone color: WMI BIOS not available");
+                return false;
+            }
+
+            try
+            {
+                // Create a 128-byte buffer with the zone color data
+                // Format varies by keyboard type, but typically:
+                // Byte 0: Zone number (0-3)
+                // Byte 1-3: RGB values
+                var data = new byte[128];
+                data[0] = (byte)zone;
+                data[1] = r;
+                data[2] = g;
+                data[3] = b;
+
+                var result = SendBiosCommand(BiosCmd.Keyboard, CMD_COLOR_SET, data, 0);
+                if (result != null)
+                {
+                    _logging?.Info($"✓ Zone {zone} color set to R:{r} G:{g} B:{b}");
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging?.Error($"Failed to set zone color: {ex.Message}", ex);
+            }
+            return false;
+        }
+        
+        /// <summary>
+        /// Get keyboard color table (for detecting current settings).
+        /// OmenMon: Cmd.Keyboard, 0x02
+        /// </summary>
+        public byte[]? GetColorTable()
+        {
+            if (!_isAvailable) return null;
+
+            try
+            {
+                var result = SendBiosCommand(BiosCmd.Keyboard, CMD_COLOR_GET, new byte[4], 128);
+                if (result != null && result.Length > 0)
+                {
+                    _logging?.Info($"Got keyboard color table ({result.Length} bytes)");
+                    return result;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging?.Warn($"Failed to get color table: {ex.Message}");
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Set idle mode (affects power management).
         /// OmenMon: Cmd.Default, 0x31
         /// </summary>

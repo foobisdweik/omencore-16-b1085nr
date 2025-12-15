@@ -3,23 +3,28 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Management;
 using System.Runtime.InteropServices;
+using OmenCore.Hardware;
 using OmenCore.Models;
 
 namespace OmenCore.Services
 {
     /// <summary>
-    /// Controls HP OMEN laptop keyboard backlight lighting via WMI and EC access.
+    /// Controls HP OMEN laptop keyboard backlight lighting via WMI BIOS and EC access.
     /// Supports 4-zone RGB keyboards found in OMEN 15/16/17 series laptops.
+    /// 
+    /// v1.3: Added WMI BIOS color table support for models where EC access doesn't work.
     /// </summary>
     public class KeyboardLightingService : IDisposable
     {
         private readonly LoggingService _logging;
-        private readonly Hardware.IEcAccess? _ecAccess;
+        private readonly IEcAccess? _ecAccess;
+        private readonly HpWmiBios? _wmiBios;
         private bool _wmiAvailable;
+        private bool _wmiBiosAvailable;
         private bool _ecAvailable;
         private bool _disposed;
 
-        // HP OMEN WMI namespace and class identifiers
+        // HP OMEN WMI namespace and class identifiers (legacy)
         private const string OmenWmiNamespace = @"root\hp\InstrumentedBIOS";
         private const string OmenWmiClass = "HPBIOS_BIOSSettingInterface";
         
@@ -55,20 +60,36 @@ namespace OmenCore.Services
             Off = 0xFF
         }
 
-        public bool IsAvailable => _wmiAvailable || _ecAvailable;
-        public string BackendType => _wmiAvailable ? "WMI" : (_ecAvailable ? "EC" : "None");
+        public bool IsAvailable => _wmiBiosAvailable || _wmiAvailable || _ecAvailable;
+        public string BackendType => _wmiBiosAvailable ? "WMI BIOS" : (_wmiAvailable ? "WMI" : (_ecAvailable ? "EC" : "None"));
 
-        public KeyboardLightingService(LoggingService logging, Hardware.IEcAccess? ecAccess = null)
+        public KeyboardLightingService(LoggingService logging, IEcAccess? ecAccess = null, HpWmiBios? wmiBios = null)
         {
             _logging = logging;
             _ecAccess = ecAccess;
+            _wmiBios = wmiBios;
             
             InitializeBackends();
         }
 
         private void InitializeBackends()
         {
-            // Try WMI first (preferred - safer)
+            // Try HpWmiBios first (preferred - uses same interface as fan control)
+            try
+            {
+                if (_wmiBios != null && _wmiBios.IsAvailable)
+                {
+                    _wmiBiosAvailable = true;
+                    _logging.Info("✓ HP WMI BIOS keyboard lighting backend available");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Info($"HP WMI BIOS keyboard not available: {ex.Message}");
+                _wmiBiosAvailable = false;
+            }
+            
+            // Try legacy WMI (for older models)
             try
             {
                 using var searcher = new ManagementObjectSearcher(OmenWmiNamespace, "SELECT * FROM HPBIOS_BIOSSettingInterface");
@@ -168,11 +189,15 @@ namespace OmenCore.Services
             }
         }
 
+        /// <summary>
+        /// Set color for a specific keyboard zone.
+        /// Uses WMI BIOS if available, falls back to EC access.
+        /// </summary>
         public void SetZoneColor(KeyboardZone zone, Color color)
         {
-            if (!_ecAvailable || _ecAccess == null)
+            if (!IsAvailable)
             {
-                _logging.Info("EC access required for per-zone control");
+                _logging.Warn("No keyboard lighting backend available");
                 return;
             }
 
@@ -180,6 +205,7 @@ namespace OmenCore.Services
             {
                 if (zone == KeyboardZone.All)
                 {
+                    // Set all 4 zones
                     for (int i = 0; i < 4; i++)
                     {
                         SetZoneColorInternal((KeyboardZone)i, color);
@@ -196,10 +222,72 @@ namespace OmenCore.Services
                 _logging.Warn($"Failed to set zone color: {ex.Message}");
             }
         }
+        
+        /// <summary>
+        /// Set all 4 zone colors at once using a color array.
+        /// More efficient than setting zones individually.
+        /// </summary>
+        public void SetAllZoneColors(Color[] zoneColors)
+        {
+            if (zoneColors.Length < 4)
+            {
+                _logging.Warn("SetAllZoneColors requires 4 colors");
+                return;
+            }
+
+            try
+            {
+                // Try WMI BIOS first (preferred - single call for all zones)
+                if (_wmiBiosAvailable && _wmiBios != null)
+                {
+                    // Create color table: 12 bytes (3 bytes RGB per zone)
+                    var colorTable = new byte[12];
+                    for (int i = 0; i < 4; i++)
+                    {
+                        colorTable[i * 3] = zoneColors[i].R;
+                        colorTable[i * 3 + 1] = zoneColors[i].G;
+                        colorTable[i * 3 + 2] = zoneColors[i].B;
+                    }
+                    
+                    if (_wmiBios.SetColorTable(colorTable))
+                    {
+                        _logging.Info("✓ All zone colors set via WMI BIOS color table");
+                        return;
+                    }
+                    _logging.Warn("WMI BIOS SetColorTable failed, trying individual zones");
+                }
+                
+                // Fallback: set each zone individually
+                for (int i = 0; i < 4; i++)
+                {
+                    SetZoneColorInternal((KeyboardZone)i, zoneColors[i]);
+                }
+                _logging.Info("✓ All zone colors set individually");
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to set all zone colors: {ex.Message}");
+            }
+        }
 
         private void SetZoneColorInternal(KeyboardZone zone, Color color)
         {
-            if (_ecAccess == null) return;
+            // Try WMI BIOS first
+            if (_wmiBiosAvailable && _wmiBios != null)
+            {
+                if (_wmiBios.SetZoneColor((int)zone, color.R, color.G, color.B))
+                {
+                    return; // Success
+                }
+                _logging.Warn($"WMI BIOS SetZoneColor failed for zone {zone}, trying EC");
+            }
+            
+            // Fall back to EC access
+            if (_ecAccess == null || !_ecAvailable) 
+            {
+                _logging.Warn("No backend available for zone color");
+                return;
+            }
 
             byte baseReg = zone switch
             {

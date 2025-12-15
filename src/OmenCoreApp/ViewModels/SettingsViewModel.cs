@@ -428,6 +428,162 @@ namespace OmenCore.ViewModels
 
         #endregion
 
+        #region Feature Toggles
+
+        public bool CorsairIntegrationEnabled
+        {
+            get => _config.Features?.CorsairIntegrationEnabled ?? true;
+            set
+            {
+                if (_config.Features == null) _config.Features = new FeaturePreferences();
+                if (_config.Features.CorsairIntegrationEnabled != value)
+                {
+                    _config.Features.CorsairIntegrationEnabled = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public bool LogitechIntegrationEnabled
+        {
+            get => _config.Features?.LogitechIntegrationEnabled ?? true;
+            set
+            {
+                if (_config.Features == null) _config.Features = new FeaturePreferences();
+                if (_config.Features.LogitechIntegrationEnabled != value)
+                {
+                    _config.Features.LogitechIntegrationEnabled = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public bool GameProfilesEnabled
+        {
+            get => _config.Features?.GameProfilesEnabled ?? true;
+            set
+            {
+                if (_config.Features == null) _config.Features = new FeaturePreferences();
+                if (_config.Features.GameProfilesEnabled != value)
+                {
+                    _config.Features.GameProfilesEnabled = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public bool KeyboardLightingEnabled
+        {
+            get => _config.Features?.KeyboardLightingEnabled ?? true;
+            set
+            {
+                if (_config.Features == null) _config.Features = new FeaturePreferences();
+                if (_config.Features.KeyboardLightingEnabled != value)
+                {
+                    _config.Features.KeyboardLightingEnabled = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public bool FanCurvesEnabled
+        {
+            get => _config.Features?.FanCurvesEnabled ?? true;
+            set
+            {
+                if (_config.Features == null) _config.Features = new FeaturePreferences();
+                if (_config.Features.FanCurvesEnabled != value)
+                {
+                    _config.Features.FanCurvesEnabled = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public bool FeaturePowerAutomationEnabled
+        {
+            get => _config.Features?.PowerAutomationEnabled ?? true;
+            set
+            {
+                if (_config.Features == null) _config.Features = new FeaturePreferences();
+                if (_config.Features.PowerAutomationEnabled != value)
+                {
+                    _config.Features.PowerAutomationEnabled = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public bool GpuSwitchingEnabled
+        {
+            get => _config.Features?.GpuSwitchingEnabled ?? true;
+            set
+            {
+                if (_config.Features == null) _config.Features = new FeaturePreferences();
+                if (_config.Features.GpuSwitchingEnabled != value)
+                {
+                    _config.Features.GpuSwitchingEnabled = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public bool UndervoltEnabled
+        {
+            get => _config.Features?.UndervoltEnabled ?? true;
+            set
+            {
+                if (_config.Features == null) _config.Features = new FeaturePreferences();
+                if (_config.Features.UndervoltEnabled != value)
+                {
+                    _config.Features.UndervoltEnabled = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public bool OmenKeyInterceptionEnabled
+        {
+            get => _config.Features?.OmenKeyInterceptionEnabled ?? false;
+            set
+            {
+                if (_config.Features == null) _config.Features = new FeaturePreferences();
+                if (_config.Features.OmenKeyInterceptionEnabled != value)
+                {
+                    _config.Features.OmenKeyInterceptionEnabled = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public string OmenKeyAction
+        {
+            get => _config.Features?.OmenKeyAction ?? "ShowQuickPopup";
+            set
+            {
+                if (_config.Features == null) _config.Features = new FeaturePreferences();
+                if (_config.Features.OmenKeyAction != value)
+                {
+                    _config.Features.OmenKeyAction = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+
+        public string[] OmenKeyActionOptions => new[] { "ShowQuickPopup", "ShowWindow", "ToggleFanMode", "TogglePerformanceMode" };
+
+        #endregion
+
         #region Fan Cleaning
 
         public string FanCleaningStatusText

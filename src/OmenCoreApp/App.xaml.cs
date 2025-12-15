@@ -159,11 +159,12 @@ namespace OmenCore
             {
                 IconSource = new System.Windows.Media.Imaging.BitmapImage(
                     new Uri("pack://application:,,,/Assets/OmenCore.ico")),
-                ToolTipText = "OmenCore - Gaming Laptop Control"
+                ToolTipText = "OmenCore - Gaming Laptop Control\n\nLeft-click: Open Dashboard\nMiddle-click: Quick Popup\nRight-click: Menu"
             };
 
             _trayIconService = new TrayIconService(_trayIcon, ShowMainWindow, () => Shutdown());
             _trayIcon.TrayLeftMouseUp += (s, e) => ShowMainWindow();
+            _trayIcon.TrayMiddleMouseUp += (s, e) => _trayIconService?.ShowQuickPopup();
 
             // Wire up to MainViewModel for monitoring updates and tray actions
             var mainViewModel = _serviceProvider?.GetRequiredService<MainViewModel>();

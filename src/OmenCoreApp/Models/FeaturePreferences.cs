@@ -1,0 +1,87 @@
+namespace OmenCore.Models
+{
+    /// <summary>
+    /// Feature toggles to enable/disable optional OmenCore modules.
+    /// This allows reducing background presence by disabling unused features.
+    /// </summary>
+    public class FeaturePreferences
+    {
+        /// <summary>
+        /// Enable Corsair iCUE device integration (keyboards, mice).
+        /// Disable if you don't have Corsair peripherals.
+        /// </summary>
+        public bool CorsairIntegrationEnabled { get; set; } = true;
+        
+        /// <summary>
+        /// Enable Logitech G HUB device integration.
+        /// Disable if you don't have Logitech G peripherals.
+        /// </summary>
+        public bool LogitechIntegrationEnabled { get; set; } = true;
+        
+        /// <summary>
+        /// Enable automatic game profile switching.
+        /// When enabled, OmenCore detects running games and applies corresponding profiles.
+        /// </summary>
+        public bool GameProfilesEnabled { get; set; } = true;
+        
+        /// <summary>
+        /// Enable keyboard backlighting control.
+        /// Disable if keyboard lighting doesn't work on your model.
+        /// </summary>
+        public bool KeyboardLightingEnabled { get; set; } = true;
+        
+        /// <summary>
+        /// Enable temperature monitoring and display.
+        /// Disable to reduce background CPU usage.
+        /// </summary>
+        public bool MonitoringEnabled { get; set; } = true;
+        
+        /// <summary>
+        /// Enable fan curve functionality (continuous fan speed adjustment).
+        /// When disabled, fans run in BIOS-controlled mode only.
+        /// </summary>
+        public bool FanCurvesEnabled { get; set; } = true;
+        
+        /// <summary>
+        /// Enable tray icon with live temperature display.
+        /// Disable for minimal background presence.
+        /// </summary>
+        public bool TrayIconEnabled { get; set; } = true;
+        
+        /// <summary>
+        /// Enable power source monitoring for automatic profile switching.
+        /// Switches profiles when AC/Battery power changes.
+        /// </summary>
+        public bool PowerAutomationEnabled { get; set; } = true;
+        
+        /// <summary>
+        /// Enable LibreHardwareMonitor for detailed sensor readings.
+        /// Disable if sensor data is inaccurate or causing issues.
+        /// </summary>
+        public bool LibreHardwareMonitorEnabled { get; set; } = true;
+        
+        /// <summary>
+        /// Enable GPU switching controls (Hybrid/Discrete/Optimus).
+        /// Disable if GPU switching doesn't work on your model.
+        /// </summary>
+        public bool GpuSwitchingEnabled { get; set; } = true;
+        
+        /// <summary>
+        /// Enable undervolt controls.
+        /// Disable if undervolting is not supported on your CPU.
+        /// </summary>
+        public bool UndervoltEnabled { get; set; } = true;
+        
+        /// <summary>
+        /// Enable OMEN key interception.
+        /// When enabled, pressing the OMEN key shows OmenCore instead of HP OMEN Gaming Hub.
+        /// </summary>
+        public bool OmenKeyInterceptionEnabled { get; set; } = false;
+        
+        /// <summary>
+        /// Action to perform when OMEN key is pressed.
+        /// Options: "ShowWindow", "ShowQuickPopup", "ToggleFanMode", "TogglePerformanceMode"
+        /// </summary>
+        public string OmenKeyAction { get; set; } = "ShowQuickPopup";
+    }
+}
