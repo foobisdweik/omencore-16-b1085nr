@@ -4,10 +4,12 @@
 
 OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop application for managing thermals, performance, RGB lighting, and peripherals. Built with WPF on .NET 8, it provides professional-grade hardware control without bloat, telemetry, or mandatory sign-ins.
 
-[![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v1.2.1)
+[![Version](https://img.shields.io/badge/version-1.3.0--beta-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v1.3.0-beta)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Website](https://img.shields.io/badge/website-omencore.info-brightgreen.svg)](https://omencore.info)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/ahcUC2Un)
+[![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C.svg?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=XH8CKYF8T7EBU&no_recurring=0&item_name=Thank+you+for+your+generous+donation%2C+this+will+allow+me+to+continue+developing+my+programs.&currency_code=AUD)
 
 ![OmenCore Screenshot](docs/screenshots/main-window.png)
 
@@ -606,16 +608,29 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 - **Latest Release**: https://github.com/theantipopau/omencore/releases/latest
 - **Issue Tracker**: https://github.com/theantipopau/omencore/issues
 - **Discussions**: https://github.com/theantipopau/omencore/discussions
+- **Discord Server**: https://discord.gg/ahcUC2Un
 - **Subreddit**: https://reddit.com/r/omencore
+- **Donate (PayPal)**: https://www.paypal.com/donate/?business=XH8CKYF8T7EBU&no_recurring=0&item_name=Thank+you+for+your+generous+donation%2C+this+will+allow+me+to+continue+developing+my+programs.&currency_code=AUD
 
 ---
 
-## 💖 Acknowledgments
+## 💖 Support Development
+
+If OmenCore has helped you get more out of your OMEN laptop, consider supporting development:
+
+[![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C.svg?logo=paypal&logoColor=white&style=for-the-badge)](https://www.paypal.com/donate/?business=XH8CKYF8T7EBU&no_recurring=0&item_name=Thank+you+for+your+generous+donation%2C+this+will+allow+me+to+continue+developing+my+programs.&currency_code=AUD)
+
+Your support helps cover development time and testing hardware. Thank you! 🙏
+
+---
+
+## 🙏 Acknowledgments
 
 - LibreHardwareMonitor team for sensor framework
 - RWEverything for EC exploration tools
 - ThrottleStop community for undervolting knowledge
 - HP OMEN laptop owners who tested early builds
+- Discord community for feedback and bug reports
 
 ---
 
