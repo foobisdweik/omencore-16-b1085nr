@@ -147,17 +147,40 @@ namespace OmenCore.Services
                     return result;
                 }
                 
-                // Parse version from tag (e.g., "v1.0.1" -> "1.0.1")
+                // Parse version from tag (e.g., "v1.4.0-beta2" -> "1.4.0")
+                // Strip 'v' prefix and handle semver suffixes like -beta, -alpha, -rc
                 var versionString = tagName.TrimStart('v');
+                var semverSuffix = string.Empty;
+                
+                // Extract semver suffix (e.g., "-beta2", "-alpha", "-rc1")
+                var dashIndex = versionString.IndexOf('-');
+                if (dashIndex > 0)
+                {
+                    semverSuffix = versionString.Substring(dashIndex); // e.g., "-beta2"
+                    versionString = versionString.Substring(0, dashIndex); // e.g., "1.4.0"
+                }
+                
                 if (!Version.TryParse(versionString, out var latestVersion))
                 {
                     result.Status = UpdateStatus.CheckFailed;
                     result.Message = $"Invalid version format: {tagName}";
+                    _logging.Warn($"Could not parse version from tag: {tagName}");
                     return result;
                 }
                 
+                // For comparison, we need to handle prerelease versions
+                // A prerelease (beta, alpha) is LESS than the release version
+                // But beta2 > beta1, and 1.4.0-beta > 1.3.0 release
+                var isLatestPrerelease = !string.IsNullOrEmpty(semverSuffix);
+                var isCurrentPrerelease = IsCurrentVersionPrerelease();
+                
+                // Compare versions with prerelease logic
+                var shouldUpdate = CompareVersionsWithPrerelease(
+                    _currentVersion, GetCurrentPrereleaseTag(),
+                    latestVersion, semverSuffix);
+                
                 // Check if newer version available
-                if (latestVersion > _currentVersion)
+                if (shouldUpdate)
                 {
                     result.UpdateAvailable = true;
                     result.Status = UpdateStatus.UpdateAvailable;
@@ -409,6 +432,9 @@ namespace OmenCore.Services
             _httpClient?.Dispose();
         }
 
+        // Store the prerelease tag from VERSION.txt (e.g., "-beta2")
+        private string _currentPrereleaseTag = string.Empty;
+        
         private Version LoadCurrentVersion()
         {
             try
@@ -420,8 +446,20 @@ namespace OmenCore.Services
                     foreach (var line in text)
                     {
                         var candidate = line.Trim();
-                        if (Version.TryParse(candidate, out var fileVersion))
+                        if (string.IsNullOrEmpty(candidate)) continue;
+                        
+                        // Handle semver suffixes like "1.4.0-beta2"
+                        var versionPart = candidate;
+                        var dashIndex = candidate.IndexOf('-');
+                        if (dashIndex > 0)
                         {
+                            _currentPrereleaseTag = candidate.Substring(dashIndex); // e.g., "-beta2"
+                            versionPart = candidate.Substring(0, dashIndex); // e.g., "1.4.0"
+                        }
+                        
+                        if (Version.TryParse(versionPart, out var fileVersion))
+                        {
+                            _logging.Info($"Loaded version from VERSION.txt: {candidate}");
                             return fileVersion;
                         }
                     }
@@ -435,6 +473,117 @@ namespace OmenCore.Services
                 _logging.Warn($"Falling back to default version: {ex.Message}");
                 return new Version(1, 0, 0);
             }
+        }
+        
+        /// <summary>
+        /// Get the current version's prerelease tag (e.g., "-beta2")
+        /// </summary>
+        private string GetCurrentPrereleaseTag() => _currentPrereleaseTag;
+        
+        /// <summary>
+        /// Check if current version is a prerelease
+        /// </summary>
+        private bool IsCurrentVersionPrerelease() => !string.IsNullOrEmpty(_currentPrereleaseTag);
+        
+        /// <summary>
+        /// Compare versions with prerelease support.
+        /// Returns true if latest version is newer than current.
+        /// 
+        /// Rules:
+        /// - 1.4.0 > 1.3.0 (any release)
+        /// - 1.4.0-beta2 > 1.3.0 (release)
+        /// - 1.4.0-beta2 > 1.4.0-beta1
+        /// - 1.4.0 > 1.4.0-beta2 (release > prerelease of same version)
+        /// </summary>
+        private bool CompareVersionsWithPrerelease(Version current, string currentPrerelease, Version latest, string latestPrerelease)
+        {
+            // If base versions are different, simple comparison works
+            if (latest > current)
+            {
+                return true;
+            }
+            
+            if (latest < current)
+            {
+                return false;
+            }
+            
+            // Base versions are equal - compare prerelease tags
+            // Examples: 1.4.0-beta2 vs 1.4.0-beta1, or 1.4.0 vs 1.4.0-beta2
+            
+            var currentIsPrerelease = !string.IsNullOrEmpty(currentPrerelease);
+            var latestIsPrerelease = !string.IsNullOrEmpty(latestPrerelease);
+            
+            if (!currentIsPrerelease && !latestIsPrerelease)
+            {
+                // Both are stable releases with same version - no update
+                return false;
+            }
+            
+            if (currentIsPrerelease && !latestIsPrerelease)
+            {
+                // Current is prerelease, latest is stable - UPDATE (stable > prerelease)
+                return true;
+            }
+            
+            if (!currentIsPrerelease && latestIsPrerelease)
+            {
+                // Current is stable, latest is prerelease - don't downgrade to prerelease
+                return false;
+            }
+            
+            // Both are prereleases - compare tags (e.g., beta2 > beta1)
+            return ComparePrereleaseStrings(currentPrerelease, latestPrerelease) < 0;
+        }
+        
+        /// <summary>
+        /// Compare prerelease strings like "-beta1" vs "-beta2"
+        /// Returns negative if a < b, zero if equal, positive if a > b
+        /// </summary>
+        private int ComparePrereleaseStrings(string a, string b)
+        {
+            // Normalize: strip leading dash
+            a = a.TrimStart('-').ToLowerInvariant();
+            b = b.TrimStart('-').ToLowerInvariant();
+            
+            // Extract type and number: "beta2" -> ("beta", 2)
+            var (typeA, numA) = ParsePrereleaseTag(a);
+            var (typeB, numB) = ParsePrereleaseTag(b);
+            
+            // Compare types first (alpha < beta < rc)
+            var typeComparison = GetPrereleaseTypeOrder(typeA).CompareTo(GetPrereleaseTypeOrder(typeB));
+            if (typeComparison != 0)
+            {
+                return typeComparison;
+            }
+            
+            // Same type, compare numbers
+            return numA.CompareTo(numB);
+        }
+        
+        private (string type, int number) ParsePrereleaseTag(string tag)
+        {
+            // Match patterns like "beta2", "alpha1", "rc3"
+            var match = System.Text.RegularExpressions.Regex.Match(tag, @"^([a-z]+)(\d*)$");
+            if (match.Success)
+            {
+                var type = match.Groups[1].Value;
+                var numStr = match.Groups[2].Value;
+                var num = string.IsNullOrEmpty(numStr) ? 1 : int.Parse(numStr);
+                return (type, num);
+            }
+            return (tag, 1);
+        }
+        
+        private int GetPrereleaseTypeOrder(string type)
+        {
+            return type switch
+            {
+                "alpha" => 1,
+                "beta" => 2,
+                "rc" => 3,
+                _ => 0
+            };
         }
 
         private string? ExtractHashFromBody(string body)

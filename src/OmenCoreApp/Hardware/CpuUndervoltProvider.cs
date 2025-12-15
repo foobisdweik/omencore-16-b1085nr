@@ -291,18 +291,48 @@ namespace OmenCore.Hardware
 
         private ExternalUndervoltInfo? DetectExternalController()
         {
-            // Check for services/processes that may control MSR
-            var probes = new[] 
+            // Check for SERVICES that may control MSR (XTU, DTT run as services, not processes)
+            var serviceProbes = new[] 
             { 
-                ("OmenGamingHub", "OMEN Gaming Hub"),
-                ("ThrottleStop", "ThrottleStop"),
                 ("XTU3SERVICE", "Intel XTU"),
                 ("XtuService", "Intel XTU"),
                 ("IntelXtuService", "Intel XTU"),
                 ("esif_uf", "Intel DTT") // Intel Dynamic Tuning Technology
             };
             
-            foreach (var (processName, displayName) in probes)
+            // Check services using ServiceController (not process names)
+            foreach (var (serviceName, displayName) in serviceProbes)
+            {
+                try
+                {
+                    using var sc = new System.ServiceProcess.ServiceController(serviceName);
+                    // Only flag if service actually exists AND is running
+                    if (sc.Status == System.ServiceProcess.ServiceControllerStatus.Running)
+                    {
+                        return new ExternalUndervoltInfo
+                        {
+                            Source = displayName,
+                            Offset = new UndervoltOffset { CoreMv = 0, CacheMv = 0 }
+                        };
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // Service doesn't exist - this is fine, continue
+                }
+                catch (System.ComponentModel.Win32Exception)
+                {
+                    // Service doesn't exist or access denied - continue
+                }
+            }
+            
+            // Check for PROCESSES (ThrottleStop runs as process, not service)
+            var processProbes = new[] 
+            { 
+                ("ThrottleStop", "ThrottleStop")
+            };
+            
+            foreach (var (processName, displayName) in processProbes)
             {
                 try
                 {
@@ -313,13 +343,13 @@ namespace OmenCore.Hardware
                         return new ExternalUndervoltInfo
                         {
                             Source = displayName,
-                            Offset = new UndervoltOffset { CoreMv = 0, CacheMv = 0 } // Unknown actual offset
+                            Offset = new UndervoltOffset { CoreMv = 0, CacheMv = 0 }
                         };
                     }
                 }
                 catch
                 {
-                    // Ignore Process enumeration failures; monitoring will continue.
+                    // Ignore Process enumeration failures
                 }
             }
 

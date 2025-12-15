@@ -96,47 +96,52 @@ namespace OmenCore.Hardware
             
             try
             {
-                // Check for OGH services using WMI
+                // Check for OGH services using ServiceController (more reliable than WMI)
                 var runningServices = new System.Collections.Generic.List<string>();
                 foreach (var serviceName in OghServiceNames)
                 {
                     try
                     {
-                        using var searcher = new ManagementObjectSearcher($"SELECT * FROM Win32_Service WHERE Name = '{serviceName}'");
-                        foreach (ManagementObject service in searcher.Get())
+                        using var sc = new System.ServiceProcess.ServiceController(serviceName);
+                        // Only count if service exists AND is running
+                        if (sc.Status == System.ServiceProcess.ServiceControllerStatus.Running)
                         {
                             Status.IsInstalled = true;
-                            var state = service["State"]?.ToString();
-                            if (state?.Equals("Running", StringComparison.OrdinalIgnoreCase) == true)
-                            {
-                                runningServices.Add(serviceName);
-                            }
+                            runningServices.Add(serviceName);
                         }
                     }
-                    catch (ManagementException)
+                    catch (InvalidOperationException)
                     {
-                        // Service doesn't exist or WMI query failed
+                        // Service doesn't exist - this is expected after uninstall
+                    }
+                    catch (System.ComponentModel.Win32Exception)
+                    {
+                        // Service doesn't exist or access denied
                     }
                 }
                 Status.RunningServices = runningServices.ToArray();
                 
-                // Check for OGH processes
+                // Check for OGH processes (only if services were found running)
                 var runningProcesses = new System.Collections.Generic.List<string>();
-                var allProcesses = Process.GetProcesses();
-                foreach (var processName in OghProcessNames)
+                if (runningServices.Count > 0)
                 {
-                    if (allProcesses.Any(p => p.ProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase)))
+                    var allProcesses = Process.GetProcesses();
+                    foreach (var processName in OghProcessNames)
                     {
-                        runningProcesses.Add(processName);
-                        Status.IsInstalled = true;
+                        if (allProcesses.Any(p => p.ProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            runningProcesses.Add(processName);
+                        }
                     }
+                    foreach (var p in allProcesses) p.Dispose();
                 }
                 Status.RunningProcesses = runningProcesses.ToArray();
                 
-                Status.IsRunning = runningServices.Count > 0 || runningProcesses.Count > 0;
+                // OGH is only truly "running" if services are actually running
+                Status.IsRunning = runningServices.Count > 0;
                 
                 // Log detection results
-                if (Status.IsInstalled)
+                if (Status.IsRunning)
                 {
                     _logging?.Info($"OMEN Gaming Hub detected:");
                     if (Status.RunningServices.Length > 0)
@@ -146,7 +151,7 @@ namespace OmenCore.Hardware
                 }
                 else
                 {
-                    _logging?.Info("OMEN Gaming Hub not installed");
+                    _logging?.Info("OMEN Gaming Hub not detected (services not running)");
                 }
                 
                 // Check for OGH WMI interface

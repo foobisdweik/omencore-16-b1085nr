@@ -115,6 +115,32 @@
 - **Improvement:** Added `HasCorsairDevices` and `HasLogitechDevices` properties
 - **Purpose:** Allows UI to conditionally show/hide peripheral sections
 
+#### Version String Display Fixed
+- **Issue:** Log showed "v1.3.0" even when running v1.4.0-beta2
+- **Fix:** Updated AssemblyVersion and FileVersion in csproj to 1.4.0
+- **Technical:** Assembly attributes now match VERSION.txt
+
+#### OGH Detection False Positive Fixed
+- **Issue:** OmenCore detected OMEN Gaming Hub as installed even after uninstall/cleanup
+- **Fix:** Now uses ServiceController to check if services are actually *running*, not just registered
+- **Technical:** Changed from WMI Win32_Service query to ServiceController for more accurate detection
+
+#### Intel XTU Detection False Positive Fixed
+- **Issue:** "Intel XTU active" warning appeared when XTU wasn't installed
+- **Fix:** XTU detection now checks Windows services (ServiceController), not process names
+- **Technical:** Service names like "XTU3SERVICE" are services, not processes - fixed detection method
+
+#### Auto-Update Version Parsing Fixed
+- **Issue:** Auto-update said "No update available" when checking v1.3.0-beta2 → v1.4.0-beta2
+- **Fix:** Added proper semantic versioning support with prerelease tag comparison
+- **Technical:** `Version.TryParse` doesn't handle "-beta2" suffixes; added custom prerelease parser
+- **Logic:** 1.4.0-beta2 > 1.3.0-beta2, beta2 > beta1, stable > prerelease of same version
+
+#### Keyboard RGB Dual-Write for Compatibility
+- **Issue:** WMI BIOS keyboard commands reported success but didn't affect hardware on some models
+- **Fix:** Added dual-write mode - applies colors via both WMI and EC for better compatibility
+- **Technical:** Some OMEN 17-ck2xxx models have WMI that returns success but doesn't control keyboard
+
 ---
 
 ## 🔧 Technical Changes
@@ -172,6 +198,8 @@ private const double ThermalEmergencyThreshold = 88.0;
 - [ ] On AMD system, verify undervolt section is hidden
 - [ ] Test 4-zone keyboard color controls
 - [ ] Verify SSD widget hides when no temperature sensor
+- [ ] Test auto-update detection from v1.3.0-beta2 → v1.4.0-beta2
+- [ ] Verify OGH/XTU not falsely detected after uninstall
 
 ---
 
@@ -199,7 +227,7 @@ Thank you for the detailed bug reports and logs! 🙏
 ## 📥 Download
 
 **Installer:** `OmenCoreSetup-1.4.0-beta2.exe`  
-**SHA256:** `398836F3A5EABCE0BE4BDCF456ACFBD51BABCB5382FBADAB0EAD43F148417D8D`
+**SHA256:** `0622B0EB68F27386560D0702BE6D656F0CA3940FA2F5D07980EA91D0BB608A0D`
 
 ---
 

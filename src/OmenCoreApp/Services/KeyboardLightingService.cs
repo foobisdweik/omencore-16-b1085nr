@@ -227,7 +227,7 @@ namespace OmenCore.Services
         /// Set all 4 zone colors at once using a color array.
         /// More efficient than setting zones individually.
         /// </summary>
-        public void SetAllZoneColors(Color[] zoneColors)
+        public void SetAllZoneColors(Color[] zoneColors, bool forceEcAccess = false)
         {
             if (zoneColors.Length < 4)
             {
@@ -237,6 +237,18 @@ namespace OmenCore.Services
 
             try
             {
+                // If force EC requested and EC is available, skip WMI
+                if (forceEcAccess && _ecAvailable && _ecAccess != null)
+                {
+                    _logging.Info("Using EC access (forced by user setting)");
+                    for (int i = 0; i < 4; i++)
+                    {
+                        SetZoneColorViaEc((KeyboardZone)i, zoneColors[i]);
+                    }
+                    _logging.Info("✓ All zone colors set via EC (forced)");
+                    return;
+                }
+                
                 // Try WMI BIOS first (preferred - single call for all zones)
                 if (_wmiBiosAvailable && _wmiBios != null)
                 {
@@ -252,6 +264,16 @@ namespace OmenCore.Services
                     if (_wmiBios.SetColorTable(colorTable))
                     {
                         _logging.Info("✓ All zone colors set via WMI BIOS color table");
+                        
+                        // Also try EC as backup - some models report WMI success but don't actually apply
+                        if (_ecAvailable && _ecAccess != null)
+                        {
+                            _logging.Info("Also applying via EC (dual-write for compatibility)");
+                            for (int i = 0; i < 4; i++)
+                            {
+                                SetZoneColorViaEc((KeyboardZone)i, zoneColors[i]);
+                            }
+                        }
                         return;
                     }
                     _logging.Warn("WMI BIOS SetColorTable failed, trying individual zones");
@@ -269,25 +291,13 @@ namespace OmenCore.Services
                 _logging.Warn($"Failed to set all zone colors: {ex.Message}");
             }
         }
-
-        private void SetZoneColorInternal(KeyboardZone zone, Color color)
+        
+        /// <summary>
+        /// Set zone color directly via EC (bypasses WMI)
+        /// </summary>
+        private void SetZoneColorViaEc(KeyboardZone zone, Color color)
         {
-            // Try WMI BIOS first
-            if (_wmiBiosAvailable && _wmiBios != null)
-            {
-                if (_wmiBios.SetZoneColor((int)zone, color.R, color.G, color.B))
-                {
-                    return; // Success
-                }
-                _logging.Warn($"WMI BIOS SetZoneColor failed for zone {zone}, trying EC");
-            }
-            
-            // Fall back to EC access
-            if (_ecAccess == null || !_ecAvailable) 
-            {
-                _logging.Warn("No backend available for zone color");
-                return;
-            }
+            if (_ecAccess == null || !_ecAvailable) return;
 
             byte baseReg = zone switch
             {
@@ -301,6 +311,33 @@ namespace OmenCore.Services
             _ecAccess.WriteByte(baseReg, color.R);
             _ecAccess.WriteByte((byte)(baseReg + 1), color.G);
             _ecAccess.WriteByte((byte)(baseReg + 2), color.B);
+        }
+
+        private void SetZoneColorInternal(KeyboardZone zone, Color color)
+        {
+            // Try WMI BIOS first
+            if (_wmiBiosAvailable && _wmiBios != null)
+            {
+                if (_wmiBios.SetZoneColor((int)zone, color.R, color.G, color.B))
+                {
+                    // Also try EC as backup - some models report WMI success but don't apply
+                    if (_ecAvailable && _ecAccess != null)
+                    {
+                        SetZoneColorViaEc(zone, color);
+                    }
+                    return; // Success
+                }
+                _logging.Warn($"WMI BIOS SetZoneColor failed for zone {zone}, trying EC");
+            }
+            
+            // Fall back to EC access
+            if (_ecAccess == null || !_ecAvailable) 
+            {
+                _logging.Warn("No backend available for zone color");
+                return;
+            }
+
+            SetZoneColorViaEc(zone, color);
         }
 
         public void SetBrightness(int brightness)

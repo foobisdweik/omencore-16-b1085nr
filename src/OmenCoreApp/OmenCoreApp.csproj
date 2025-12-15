@@ -6,8 +6,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>OmenCore</AssemblyName>
-    <AssemblyVersion>1.3.0</AssemblyVersion>
-    <FileVersion>1.3.0</FileVersion>
+    <AssemblyVersion>1.4.0</AssemblyVersion>
+    <FileVersion>1.4.0</FileVersion>
     <ApplicationIcon>Assets\OmenCore.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <NoWarn>$(NoWarn);NU1701</NoWarn>
@@ -40,6 +40,7 @@
     <PackageReference Include="RGB.NET.Core" Version="3.1.0" />
     <PackageReference Include="RGB.NET.Devices.Corsair" Version="3.1.0" />
     <PackageReference Include="System.Management" Version="9.0.0" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="9.0.0" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\VERSION.txt" Link="VERSION.txt">
