@@ -1828,6 +1828,53 @@ namespace OmenCore.ViewModels
             CleanupStatus = CleanupDryRun ? "Running cleanup dry run..." : "Removing OMEN Gaming Hub...";
             OmenCleanupSteps.Clear();
             
+            // Skip restore point for dry run
+            if (!CleanupDryRun)
+            {
+                // Automatically attempt to create restore point before cleanup
+                _logging.Info("Attempting to create restore point before OGH cleanup...");
+                CleanupStatus = "Creating restore point...";
+                OmenCleanupSteps.Add("Creating system restore point...");
+                
+                var restoreResult = await _systemRestoreService.CreateRestorePointAsync("OmenCore - Before OGH Cleanup");
+                
+                if (!restoreResult.Success)
+                {
+                    _logging.Warn($"Restore point creation failed: {restoreResult.Message}");
+                    OmenCleanupSteps.Add($"⚠ Restore point failed: {restoreResult.Message}");
+                    
+                    // Ask user if they want to continue anyway
+                    var continueAnyway = System.Windows.MessageBox.Show(
+                        $"System Restore point creation failed:\n{restoreResult.Message}\n\n" +
+                        "This is often because System Restore is disabled on your system.\n\n" +
+                        "Do you want to continue with the cleanup anyway?\n\n" +
+                        "Note: Without a restore point, you cannot easily undo the cleanup.",
+                        "Restore Point Failed - OmenCore",
+                        System.Windows.MessageBoxButton.YesNo,
+                        System.Windows.MessageBoxImage.Warning);
+                    
+                    if (continueAnyway != System.Windows.MessageBoxResult.Yes)
+                    {
+                        CleanupStatus = "⚠ Cleanup cancelled - no restore point";
+                        OmenCleanupSteps.Add("Cleanup cancelled by user");
+                        _logging.Info("OGH cleanup cancelled by user due to restore point failure");
+                        PushEvent("OGH cleanup cancelled");
+                        CleanupInProgress = false;
+                        return;
+                    }
+                    
+                    _logging.Info("User chose to continue cleanup without restore point");
+                    OmenCleanupSteps.Add("Continuing without restore point (user confirmed)");
+                }
+                else
+                {
+                    _logging.Info($"✓ Restore point created (sequence: {restoreResult.SequenceNumber})");
+                    OmenCleanupSteps.Add($"✓ Restore point created (#{restoreResult.SequenceNumber})");
+                }
+                
+                CleanupStatus = "Removing OMEN Gaming Hub...";
+            }
+            
             // Subscribe to real-time progress updates
             void OnStepCompleted(string step)
             {

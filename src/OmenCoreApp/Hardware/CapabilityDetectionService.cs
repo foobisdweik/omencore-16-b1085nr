@@ -385,11 +385,10 @@ namespace OmenCore.Hardware
                 {
                     _logging?.Info($"  WMI BIOS not available: {_wmiBios.Status}");
                     
-                    // If WMI BIOS failed but OGH is running, this model may require OGH
+                    // WMI BIOS failed - will fall back to OGH proxy if available
                     if (Capabilities.OghRunning)
                     {
-                        Capabilities.RequiresOghService = true;
-                        _logging?.Info("  → This model may require OGH services for control");
+                        _logging?.Info("  → Will use OGH proxy as fallback");
                     }
                 }
             }
@@ -403,79 +402,62 @@ namespace OmenCore.Hardware
         {
             _logging?.Info("Phase 6: Determining fan control method...");
             
-            // Priority order depends on model family:
-            // For newer models (Transcend, 2024+): OGH Proxy preferred over WMI BIOS
-            // For classic models: WMI BIOS preferred
-            //
-            // 1. OGH Proxy (for newer models or if WMI fails)
-            // 2. WMI BIOS (for classic models, no driver needed)
-            // 3. Direct EC via PawnIO (Secure Boot compatible)
-            // 4. Direct EC via WinRing0 (requires Secure Boot disabled)
+            // OmenCore is designed to be FULLY INDEPENDENT from OMEN Gaming Hub.
+            // Priority order (OGH-independent methods first):
+            // 1. WMI BIOS (no driver needed, works on most OMEN laptops)
+            // 2. Direct EC via PawnIO (Secure Boot compatible)
+            // 3. Direct EC via WinRing0 (requires Secure Boot disabled)
+            // 4. OGH Proxy (LAST RESORT - only if WMI BIOS fails)
             // 5. Monitoring only
             
-            // Check if this is a newer model that typically needs OGH proxy
-            if (Capabilities.IsNewerModelRequiringOgh)
-            {
-                _logging?.Info("  Newer OMEN model detected (Transcend/2024+) - preferring OGH proxy");
-                
-                if (Capabilities.OghRunning && _oghProxy?.IsAvailable == true)
-                {
-                    Capabilities.FanControl = FanControlMethod.OghProxy;
-                    Capabilities.CanSetFanSpeed = true;
-                    Capabilities.CanReadRpm = true;
-                    Capabilities.RequiresOghService = true;
-                    _logging?.Info("  → Using OGH proxy for fan control (recommended for this model)");
-                    return;
-                }
-                else
-                {
-                    _logging?.Warn("  ⚠️ OGH proxy not available - fan control may not work correctly");
-                    _logging?.Info("  💡 Install OMEN Gaming Hub for reliable fan control on this model");
-                }
-            }
-            
-            // Standard priority for classic models
+            // Primary: WMI BIOS - works on most OMEN models without any dependencies
             if (_wmiBios?.IsAvailable == true)
             {
                 Capabilities.FanControl = FanControlMethod.WmiBios;
                 Capabilities.CanSetFanSpeed = true;
                 Capabilities.CanReadRpm = true;
-                _logging?.Info("  → Using WMI BIOS for fan control");
-                
-                // Add note for newer models that might need OGH
-                if (Capabilities.IsNewerModelRequiringOgh)
-                {
-                    _logging?.Warn("  ⚠️ Note: If fan control doesn't change actual fan speeds,");
-                    _logging?.Warn("     install OMEN Gaming Hub for OGH proxy support");
-                }
+                _logging?.Info("  → Using WMI BIOS for fan control (OGH-independent)");
+                return;
             }
-            else if (Capabilities.OghRunning && _oghProxy?.IsAvailable == true)
+            
+            // Secondary: PawnIO for EC access (Secure Boot compatible)
+            if (Capabilities.PawnIOAvailable)
+            {
+                Capabilities.FanControl = FanControlMethod.EcDirect;
+                Capabilities.CanSetFanSpeed = true;
+                Capabilities.CanReadRpm = true;
+                _logging?.Info("  → Using PawnIO for EC access (OGH-independent, Secure Boot compatible)");
+                return;
+            }
+            
+            // Tertiary: WinRing0 for EC access (requires Secure Boot disabled)
+            if (Capabilities.WinRing0Available)
+            {
+                Capabilities.FanControl = FanControlMethod.EcDirect;
+                Capabilities.CanSetFanSpeed = true;
+                Capabilities.CanReadRpm = true;
+                _logging?.Info("  → Using WinRing0 for EC access (OGH-independent)");
+                return;
+            }
+            
+            // Last resort: OGH Proxy (requires OGH services running)
+            if (Capabilities.OghRunning && _oghProxy?.IsAvailable == true)
             {
                 Capabilities.FanControl = FanControlMethod.OghProxy;
                 Capabilities.CanSetFanSpeed = true;
                 Capabilities.CanReadRpm = true;
-                Capabilities.RequiresOghService = true;
-                _logging?.Info("  → Using OGH proxy for fan control");
+                Capabilities.UsingOghFallback = true;
+                _logging?.Warn("  → Using OGH proxy as FALLBACK (WMI BIOS unavailable)");
+                _logging?.Info("  💡 Report your model to help add native support");
+                return;
             }
-            else if (Capabilities.PawnIOAvailable)
+            
+            // Suggestions if nothing works
+            if (Capabilities.OghInstalled && !Capabilities.OghRunning)
             {
-                Capabilities.FanControl = FanControlMethod.EcDirect;
-                Capabilities.CanSetFanSpeed = true;
-                Capabilities.CanReadRpm = true;
-                _logging?.Info("  → Using PawnIO for EC access (Secure Boot compatible)");
-            }
-            else if (Capabilities.WinRing0Available)
-            {
-                Capabilities.FanControl = FanControlMethod.EcDirect;
-                Capabilities.CanSetFanSpeed = true;
-                Capabilities.CanReadRpm = true;
-                _logging?.Info("  → Using WinRing0 for EC access");
-            }
-            else if (Capabilities.OghInstalled && !Capabilities.OghRunning)
-            {
-                // OGH installed but not running - suggest starting it
                 Capabilities.FanControl = FanControlMethod.None;
-                _logging?.Warn("  → Fan control unavailable. Try starting OMEN Gaming Hub services.");
+                _logging?.Warn("  → Fan control unavailable. OGH installed but not running.");
+                _logging?.Info("  💡 Start OGH services as temporary workaround, or report your model");
             }
             else if (Capabilities.SecureBootEnabled)
             {

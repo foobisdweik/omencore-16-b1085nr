@@ -1322,11 +1322,11 @@
                         
                         <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
                                    Margin="0,0,0,8" TextWrapping="Wrap">
-                            <Run Text="Remove HP OMEN Gaming Hub and related services. This is optional and will free up system resources."/>
+                            <Run Text="Remove HP OMEN Gaming Hub and related services. This is optional - OmenCore works without OGH installed."/>
                         </TextBlock>
                         
                         <TextBlock FontSize="12" Margin="0,0,0,16" TextWrapping="Wrap">
-                            <Run Text="⚠️ Warning: These operations cannot be undone easily. Create a System Restore Point before proceeding." FontWeight="Bold" Foreground="Orange"/>
+                            <Run Text="ℹ️ A System Restore point will be created automatically before cleanup begins." FontWeight="Bold" Foreground="#4CAF50"/>
                         </TextBlock>
 
                         <!-- Cleanup Options -->
@@ -1361,24 +1361,31 @@
                                       Foreground="{StaticResource TextPrimaryBrush}"/>
                         </StackPanel>
 
-                        <!-- System Restore -->
+                        <!-- System Restore Info -->
                         <Border Background="{StaticResource SurfaceDarkBrush}" 
                                 CornerRadius="8" Padding="16" Margin="0,0,0,16"
-                                BorderBrush="Orange" BorderThickness="1">
+                                BorderBrush="#4CAF50" BorderThickness="1">
                             <StackPanel>
-                                <TextBlock Text="⚠️ Create System Restore Point" 
+                                <TextBlock Text="✓ Automatic System Restore Point" 
                                            FontSize="14" FontWeight="SemiBold"
-                                           Foreground="Orange" Margin="0,0,0,8"/>
+                                           Foreground="#4CAF50" Margin="0,0,0,8"/>
                                 
-                                <TextBlock Text="Highly recommended before performing cleanup operations." 
-                                           FontSize="12" 
+                                <TextBlock FontSize="12" 
                                            Foreground="{StaticResource TextSecondaryBrush}"
-                                           TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                           TextWrapping="Wrap" Margin="0,0,0,8">
+                                    <Run Text="A System Restore point will be created automatically before cleanup starts. If restore point creation fails (e.g., System Restore is disabled), you'll be prompted to continue or cancel."/>
+                                </TextBlock>
                                 
-                                <Button Content="Create Restore Point" 
-                                        Style="{StaticResource ModernButton}"
+                                <TextBlock FontSize="11" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap">
+                                    <Run Text="Tip: You can also manually create a restore point using the button below if you want extra safety."/>
+                                </TextBlock>
+                                
+                                <Button Content="Create Manual Restore Point" 
+                                        Style="{StaticResource SecondaryButton}"
                                         Command="{Binding CreateRestorePointCommand}"
-                                        HorizontalAlignment="Left" Padding="16,8"/>
+                                        HorizontalAlignment="Left" Padding="16,8" Margin="0,12,0,0"/>
                             </StackPanel>
                         </Border>
 

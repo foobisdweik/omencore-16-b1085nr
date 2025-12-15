@@ -1,8 +1,15 @@
 # OmenCore
 
-**A modern, lightweight control center for HP OMEN & Victus gaming laptops.**
+**A modern, lightweight, and fully independent control center for HP OMEN & Victus gaming laptops.**
 
-OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop application for managing thermals, performance, RGB lighting, and peripherals. Built with WPF on .NET 8, it provides professional-grade hardware control without bloat, telemetry, or mandatory sign-ins.
+OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services required, no bloatware, no telemetry, no ads. Built with WPF on .NET 8, it provides professional-grade hardware control using native WMI BIOS commands that work directly with your laptop's firmware.
+
+**🎯 Key Differentiators:**
+- ✅ **100% OGH-Independent** - Works without OMEN Gaming Hub installed
+- ✅ **No Bloatware** - Single 70MB self-contained executable
+- ✅ **No Telemetry** - Your data stays on your machine
+- ✅ **No Ads** - Clean, focused interface
+- ✅ **No Sign-In Required** - Full offline operation
 
 [![Version](https://img.shields.io/badge/version-1.3.0--beta-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v1.3.0-beta)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -12,6 +19,36 @@ OmenCore replaces HP OMEN Gaming Hub with a focused, privacy-respecting desktop 
 [![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C.svg?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=XH8CKYF8T7EBU&no_recurring=0&item_name=Thank+you+for+your+generous+donation%2C+this+will+allow+me+to+continue+developing+my+programs.&currency_code=AUD)
 
 ![OmenCore Screenshot](docs/screenshots/main-window.png)
+
+---
+
+## 🆕 What's New in v1.3.0-beta
+
+### 🎯 Complete OGH Independence
+- **WMI BIOS First** - Direct firmware communication without OGH services
+- **No OGH Required** - Uninstall OMEN Gaming Hub completely, OmenCore works standalone
+- **Model Family Detection** - Automatically identifies OMEN 16/17, Victus, Transcend, Desktop
+- **Command Verification** - Detects if fan commands actually work on your model
+
+### 🔥 Fan Control That Actually Works
+- **Continuous Monitoring** - OmenMon-style 15-second curve reapplication
+- **Fan curves now work** - Settings persist instead of reverting after seconds
+- **MAX mode fix** - Robust reset sequence to exit max fan mode
+- **Hysteresis support** - Prevents annoying fan oscillation
+
+### ⚡ Performance Improvements  
+- **Reduced DPC Latency** - Adaptive polling (1-5s based on temp stability)
+- **Lower CPU Usage** - 5x slower polling in low overhead mode
+- **Fast Startup** - Async service initialization
+
+### ✨ New Features
+- **Quick Popup** (middle-click tray) - Instant temp/fan control
+- **Battery Care Mode** - Limit charge to 80% for battery longevity
+- **In-Game OSD** - Click-through overlay showing temps/FPS
+- **Tray Quick Profiles** - Fast mode switching from system tray
+- **OMEN Key Interception** - Use OMEN key to show OmenCore
+
+See [CHANGELOG_v1.3.0-beta.md](docs/CHANGELOG_v1.3.0-beta.md) for full details.
 
 ---
 
@@ -118,24 +155,27 @@ See [CHANGELOG_v1.2.0.md](docs/CHANGELOG_v1.2.0.md) and [CHANGELOG_v1.2.1.md](do
 
 ## 🎯 HP Gaming Hub Feature Parity
 
+OmenCore is designed to **completely replace** OMEN Gaming Hub. You can safely uninstall OGH.
+
 | HP Gaming Hub Feature | OmenCore Status | Notes |
 |----------------------|----------------|-------|
-| **Fan Control** | ✅ Full support | Custom curves + WMI/EC presets |
-| **Performance Modes** | ✅ Full support | CPU/GPU power limits |
+| **Fan Control** | ✅ Full support | Custom curves + WMI BIOS presets (no OGH needed) |
+| **Performance Modes** | ✅ Full support | CPU/GPU power limits via WMI |
 | **CPU Undervolting** | ✅ Full support | Intel MSR access with safety |
 | **GPU Power Boost** | ✅ Full support | +15W Dynamic Boost (PPAB) |
 | **Keyboard RGB** | ✅ Profiles | Per-zone control with effects |
 | **Hardware Monitoring** | ✅ Full support | LibreHardwareMonitor integration |
 | **Gaming Mode** | ✅ Service toggles | One-click optimization |
+| **Battery Care** | ✅ Full support | 80% charge limit |
 | **Peripheral Control** | ⚠️ Beta (stub) | Hardware detection ready |
 | **Hub Cleanup** | ✅ Exclusive | Safe Gaming Hub removal |
+| **Per-Game Profiles** | ✅ Full support | Auto-switch on game detect |
+| **In-Game Overlay** | ✅ Full support | Click-through OSD |
 | **Network Booster** | ❌ Out of scope | Use router/Windows QoS |
 | **Game Library** | ❌ Out of scope | Use Steam/Epic/Xbox app |
 | **Omen Oasis** | ❌ Out of scope | Cloud gaming elsewhere |
-| **Per-Game Profiles** | ✅ Full support | Auto-switch on game detect |
-| **Overlay (FPS/Temps)** | 🔜 Planned v1.2 | In-game OSD |
 
-**Verdict**: OmenCore covers **95% of daily Gaming Hub usage** with better performance, no telemetry, and full offline operation.
+**Verdict**: OmenCore covers **100% of essential Gaming Hub features** with better performance, no telemetry, no ads, and complete offline operation.
 
 ---
 
@@ -143,30 +183,31 @@ See [CHANGELOG_v1.2.0.md](docs/CHANGELOG_v1.2.0.md) and [CHANGELOG_v1.2.1.md](do
 
 ### System
 - **OS**: Windows 10 (build 19041+) or Windows 11
-- **Runtime**: .NET 8 Desktop Runtime (x64) - [Download](https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe)
-- **Privileges**: Administrator for EC/MSR/driver operations
+- **Runtime**: Self-contained (.NET 8 embedded) - no separate installation needed
+- **Privileges**: Administrator for WMI BIOS/EC/MSR operations
 - **Disk**: 100 MB for app + 50 MB for logs/config
+- **OGH**: ❌ **NOT REQUIRED** - OmenCore works without OMEN Gaming Hub
 
 ### Hardware
 - **CPU**: Intel 6th-gen+ (Skylake or newer) for undervolting/TCC offset; AMD Ryzen supported for monitoring/fan control
 - **Laptop**: HP OMEN 15/16/17 series and HP Victus (2019-2024 models)
   - ✅ Tested: OMEN 15-dh, 16-b, 16-k, 17-ck (2023), Victus 15/16
-  - ✅ **2023+ models**: OGH Service Proxy enables fan control with Secure Boot enabled
+  - ✅ **OMEN Transcend 14/16**: Supported via WMI BIOS
+  - ✅ **2023+ models**: Full WMI BIOS support, no OGH needed
 - **Desktop**: HP OMEN 25L/30L/40L/45L (limited support)
   - ⚠️ Desktop PCs use different EC registers - fan control may not work
   - Monitoring, game profiles, and OGH cleanup still functional
   - Auto-detected via chassis type with warning message
-- **EC Layout**: Standard HP OMEN Embedded Controller
-  - Fan registers: `0x44` (Fan1 duty), `0x45` (Fan2 duty), `0x46` (mode)
-  - Performance register: `0xCE` (mode selector)
-  - Keyboard RGB: `0xBA`, `0xBB` (zone control)
 
-### Driver (Optional with OGH/WMI)
-- **PawnIO** (recommended for Secure Boot) - Secure Boot compatible EC access
-  - Optional install during setup (if offered by the installer)
-- **WinRing0 v1.2** - legacy kernel driver for EC/MSR-based hardware access (may be blocked by Secure Boot / Memory Integrity)
-  - Optional via OmenCore installer ("Install WinRing0" task)
-  - **Note**: Some features (e.g., Intel MSR-based undervolt/TCC) may still require a driver/backend that can access MSRs
+### Fan Control Methods (Priority Order)
+1. **WMI BIOS** (default) - No driver needed, works on all OMEN laptops
+2. **EC Direct via PawnIO** - For advanced EC access (Secure Boot compatible)
+3. **EC Direct via WinRing0** - Legacy driver (may need Secure Boot disabled)
+4. **OGH Proxy** - Last resort fallback only if WMI fails (rare)
+
+### Optional Drivers
+- **PawnIO** (recommended for advanced features) - Secure Boot compatible EC access
+- **WinRing0 v1.2** - Legacy kernel driver for EC/MSR access (may be blocked by Secure Boot)
 
 **⚠️ Windows Defender False Positive**: WinRing0 is flagged as `HackTool:Win64/WinRing0` by antivirus. This is a **known false positive** for kernel hardware drivers. Add exclusion for `C:\Windows\System32\drivers\WinRing0x64.sys` and verify signature. See [WINRING0_SETUP.md](docs/WINRING0_SETUP.md).
 
@@ -180,23 +221,31 @@ See [CHANGELOG_v1.2.0.md](docs/CHANGELOG_v1.2.0.md) and [CHANGELOG_v1.2.1.md](do
 ## 🚀 Installation
 
 ### Option 1: Installer (Recommended)
-1. Download `OmenCoreSetup-1.2.1.exe` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
+1. Download `OmenCoreSetup-1.3.0-beta.exe` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
 2. Run installer as Administrator
-3. Select "Install PawnIO driver" task (recommended, Secure Boot compatible)
-4. (Optional) Select "Install WinRing0 driver" task (legacy)
+3. (Optional) Select "Install PawnIO driver" for advanced EC features
 4. Launch OmenCore from Start Menu or Desktop
+5. (Optional) Use OGH Cleanup in Settings to remove OMEN Gaming Hub
 
 ### Option 2: Portable ZIP
-1. Download `OmenCore-1.2.1-win-x64.zip` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
+1. Download `OmenCore-1.3.0-beta-win-x64.zip` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
 2. Extract to `C:\OmenCore` (or preferred location)
 3. Right-click `OmenCore.exe` → Run as Administrator
-4. Install [PawnIO](https://pawnio.eu/) (recommended) or [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases) (legacy WinRing0)
 
 ### First Launch
-- OmenCore checks for an available hardware backend (PawnIO / WinRing0) on startup
-- On Secure Boot / Memory Integrity systems, PawnIO is recommended
-- Config copied from `config/default_config.json` to `%APPDATA%\OmenCore\config.json`
+- OmenCore auto-detects your model and selects the best fan control method
+- WMI BIOS is used by default (no drivers needed for basic fan control)
+- Config saved to `%APPDATA%\OmenCore\config.json`
 - Logs written to `%LOCALAPPDATA%\OmenCore\OmenCore_<timestamp>.log`
+
+### Uninstalling OMEN Gaming Hub
+OmenCore includes a built-in **OGH Cleanup** tool (Settings tab):
+1. Creates a System Restore point (safety)
+2. Removes HP Gaming Hub Store packages
+3. Cleans registry entries and scheduled tasks
+4. Deletes residual files from Program Files/AppData
+
+**After cleanup, OmenCore provides full fan control without OGH.**
 
 ---
 

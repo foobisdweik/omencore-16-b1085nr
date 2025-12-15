@@ -7,7 +7,13 @@
 
 ## 🎯 Overview
 
-This beta release addresses critical fan control and DPC latency issues reported in v1.2.x, while adding powerful new features to make OmenCore a complete standalone replacement for HP OMEN Gaming Hub.
+This beta release addresses critical fan control and DPC latency issues reported in v1.2.x, while adding powerful new features to make OmenCore a **complete standalone replacement** for HP OMEN Gaming Hub.
+
+**🚫 OmenCore is 100% OGH-Independent:**
+- WMI BIOS is the **primary** fan control backend
+- No OGH services required for fan control, thermal management, or GPU settings
+- Works on fresh Windows installs without any HP software
+- OGH proxy is a last-resort fallback only for edge cases
 
 **Key highlights:**
 - ✅ Fan curves now actually work (OmenMon-style continuous monitoring)
@@ -16,6 +22,7 @@ This beta release addresses critical fan control and DPC latency issues reported
 - ✅ Quick Popup UI (middle-click tray icon)
 - ✅ Modular feature toggles to reduce background presence
 - ✅ OMEN key interception (experimental)
+- ✅ **Full OGH independence** - uninstall OGH entirely
 
 ---
 
@@ -292,7 +299,10 @@ Based on community feedback, the following UI improvements were made:
 ### HP OMEN Gaming Hub Cleanup (Restored)
 - **Moved to Settings tab** - OGH cleanup tool now in Settings under "HP OMEN Gaming Hub Cleanup" section
 - **All options preserved** - Kill processes, uninstall, remove services, registry cleanup, file removal
-- **System restore point** - Create restore point before cleanup with one click
+- **Automatic restore point** - OGH cleanup now automatically creates a System Restore point before starting
+  - If restore point creation fails (e.g., System Restore disabled), user is prompted to continue or cancel
+  - No more "forgot to create restore point" risk
+  - Manual restore point button still available for extra safety
 
 ---
 

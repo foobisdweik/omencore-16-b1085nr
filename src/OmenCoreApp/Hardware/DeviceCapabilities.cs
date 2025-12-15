@@ -58,30 +58,34 @@ namespace OmenCore.Hardware
         public bool SecureBootEnabled { get; set; }
         public UndervoltMethod UndervoltMethod { get; set; } = UndervoltMethod.None;
         
-        // OGH dependency
+        // OGH status (for fallback/compatibility, NOT required)
         public bool OghInstalled { get; set; }
         public bool OghRunning { get; set; }
-        public bool RequiresOghService { get; set; }
+        /// <summary>
+        /// Indicates OGH proxy is being used as fallback (WMI BIOS preferred).
+        /// OmenCore is designed to work WITHOUT OGH - this is only set when WMI BIOS fails.
+        /// </summary>
+        public bool UsingOghFallback { get; set; }
         
         // Driver status
         public bool WinRing0Available { get; set; }
         public bool PawnIOAvailable { get; set; }
         public string DriverStatus { get; set; } = "";
         
-        // Model family detection (helps determine fan control method)
+        // Model family detection (helps identify potential WMI quirks)
         public OmenModelFamily ModelFamily { get; set; } = OmenModelFamily.Unknown;
         
         /// <summary>
-        /// Returns true if this is a newer model that typically requires OGH proxy for fan control.
-        /// OMEN Transcend and 2024+ models often have WMI that reports success but doesn't work.
+        /// Returns true if this is a newer model that may have WMI quirks.
+        /// These models are still supported via WMI BIOS - OGH is NOT required.
         /// </summary>
-        public bool IsNewerModelRequiringOgh => 
+        public bool IsNewerModel => 
             ModelFamily == OmenModelFamily.Transcend || 
             ModelFamily == OmenModelFamily.OMEN2024Plus ||
             (ModelName?.Contains("Transcend", StringComparison.OrdinalIgnoreCase) ?? false);
         
         /// <summary>
-        /// Returns true if this is a classic OMEN model with full WMI BIOS support.
+        /// Returns true if this is a classic OMEN model with well-tested WMI BIOS support.
         /// </summary>
         public bool IsClassicOmen =>
             ModelFamily == OmenModelFamily.OMEN16 ||
@@ -123,10 +127,10 @@ namespace OmenCore.Hardware
             lines.AppendLine($"  Secure Boot: {(SecureBootEnabled ? "Enabled (blocks WinRing0)" : "Disabled")}");
             lines.AppendLine();
             
-            lines.AppendLine("OGH Dependency:");
+            lines.AppendLine("OGH Status (optional fallback):");
             lines.AppendLine($"  Installed: {(OghInstalled ? "Yes" : "No")}");
             lines.AppendLine($"  Running: {(OghRunning ? "Yes" : "No")}");
-            lines.AppendLine($"  Required: {(RequiresOghService ? "Yes" : "No")}");
+            lines.AppendLine($"  Using as Fallback: {(UsingOghFallback ? "Yes" : "No")}");
             
             return lines.ToString();
         }
@@ -140,9 +144,9 @@ namespace OmenCore.Hardware
         None = 0,
         /// <summary>Direct EC register access (requires WinRing0/PawnIO)</summary>
         EcDirect,
-        /// <summary>HP WMI BIOS commands (no driver needed)</summary>
+        /// <summary>HP WMI BIOS commands (no driver needed) - PREFERRED</summary>
         WmiBios,
-        /// <summary>Through OGH services (requires OGH running)</summary>
+        /// <summary>Through OGH services (fallback only)</summary>
         OghProxy,
         /// <summary>Step-based control (discrete levels only)</summary>
         Steps,

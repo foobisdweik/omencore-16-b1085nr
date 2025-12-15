@@ -132,41 +132,39 @@ namespace OmenCore.Hardware
         
         /// <summary>
         /// Create fan controller by trying all backends in order.
-        /// For newer models (OMEN Transcend, 2024+), WMI may report available but not actually work.
-        /// This method prioritizes OGH proxy for reliability on such models.
+        /// OmenCore is designed to be FULLY INDEPENDENT from OMEN Gaming Hub.
+        /// WMI BIOS is always preferred - OGH proxy is only a last-resort fallback.
         /// </summary>
         private IFanController CreateWithAutoDetection()
         {
-            // Try OGH proxy first (for 2023+ models with OGH running)
-            // OGH proxy is more reliable on newer OMEN models
-            var oghController = TryCreateOghController();
-            if (oghController != null)
-            {
-                ActiveBackend = "OGH Proxy";
-                _logging?.Info("✓ Using OGH proxy fan controller (OGH services detected)");
-                return oghController;
-            }
-
-            // Try WMI-based controller (no driver required)
+            // Priority 1: WMI BIOS (no driver required, OGH-independent)
+            // This is the preferred method for true independence from OGH
             var wmiController = TryCreateWmiController();
             if (wmiController != null)
             {
-                // On newer OMEN models, WMI may report success but not change fans
-                // We could optionally test effectiveness here but it adds delay
-                // Instead, log a note about potential issues
                 ActiveBackend = "WMI BIOS";
-                _logging?.Info("✓ Using WMI-based fan controller (no driver required)");
-                _logging?.Info("  Note: If fan control doesn't work, try installing OMEN Gaming Hub for OGH proxy support");
+                _logging?.Info("✓ Using WMI-based fan controller (OGH-independent, no driver required)");
                 return wmiController;
             }
 
-            // Fall back to EC-based controller
+            // Priority 2: EC Direct via PawnIO (Secure Boot compatible, OGH-independent)
             var ecController = TryCreateEcController();
             if (ecController != null)
             {
                 ActiveBackend = "EC Direct";
-                _logging?.Info("✓ Using EC-based fan controller (requires PawnIO/WinRing0 backend)");
+                _logging?.Info("✓ Using EC-based fan controller (OGH-independent, requires PawnIO/WinRing0)");
                 return ecController;
+            }
+
+            // Priority 3: OGH proxy as last resort (requires OGH services)
+            // Only used if WMI BIOS and EC both fail
+            var oghController = TryCreateOghController();
+            if (oghController != null)
+            {
+                ActiveBackend = "OGH Proxy";
+                _logging?.Warn("⚠️ Using OGH proxy (WMI BIOS unavailable on this model)");
+                _logging?.Info("  Consider reporting your model for native support");
+                return oghController;
             }
 
             // Last resort: fallback controller with monitoring only
@@ -177,7 +175,8 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Create OGH proxy-based controller if available.
-        /// This is the preferred method for 2023+ OMEN models with Secure Boot enabled.
+        /// This is a FALLBACK method when WMI BIOS doesn't work on certain models.
+        /// OmenCore prefers WMI BIOS for true OGH independence.
         /// </summary>
         public OghFanControllerWrapper? TryCreateOghController()
         {
