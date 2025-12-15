@@ -24,7 +24,196 @@ From v1.3.0-beta2 development, the following issues informed our priorities:
 
 ---
 
-## 🔴 High Priority (Must Have)
+## � Community Bug Reports (v1.3.0-beta2 Feedback)
+
+Critical bugs reported by community members that need addressing in v1.4:
+
+### BUG-1: System Restore Point Creation Fails
+**Reported by:** Multiple users  
+**Error:** `System.Management.ManagementException: No encontrado` (Spanish: "Not found")  
+**File:** `Services/SystemRestoreService.cs:line 98`  
+**Root Cause:** WMI property access failing - likely System Restore disabled or insufficient permissions  
+**Fix:**
+```csharp
+// Check if System Restore is enabled before attempting
+// Add proper error handling for non-English Windows
+// Provide user-friendly error message
+```
+**Priority:** Medium
+
+---
+
+### BUG-2: CPU Undervolting Fails (MSR Write Error)
+**Reported by:** Multiple users (Intel 13th gen, AMD Ryzen)  
+**Error:** `Failed to write MSR 0x152` - InvalidOperationException  
+**File:** `Hardware/WinRing0MsrAccess.cs:line 119`  
+**Root Cause:** 
+- Intel: Plundervolt patches block MSR writes on many systems
+- AMD: Ryzen CPUs don't support voltage offset via MSR 0x150
+**Fix:**
+- Detect if MSR writes are blocked and show informative message
+- Add AMD Ryzen detection and disable undervolt UI for unsupported CPUs
+- Add "Undervolt unavailable (blocked by BIOS)" status message
+**Priority:** High
+
+---
+
+### BUG-3: TCC Offset Resets to 100°C on Reboot
+**Reported by:** Multiple users (Omen Max 16, Omen 17-ck2xxx)  
+**Symptom:** CPU Temperature Limit returns to 100°C after PC restart  
+**File:** `App.xaml.cs`, `Services/FanService.cs`  
+**Root Cause:** TCC offset not persisted to config or not re-applied on startup  
+**Fix:**
+- Save TCC offset to config when changed
+- Re-apply saved TCC offset in StartupSequencer
+- Verify successful application after boot
+**Priority:** High
+
+---
+
+### BUG-4: GPU Power Boost Resets to Minimum on Reboot
+**Reported by:** Multiple users  
+**Symptom:** GPU TGP/Dynamic Boost returns to Minimum after restart  
+**File:** `ViewModels/MainViewModel.cs` (line ~1750 reapply logic)  
+**Root Cause:** Reapply happens too early before WMI BIOS is ready  
+**Fix:**
+- Move GPU boost restoration to StartupSequencer with retry logic
+- Add verification that setting was actually applied
+- Log success/failure of boot-time restoration
+**Priority:** High
+
+---
+
+### BUG-5: Auto-Start Not Working
+**Reported by:** Multiple users  
+**Symptom:** App doesn't start automatically with Windows  
+**File:** `ViewModels/SettingsViewModel.cs` (registry code)  
+**Root Cause:** Registry write failing or task scheduler entry not created  
+**Fix:**
+- Check if registry entry exists after write
+- Add fallback to Task Scheduler method
+- Show error if both methods fail
+- Verify startup entry in Settings view
+**Priority:** Medium
+
+---
+
+### BUG-6: SSD Sensor Shows 0°C and 0% Usage
+**Reported by:** User with SAMSUNG MZVLB512HBJQ-000H1  
+**Symptom:** SSD temperature and usage always show 0  
+**File:** `Services/HardwareMonitorService.cs`  
+**Root Cause:** LibreHardwareMonitor not detecting Samsung NVMe SMART data  
+**Fix:**
+- Check if SSD sensors are available before displaying
+- Hide SSD widget if no valid data
+- Add fallback to WMI Win32_DiskDrive for basic info
+**Priority:** Low
+
+---
+
+### BUG-7: Overlay Hotkey Doesn't Work
+**Reported by:** Multiple users  
+**Symptom:** Pressing OSD hotkey does nothing  
+**File:** `Services/HotkeyService.cs`, `Services/OsdOverlayService.cs`  
+**Root Cause:** Hotkey registration failing when app starts minimized  
+**Fix:**
+- Register hotkeys after window is fully loaded (already partially fixed in beta2)
+- Add retry logic if initial registration fails
+- Log hotkey registration status
+**Priority:** Medium
+
+---
+
+### BUG-8: Unsupported Features Still Visible in UI
+**Reported by:** AMD Ryzen users  
+**Symptom:** Undervolt toggle visible but doesn't work on AMD; Corsair/Logitech visible with no devices  
+**File:** `Views/AdvancedView.xaml`, `ViewModels/LightingViewModel.cs`  
+**Root Cause:** UI doesn't hide unavailable features based on hardware detection  
+**Fix:**
+- Bind Visibility to capability detection results
+- Add `IsUndervoltSupported`, `IsCorsairAvailable`, `IsLogitechAvailable` properties
+- Hide sections when features unavailable
+**Priority:** Medium
+
+---
+
+### BUG-9: System Tray Refresh Rate Display Shows Wrong Value
+**Reported by:** User with 144Hz display  
+**Symptom:** After changing to 144Hz, tray popup still shows "60Hz"  
+**File:** `Views/TrayContextMenu.xaml`, `ViewModels/MainViewModel.cs`  
+**Root Cause:** Refresh rate display not updated after change  
+**Fix:**
+- Refresh the tray menu items after applying display change
+- Add PropertyChanged notification for CurrentRefreshRate
+- Consider auto-toggle in Power Automation (60Hz on battery)
+**Priority:** Low
+
+---
+
+### BUG-10: Fan Profile UI Confusing/Redundant
+**Reported by:** Multiple users  
+**Symptom:** Too many similar options (Quick Presets vs Choose Preset dropdown)  
+**Analysis:**
+- Quick Presets: Max, Gaming, Auto, Quiet
+- Choose Preset: Quiet, Performance, Gaming (overlap/confusion)
+- "Quiet" vs "Silent" naming inconsistency
+**Fix:**
+- Unify preset naming (use: Silent, Auto, Performance, Max)
+- Remove redundant dropdown or merge with quick presets
+- Add clear visual distinction between BIOS presets and custom curves
+**Priority:** Medium
+
+---
+
+### BUG-11: OSD Position Missing "TopCenter" Option
+**Reported by:** User request  
+**Symptom:** Cannot position OSD at top-center of screen  
+**File:** `ViewModels/SettingsViewModel.cs`, `Views/OsdOverlayWindow.xaml`  
+**Fix:**
+- Add TopCenter to OsdPosition enum
+- Update positioning logic in OsdOverlayWindow
+- Add button/option in Settings view
+**Priority:** Low (Enhancement)
+
+---
+
+### BUG-12: Logs Stored in AppData Instead of Program Files
+**Reported by:** User request  
+**Symptom:** Logs in `%APPDATA%\OmenCore\Logs` - user wants `C:\Program Files\OmenCore\Logs`  
+**File:** `Services/LoggingService.cs`  
+**Consideration:** Program Files requires admin elevation for writes  
+**Fix:**
+- Keep logs in AppData (standard Windows practice)
+- Add "Open Log Folder" button in Settings
+- Consider optional log location in config
+**Priority:** Low (Won't Fix - by design)
+
+---
+
+### BUG-13: Antivirus False Positive (Trojan Detection)
+**Reported by:** User  
+**Symptom:** Antivirus flags OmenCore as trojan  
+**Root Cause:** WinRing0 driver and low-level hardware access triggers heuristics  
+**Fix:**
+- Submit to Microsoft/major AV vendors for whitelisting
+- Add documentation about false positives
+- Consider code signing certificate (costs $200-500/year)
+**Priority:** Medium (Reputation)
+
+---
+
+### Community Feature Requests (From Bug Reports)
+
+| Request | Description | Priority |
+|---------|-------------|----------|
+| Keyboard animations | Wave, breathing, color cycle effects | Medium |
+| Auto 60Hz on battery | Power Automation toggle for refresh rate | Low |
+| Hide unsupported features | Don't show unavailable options | Medium |
+| Keyboard control without OGH | Work without OMEN Gaming Hub installed | High (4-zone works) |
+
+---
+
+## �🔴 High Priority (Must Have)
 
 ### Priority Rationale
 Based on beta2 feedback:
