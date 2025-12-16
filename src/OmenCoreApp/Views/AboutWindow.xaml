@@ -26,7 +26,7 @@
                     <Image Source="/Assets/logo.png" Width="80" Height="80" DockPanel.Dock="Left" Margin="0,0,20,0" />
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="OmenCore" FontSize="28" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
-                        <TextBlock Text="Gaming Laptop Control Center" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0" />
+                        <TextBlock Text="Gaming Laptop and Desktop Control Center" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0" />
                     </StackPanel>
                 </DockPanel>
                 <Button Grid.Column="1"
@@ -48,17 +48,20 @@
                         Padding="16" 
                         Margin="0,0,0,16">
                     <StackPanel>
-                        <TextBlock x:Name="VersionText" Text="Version 1.0.0" FontSize="14" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8" />
-                        <TextBlock Text="Advanced thermal, power, and RGB control for HP OMEN &amp; Victus gaming laptops." 
+                        <TextBlock x:Name="VersionText" Text="Version 1.4.0" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8" />
+                        <TextBlock Text="Advanced thermal, power, and RGB control for HP OMEN gaming laptops and desktops." 
                                    FontSize="13" 
                                    Foreground="{StaticResource TextSecondaryBrush}" 
                                    TextWrapping="Wrap" 
                                    Margin="0,0,0,8" />
-                        <TextBlock Text="Features: WMI/EC fan control, custom curves, CPU undervolt, game profiles, GPU power boost." 
-                                   FontSize="13" 
-                                   Foreground="{StaticResource TextSecondaryBrush}" 
-                                   TextWrapping="Wrap" 
-                                   Margin="0,0,0,8" />
+                        <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,8">
+                            <Run Text="✓ WMI/EC Fan Control"/><LineBreak/>
+                            <Run Text="✓ Custom Fan Curves with Validation"/><LineBreak/>
+                            <Run Text="✓ CPU Undervolt (Intel &amp; AMD)"/><LineBreak/>
+                            <Run Text="✓ Game Profile Auto-Switching"/><LineBreak/>
+                            <Run Text="✓ 4-Zone RGB Keyboard Control"/><LineBreak/>
+                            <Run Text="✓ Real-time Hardware Monitoring"/>
+                        </TextBlock>
                         <TextBlock x:Name="UpdateStatusText" 
                                    Text="" 
                                    FontSize="12" 

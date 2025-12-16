@@ -115,7 +115,7 @@ namespace OmenCore.Utils
             var headerPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
             headerPanel.Children.Add(new TextBlock { Text = "🎮", FontSize = 14, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
             headerPanel.Children.Add(new TextBlock { Text = "OmenCore", FontWeight = FontWeights.Bold, FontSize = 13, Foreground = accentPrimary, VerticalAlignment = VerticalAlignment.Center });
-            headerPanel.Children.Add(new TextBlock { Text = " v1.2.0", FontSize = 11, Foreground = textSecondary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 1, 0, 0) });
+            headerPanel.Children.Add(new TextBlock { Text = " v1.4.0", FontSize = 11, Foreground = textSecondary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 1, 0, 0) });
             
             var headerItem = new MenuItem
             {
@@ -385,7 +385,7 @@ namespace OmenCore.Utils
                 var memTotalGb = _latestSample.RamTotalGb;
                 var memPercent = memTotalGb > 0 ? (memUsedGb * 100.0 / memTotalGb) : 0;
                 
-                _trayIcon.ToolTipText = $"🎮 OmenCore v1.2.0\n" +
+                _trayIcon.ToolTipText = $"🎮 OmenCore v1.4.0\n" +
                                        $"━━━━━━━━━━━━━━━━━━\n" +
                                        $"🔥 CPU: {cpuTemp:F0}°C @ {cpuLoad:F0}%\n" +
                                        $"🎯 GPU: {gpuTemp:F0}°C @ {gpuLoad:F0}%\n" +
@@ -764,12 +764,12 @@ namespace OmenCore.Utils
             style.Setters.Add(new Setter(MenuItem.ForegroundProperty, Brushes.White));
             style.Setters.Add(new Setter(MenuItem.BorderBrushProperty, Brushes.Transparent));
             style.Setters.Add(new Setter(MenuItem.BorderThicknessProperty, new Thickness(0)));
-            style.Setters.Add(new Setter(MenuItem.PaddingProperty, new Thickness(8, 4, 8, 4)));
+            style.Setters.Add(new Setter(MenuItem.PaddingProperty, new Thickness(8, 6, 8, 6)));
             
-            // Override the icon column by using UsesItemContainerTemplate
-            // This approach uses margins to hide the gutter
-            style.Setters.Add(new Setter(MenuItem.MarginProperty, new Thickness(-28, 0, 0, 0)));
-            style.Setters.Add(new Setter(MenuItem.PaddingProperty, new Thickness(36, 6, 8, 6)));
+            // Remove the icon column completely using negative margin
+            // WPF's default MenuItem template has a 22-28px icon column on the left
+            style.Setters.Add(new Setter(MenuItem.MarginProperty, new Thickness(-30, 0, 0, 0)));
+            style.Setters.Add(new Setter(MenuItem.PaddingProperty, new Thickness(38, 6, 8, 6)));
             
             var hoverTrigger = new Trigger
             {

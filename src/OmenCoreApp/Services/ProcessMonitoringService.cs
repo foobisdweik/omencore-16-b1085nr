@@ -52,7 +52,7 @@ namespace OmenCore.Services
         public ProcessMonitoringService(LoggingService logging)
         {
             _logging = logging;
-            _pollTimer = new Timer(2000); // Poll every 2 seconds
+            _pollTimer = new Timer(2000); // Start with 2 second interval
             _pollTimer.Elapsed += OnPollTimer;
         }
 
@@ -90,6 +90,21 @@ namespace OmenCore.Services
             _logging.Info($"Stopped tracking process: {executableName}");
         }
 
+        /// <summary>
+        /// Update polling interval based on activity. Slows down when idle to reduce CPU usage.
+        /// </summary>
+        private void UpdatePollingInterval()
+        {
+            // Use fast polling (2s) when games are running, slow (10s) when idle
+            var newInterval = ActiveProcesses.Count > 0 ? 2000 : 10000;
+            
+            if (Math.Abs(_pollTimer.Interval - newInterval) > 100) // Only update if changed significantly
+            {
+                _pollTimer.Interval = newInterval;
+                _logging.Info($"Process monitoring interval adjusted to {newInterval}ms (active processes: {ActiveProcesses.Count})");
+            }
+        }
+        
         /// <summary>
         /// Clear all tracked processes.
         /// </summary>
@@ -207,6 +222,9 @@ namespace OmenCore.Services
                         ProcessExited?.Invoke(this, new ProcessExitedEventArgs(info, runtime));
                     }
                 }
+                
+                // Update polling interval based on activity
+                UpdatePollingInterval();
             }
             catch (Exception ex)
             {

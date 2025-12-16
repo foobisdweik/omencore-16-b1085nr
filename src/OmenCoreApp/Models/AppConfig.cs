@@ -82,6 +82,14 @@ namespace OmenCore.Models
         
         /// <summary>Path to external app when OmenKeyAction is LaunchExternalApp</summary>
         public string? OmenKeyExternalApp { get; set; }
+        
+        /// <summary>
+        /// EXPERIMENTAL: Enable direct EC writes for keyboard RGB control.
+        /// WARNING: This feature is DISABLED by default because EC keyboard registers vary by model.
+        /// Writing to wrong EC addresses can cause hard system crashes requiring forced restart.
+        /// Only enable this if WMI keyboard lighting doesn't work and you accept the risk.
+        /// </summary>
+        public bool ExperimentalEcKeyboardEnabled { get; set; } = false;
     }
     
     /// <summary>

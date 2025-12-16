@@ -165,23 +165,29 @@ namespace OmenCore.Services
             {
                 _logging.Info($"Fan preset '{preset.Name}' applied via {Backend}");
                 
-                // For Max/Auto presets, don't enable curve - they use BIOS control
+                // Check if preset has a custom curve to apply
                 var nameLower = preset.Name.ToLowerInvariant();
                 bool isMaxPreset = nameLower.Contains("max") && !nameLower.Contains("auto");
-                bool isAutoPreset = nameLower.Contains("auto") || nameLower.Contains("default");
                 
-                if (isMaxPreset || isAutoPreset)
+                if (isMaxPreset)
                 {
-                    // Disable curve for Max/Auto - let BIOS handle it
+                    // Max preset: Disable curve, let fans run at 100%
                     DisableCurve();
                     _activePreset = preset;
-                    _logging.Info($"Preset '{preset.Name}' using BIOS control (curve disabled)");
+                    _logging.Info($"Preset '{preset.Name}' using maximum fan speed (curve disabled)");
                 }
                 else if (preset.Curve != null && preset.Curve.Any())
                 {
-                    // Enable continuous curve application for custom presets
+                    // Enable continuous curve application for ALL presets with curves (including Auto)
                     EnableCurve(preset.Curve.ToList(), preset);
-                    _logging.Info($"Preset '{preset.Name}' curve enabled with {preset.Curve.Count} points");
+                    _logging.Info($"✓ Preset '{preset.Name}' curve enabled with {preset.Curve.Count} points");
+                }
+                else
+                {
+                    // No curve defined - use BIOS defaults
+                    DisableCurve();
+                    _activePreset = preset;
+                    _logging.Info($"Preset '{preset.Name}' using BIOS control (no curve defined)");
                 }
             }
             else

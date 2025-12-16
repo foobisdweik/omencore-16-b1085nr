@@ -76,6 +76,8 @@ namespace OmenCore.Services
         {
             "OmenCommandCenterBackgroundService",
             "HPAppHelperCap",
+            "HPOmenCap",              // HP Omen HSA Service (primary OGH service)
+            "HPOmenCommandCenter",    // Older OGH service name
             "OmenInstallMonitor"
         };
 

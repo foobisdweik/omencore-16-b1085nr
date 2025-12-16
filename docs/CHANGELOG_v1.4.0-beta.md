@@ -136,10 +136,21 @@
 - **Technical:** `Version.TryParse` doesn't handle "-beta2" suffixes; added custom prerelease parser
 - **Logic:** 1.4.0-beta2 > 1.3.0-beta2, beta2 > beta1, stable > prerelease of same version
 
-#### Keyboard RGB Dual-Write for Compatibility
-- **Issue:** WMI BIOS keyboard commands reported success but didn't affect hardware on some models
-- **Fix:** Added dual-write mode - applies colors via both WMI and EC for better compatibility
-- **Technical:** Some OMEN 17-ck2xxx models have WMI that returns success but doesn't control keyboard
+#### **🚨 CRITICAL: Keyboard RGB EC Writes DISABLED (Crash Fix)**
+- **Issue:** Applying keyboard RGB colors caused **hard system crash** requiring forced restart on OMEN 17-ck2xxx
+- **Root Cause:** EC registers 0xB0-0xBE are NOT universal - they vary by laptop model and writing to wrong addresses crashes the system
+- **Fix:** 
+  - Removed keyboard RGB EC addresses (0xB2-0xBE) from the allowlist
+  - Disabled EC dual-write fallback for keyboard lighting
+  - Keyboard RGB now uses **WMI BIOS only** which is safe on all models
+- **Impact:** Keyboard RGB may not work on some models where WMI doesn't control the keyboard hardware
+- **Technical:** Event Viewer showed `LiveKernelEvent` with WATCHDOG dump - hardware watchdog timeout from bad EC writes
+- **Safety:** EC writes for fan control (0x44-0x4D, 0xB0-0xB1, 0xCE-0xCF) are still enabled as these are known-safe addresses
+
+#### OGH Cleanup Now Removes HPOmenCap Service
+- **Issue:** OGH cleanup didn't stop/delete HPOmenCap service, causing persistent "OGH detected" status
+- **Fix:** Added HPOmenCap and HPOmenCommandCenter to the cleanup service list
+- **Technical:** SettingsViewModel now uses ServiceController to check if services are *running* (not just registry presence)
 
 ---
 

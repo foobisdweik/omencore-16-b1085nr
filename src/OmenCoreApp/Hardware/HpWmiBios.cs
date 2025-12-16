@@ -140,6 +140,10 @@ namespace OmenCore.Hardware
         public ThermalPolicyVersion ThermalPolicy { get; private set; } = ThermalPolicyVersion.V1;
         public int FanCount { get; private set; } = 2;
         public bool HeartbeatEnabled => _heartbeatEnabled;
+        
+        // Cache static WMI data to avoid repeated queries
+        private bool _staticDataCached = false;
+        private readonly object _cacheLock = new();
 
         public HpWmiBios(LoggingService? logging = null)
         {
@@ -289,9 +293,19 @@ namespace OmenCore.Hardware
         /// <summary>
         /// Query system data and validate WMI commands work.
         /// Returns true if commands work, false otherwise.
+        /// Results are cached after first successful query.
         /// </summary>
         private bool QuerySystemData()
         {
+            // Return cached data if available
+            lock (_cacheLock)
+            {
+                if (_staticDataCached)
+                {
+                    return true;
+                }
+            }
+            
             try
             {
                 var result = SendBiosCommand(BiosCmd.Default, CMD_SYSTEM_GET_DATA, null, 128);
@@ -306,6 +320,12 @@ namespace OmenCore.Hardware
                     {
                         FanCount = fanResult[0];
                         _logging?.Info($"  Fan Count: {FanCount}");
+                    }
+                    
+                    // Cache successful query
+                    lock (_cacheLock)
+                    {
+                        _staticDataCached = true;
                     }
                     
                     return true; // Commands are working

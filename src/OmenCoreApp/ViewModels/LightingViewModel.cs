@@ -465,6 +465,20 @@ namespace OmenCore.ViewModels
                 };
                 
                 _keyboardLightingService.SetAllZoneColors(colors);
+                
+                // Log telemetry to help user understand which backend works
+                var telemetry = _keyboardLightingService.GetTelemetry();
+                if (telemetry != null)
+                {
+                    _logging.Info($"Keyboard telemetry: WMI {telemetry.WmiSuccessRate:F0}% success, EC {telemetry.EcSuccessRate:F0}% success");
+                    
+                    // If WMI has high failure rate, suggest EC
+                    if (telemetry.WmiSuccessCount == 0 && telemetry.WmiFailureCount > 0)
+                    {
+                        _logging.Warn("💡 WMI keyboard commands aren't working on your model. Try enabling 'Experimental EC Keyboard' in Settings if RGB doesn't change.");
+                    }
+                }
+                
                 _logging.Info($"✓ Applied keyboard zone colors: Z1={_zone1ColorHex}, Z2={_zone2ColorHex}, Z3={_zone3ColorHex}, Z4={_zone4ColorHex}");
                 await Task.CompletedTask;
             }, "Applying keyboard colors...");

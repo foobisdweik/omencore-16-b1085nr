@@ -1,6 +1,6 @@
 #define MyAppName "OmenCore"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.4.0-beta2"
+  #define MyAppVersion "1.4.0"
 #endif
 #define MyAppPublisher "OmenCore Project"
 #define MyAppExeName "OmenCore.exe"
@@ -84,4 +84,4 @@ begin
 end;
 
 [Messages]
-WelcomeLabel2=This will install [name/ver] on your computer.%n%n🎮 OmenCore is a complete replacement for HP OMEN Gaming Hub%n%n✓ Fan control and custom curves%n✓ Performance mode switching%n✓ CPU undervolting (Intel)%n✓ RGB keyboard control%n✓ Hardware monitoring%n%nFor full hardware control on Secure Boot systems, install PawnIO driver (recommended).%n%nClick Next to continue.
+WelcomeLabel2=This will install [name/ver] on your computer.%n%n%n╔════════════════════════════════════╗%n║   🎮  HP OMEN Control Suite  🎮   ║%n╚════════════════════════════════════╝%n%n✨ FEATURES%n%n  🌀  Advanced Fan Control & Custom Curves%n  📊  Real-time Hardware Monitoring%n  ⚡  CPU Undervolting (Intel & AMD)%n  💡  4-Zone RGB Keyboard Control%n  🎯  Game Profile Auto-Switching%n  🚀  GPU Power Management%n  🖥️  Desktop & Laptop Support%n%n🔧 HARDWARE CONTROL%n%n  🛡️  Secure Boot Compatible (PawnIO driver)%n  🔌  WMI BIOS control for max compatibility%n  📈  Performance monitoring with OSD overlay%n  ⚙️  Direct EC register access option%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nComplete replacement for HP OMEN Gaming Hub%nwith more features, better performance, and full control.%n%nClick Next to continue, or Cancel to exit Setup.

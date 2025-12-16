@@ -9,20 +9,30 @@ using OmenCore.Models;
 namespace OmenCore.Services
 {
     /// <summary>
-    /// Controls HP OMEN laptop keyboard backlight lighting via WMI BIOS and EC access.
-    /// Supports 4-zone RGB keyboards found in OMEN 15/16/17 series laptops.
+    /// Controls HP OMEN laptop/desktop keyboard backlight lighting via WMI BIOS and EC access.
+    /// Supports 4-zone RGB keyboards found in OMEN 15/16/17 series laptops and 25L/30L/40L/45L desktops.
     /// 
-    /// v1.3: Added WMI BIOS color table support for models where EC access doesn't work.
+    /// v1.4.0-beta3: Added telemetry tracking for WMI vs EC success rates and better fallback logic.
+    /// Improved desktop PC support with chassis-aware detection.
     /// </summary>
     public class KeyboardLightingService : IDisposable
     {
         private readonly LoggingService _logging;
         private readonly IEcAccess? _ecAccess;
         private readonly HpWmiBios? _wmiBios;
+        private readonly ConfigurationService? _configService;
         private bool _wmiAvailable;
         private bool _wmiBiosAvailable;
         private bool _ecAvailable;
         private bool _disposed;
+        
+        // Telemetry counters for tracking success rates
+        private int _wmiSuccessCount = 0;
+        private int _wmiFailureCount = 0;
+        private int _ecSuccessCount = 0;
+        private int _ecFailureCount = 0;
+        private int _totalAttempts = 0;
+        private readonly object _telemetryLock = new();
 
         // HP OMEN WMI namespace and class identifiers (legacy)
         private const string OmenWmiNamespace = @"root\hp\InstrumentedBIOS";
@@ -62,12 +72,18 @@ namespace OmenCore.Services
 
         public bool IsAvailable => _wmiBiosAvailable || _wmiAvailable || _ecAvailable;
         public string BackendType => _wmiBiosAvailable ? "WMI BIOS" : (_wmiAvailable ? "WMI" : (_ecAvailable ? "EC" : "None"));
+        
+        /// <summary>
+        /// Check if experimental EC keyboard writes are enabled and allowed.
+        /// </summary>
+        private bool IsExperimentalEcEnabled => _configService?.Config?.ExperimentalEcKeyboardEnabled ?? false;
 
-        public KeyboardLightingService(LoggingService logging, IEcAccess? ecAccess = null, HpWmiBios? wmiBios = null)
+        public KeyboardLightingService(LoggingService logging, IEcAccess? ecAccess = null, HpWmiBios? wmiBios = null, ConfigurationService? configService = null)
         {
             _logging = logging;
             _ecAccess = ecAccess;
             _wmiBios = wmiBios;
+            _configService = configService;
             
             InitializeBackends();
         }
@@ -147,9 +163,15 @@ namespace OmenCore.Services
                 {
                     ApplyViaWmi(effect, primaryColor, secondaryColor, profile.EffectSpeed, profile.Brightness);
                 }
-                else if (_ecAvailable)
+                else if (_wmiBiosAvailable)
                 {
-                    ApplyViaEc(effect, primaryColor, secondaryColor, profile.EffectSpeed, profile.Brightness);
+                    // Use WMI BIOS color table as fallback
+                    SetZoneColor(KeyboardZone.All, primaryColor);
+                }
+                else
+                {
+                    // EC fallback is DISABLED - keyboard EC writes caused system crashes
+                    _logging.Warn("Keyboard lighting not applied - no safe backend available (EC disabled for safety)");
                 }
             }
             catch (Exception ex)
@@ -174,13 +196,19 @@ namespace OmenCore.Services
                 var secondaryColor = ParseHexColor(secondaryHex);
                 var mappedEffect = MapEffect(effect);
 
-                if (_ecAvailable)
-                {
-                    ApplyViaEc(mappedEffect, primaryColor, secondaryColor, speed, 100);
-                }
-                else if (_wmiAvailable)
+                if (_wmiAvailable)
                 {
                     ApplyViaWmi(mappedEffect, primaryColor, secondaryColor, speed, 100);
+                }
+                else if (_wmiBiosAvailable)
+                {
+                    // Use WMI BIOS color table as fallback
+                    SetZoneColor(KeyboardZone.All, primaryColor);
+                }
+                else
+                {
+                    // EC fallback is DISABLED - keyboard EC writes caused system crashes
+                    _logging.Warn("Keyboard effect not applied - no safe backend available (EC disabled for safety)");
                 }
             }
             catch (Exception ex)
@@ -226,6 +254,7 @@ namespace OmenCore.Services
         /// <summary>
         /// Set all 4 zone colors at once using a color array.
         /// More efficient than setting zones individually.
+        /// NOTE: forceEcAccess requires ExperimentalEcKeyboardEnabled=true in settings (dangerous).
         /// </summary>
         public void SetAllZoneColors(Color[] zoneColors, bool forceEcAccess = false)
         {
@@ -237,15 +266,22 @@ namespace OmenCore.Services
 
             try
             {
-                // If force EC requested and EC is available, skip WMI
+                // Check if experimental EC writes are allowed
+                if (forceEcAccess && !IsExperimentalEcEnabled)
+                {
+                    _logging.Warn("Force EC access requested but experimental EC keyboard is disabled in settings. Using WMI only.");
+                    forceEcAccess = false;
+                }
+                
+                // If force EC requested and allowed, skip WMI
                 if (forceEcAccess && _ecAvailable && _ecAccess != null)
                 {
-                    _logging.Info("Using EC access (forced by user setting)");
+                    _logging.Warn("⚠️ Using EXPERIMENTAL EC keyboard writes - crash risk!");
                     for (int i = 0; i < 4; i++)
                     {
                         SetZoneColorViaEc((KeyboardZone)i, zoneColors[i]);
                     }
-                    _logging.Info("✓ All zone colors set via EC (forced)");
+                    _logging.Info("✓ All zone colors set via EC (EXPERIMENTAL)");
                     return;
                 }
                 
@@ -261,18 +297,26 @@ namespace OmenCore.Services
                         colorTable[i * 3 + 2] = zoneColors[i].B;
                     }
                     
-                    if (_wmiBios.SetColorTable(colorTable))
+                    bool wmiSuccess = _wmiBios.SetColorTable(colorTable);
+                    TrackWmiResult(wmiSuccess);
+                    
+                    if (wmiSuccess)
                     {
-                        _logging.Info("✓ All zone colors set via WMI BIOS color table");
+                        _logging.Info($"✓ Keyboard color table set ({colorTable.Length} bytes)");
+                        _logging.Info($"✓ All zone colors set via WMI BIOS color table");
+                        _logging.Info($"✓ Applied keyboard zone colors: Z1=#{zoneColors[0].R:X2}{zoneColors[0].G:X2}{zoneColors[0].B:X2}, Z2=#{zoneColors[1].R:X2}{zoneColors[1].G:X2}{zoneColors[1].B:X2}, Z3=#{zoneColors[2].R:X2}{zoneColors[2].G:X2}{zoneColors[2].B:X2}, Z4=#{zoneColors[3].R:X2}{zoneColors[3].G:X2}{zoneColors[3].B:X2}");
                         
-                        // Also try EC as backup - some models report WMI success but don't actually apply
-                        if (_ecAvailable && _ecAccess != null)
+                        // On some models, WMI reports success but doesn't actually work
+                        // Try EC as well if enabled to ensure it takes effect
+                        if (IsExperimentalEcEnabled && _ecAvailable && _ecAccess != null)
                         {
-                            _logging.Info("Also applying via EC (dual-write for compatibility)");
+                            _logging.Info("⚙️ Also applying via EC (experimental) for better compatibility...");
                             for (int i = 0; i < 4; i++)
                             {
                                 SetZoneColorViaEc((KeyboardZone)i, zoneColors[i]);
                             }
+                            TrackEcResult(true);
+                            _logging.Info("✓ Also applied via EC registers");
                         }
                         return;
                     }
@@ -315,29 +359,20 @@ namespace OmenCore.Services
 
         private void SetZoneColorInternal(KeyboardZone zone, Color color)
         {
-            // Try WMI BIOS first
+            // Try WMI BIOS first (and only - EC keyboard writes are dangerous)
             if (_wmiBiosAvailable && _wmiBios != null)
             {
                 if (_wmiBios.SetZoneColor((int)zone, color.R, color.G, color.B))
                 {
-                    // Also try EC as backup - some models report WMI success but don't apply
-                    if (_ecAvailable && _ecAccess != null)
-                    {
-                        SetZoneColorViaEc(zone, color);
-                    }
+                    // NOTE: EC dual-write is DISABLED - it caused hard crashes on OMEN 17-ck2xxx.
+                    // The EC keyboard registers (0xB2-0xBE) vary by model and are not safe to write.
                     return; // Success
                 }
-                _logging.Warn($"WMI BIOS SetZoneColor failed for zone {zone}, trying EC");
+                _logging.Warn($"WMI BIOS SetZoneColor failed for zone {zone}");
             }
             
-            // Fall back to EC access
-            if (_ecAccess == null || !_ecAvailable) 
-            {
-                _logging.Warn("No backend available for zone color");
-                return;
-            }
-
-            SetZoneColorViaEc(zone, color);
+            // EC fallback is DISABLED for keyboard RGB - not safe on all models
+            _logging.Warn($"Zone {zone} color not applied - WMI BIOS method unavailable or failed");
         }
 
         public void SetBrightness(int brightness)
@@ -346,16 +381,16 @@ namespace OmenCore.Services
             
             try
             {
-                if (_ecAvailable && _ecAccess != null)
-                {
-                    // Map 0-100 to 0-255
-                    byte ecBrightness = (byte)(brightness * 255 / 100);
-                    _ecAccess.WriteByte(EC_KB_BRIGHTNESS, ecBrightness);
-                    _logging.Info($"Set keyboard brightness to {brightness}%");
-                }
-                else if (_wmiAvailable)
+                // Use WMI for brightness - EC writes to keyboard registers are not safe on all models
+                if (_wmiAvailable)
                 {
                     SetBrightnessViaWmi(brightness);
+                    _logging.Info($"Set keyboard brightness to {brightness}% via WMI");
+                }
+                else
+                {
+                    // EC brightness write disabled - 0xBD register varies by model
+                    _logging.Warn($"Keyboard brightness not applied - WMI method unavailable");
                 }
             }
             catch (Exception ex)
@@ -373,15 +408,18 @@ namespace OmenCore.Services
                 // Default: White static at 80% brightness
                 var white = Color.FromArgb(255, 255, 255);
                 
-                if (_ecAvailable && _ecAccess != null)
-                {
-                    _ecAccess.WriteByte(EC_KB_EFFECT, (byte)KeyboardEffect.Static);
-                    SetZoneColor(KeyboardZone.All, white);
-                    SetBrightness(80);
-                }
-                else if (_wmiAvailable)
+                // Use WMI only - EC keyboard writes are dangerous on some models
+                if (_wmiAvailable)
                 {
                     ApplyViaWmi(KeyboardEffect.Static, white, white, 0.5, 80);
+                }
+                else if (_wmiBiosAvailable)
+                {
+                    SetZoneColor(KeyboardZone.All, white);
+                }
+                else
+                {
+                    _logging.Warn("Cannot restore keyboard defaults - no safe backend available");
                 }
             }
             catch (Exception ex)
@@ -396,14 +434,14 @@ namespace OmenCore.Services
             
             try
             {
-                if (_ecAvailable && _ecAccess != null)
-                {
-                    _ecAccess.WriteByte(EC_KB_EFFECT, (byte)KeyboardEffect.Off);
-                    _ecAccess.WriteByte(EC_KB_BRIGHTNESS, 0);
-                }
-                else if (_wmiAvailable)
+                // Use WMI only - EC keyboard writes are dangerous on some models
+                if (_wmiAvailable)
                 {
                     SetBrightnessViaWmi(0);
+                }
+                else
+                {
+                    _logging.Warn("Cannot turn off keyboard - no safe backend available");
                 }
             }
             catch (Exception ex)
@@ -508,8 +546,75 @@ namespace OmenCore.Services
         {
             if (!_disposed)
             {
+                // Log telemetry summary before disposing
+                LogTelemetrySummary();
                 _disposed = true;
             }
         }
+        
+        /// <summary>
+        /// Get telemetry statistics for WMI vs EC keyboard control success rates.
+        /// </summary>
+        public KeyboardTelemetryStats GetTelemetry()
+        {
+            lock (_telemetryLock)
+            {
+                return new KeyboardTelemetryStats
+                {
+                    TotalAttempts = _totalAttempts,
+                    WmiSuccessCount = _wmiSuccessCount,
+                    WmiFailureCount = _wmiFailureCount,
+                    EcSuccessCount = _ecSuccessCount,
+                    EcFailureCount = _ecFailureCount,
+                    WmiSuccessRate = _wmiSuccessCount + _wmiFailureCount > 0 
+                        ? (double)_wmiSuccessCount / (_wmiSuccessCount + _wmiFailureCount) * 100 
+                        : 0,
+                    EcSuccessRate = _ecSuccessCount + _ecFailureCount > 0 
+                        ? (double)_ecSuccessCount / (_ecSuccessCount + _ecFailureCount) * 100 
+                        : 0
+                };
+            }
+        }
+        
+        private void LogTelemetrySummary()
+        {
+            var stats = GetTelemetry();
+            if (stats.TotalAttempts > 0)
+            {
+                _logging.Info($"Keyboard Telemetry: {stats.TotalAttempts} attempts | WMI: {stats.WmiSuccessCount}✓/{stats.WmiFailureCount}✗ ({stats.WmiSuccessRate:F0}%) | EC: {stats.EcSuccessCount}✓/{stats.EcFailureCount}✗ ({stats.EcSuccessRate:F0}%)");
+            }
+        }
+        
+        private void TrackWmiResult(bool success)
+        {
+            lock (_telemetryLock)
+            {
+                _totalAttempts++;
+                if (success) _wmiSuccessCount++; else _wmiFailureCount++;
+            }
+        }
+        
+        private void TrackEcResult(bool success)
+        {
+            lock (_telemetryLock)
+            {
+                _totalAttempts++;
+                if (success) _ecSuccessCount++; else _ecFailureCount++;
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Telemetry statistics for keyboard lighting operations.
+    /// </summary>
+    public class KeyboardTelemetryStats
+    {
+        public int TotalAttempts { get; set; }
+        public int WmiSuccessCount { get; set; }
+        public int WmiFailureCount { get; set; }
+        public int EcSuccessCount { get; set; }
+        public int EcFailureCount { get; set; }
+        public double WmiSuccessRate { get; set; }
+        public double EcSuccessRate { get; set; }
     }
 }

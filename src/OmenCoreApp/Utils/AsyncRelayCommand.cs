@@ -34,6 +34,23 @@ namespace OmenCore.Utils
                 RaiseCanExecuteChanged();
                 await _executeAsync(parameter);
             }
+            catch (Exception ex)
+            {
+                // Log the error and show user feedback
+                // This prevents unhandled exceptions from crashing the application
+                var logging = App.Current?.Properties["LoggingService"] as OmenCore.Services.LoggingService;
+                logging?.Error($"Command execution failed: {ex.Message}", ex);
+                
+                // Show error dialog to user on UI thread
+                System.Windows.Application.Current?.Dispatcher?.BeginInvoke(() =>
+                {
+                    System.Windows.MessageBox.Show(
+                        $"Operation failed: {ex.Message}\n\nCheck logs for details.\n\nTip: Try restarting OmenCore or check Settings for any misconfigurations.",
+                        "Operation Failed",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Error);
+                });
+            }
             finally
             {
                 _isExecuting = false;

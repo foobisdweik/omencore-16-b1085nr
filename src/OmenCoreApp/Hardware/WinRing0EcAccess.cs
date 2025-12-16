@@ -15,8 +15,10 @@ namespace OmenCore.Hardware
         private bool _disposed;
 
         /// <summary>
-        /// Allowlist of EC addresses that are safe to write (fan control, keyboard backlight, etc.)
+        /// Allowlist of EC addresses that are safe to write (fan control only).
         /// Prevents accidental writes to critical hardware registers like VRM control, battery charger, etc.
+        /// IMPORTANT: Keyboard RGB EC addresses (0xB0-0xBE) are NOT included because
+        /// they vary by model and can cause system crashes on some hardware (e.g., OMEN 17-ck2xxx).
         /// </summary>
         private static readonly HashSet<ushort> AllowedWriteAddresses = new()
         {
@@ -28,21 +30,20 @@ namespace OmenCore.Hardware
             0x4B, // Fan 1 speed high byte
             0x4C, // Fan 2 speed low byte
             0x4D, // Fan 2 speed high byte
+            0xB0, // Fan speed target CPU
+            0xB1, // Fan speed target GPU
             
             // Note: 0x6C (dust cleaning/fan reversal) is NOT included because true fan reversal
             // requires OMEN Max hardware with omnidirectional BLDC fans. Writing to this register
             // on unsupported hardware could be dangerous.
             
-            // Keyboard backlight (adjust for your hardware)
-            0xBA, // Keyboard brightness
-            0xBB, // Keyboard RGB zone control
+            // NOTE: Keyboard backlight EC addresses (0xB2-0xBE) are NOT safe to write!
+            // These registers vary by model and caused hard crashes on OMEN 17-ck2xxx.
+            // Use WMI BIOS SetColorTable() for keyboard lighting instead.
             
             // Performance modes
             0xCE, // Performance mode register
             0xCF, // Power limit control
-            
-            // Add more addresses as needed for your specific hardware
-            // ALWAYS test on sacrificial hardware before adding new addresses!
         };
 
         public bool IsAvailable => _handle is { IsInvalid: false };

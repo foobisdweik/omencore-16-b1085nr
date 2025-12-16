@@ -51,7 +51,10 @@ namespace OmenCore.Hardware
         private PawnioClose? _pawnioClose;
 
         /// <summary>
-        /// Allowlist of EC addresses that are safe to write (fan control, keyboard backlight, etc.)
+        /// Allowlist of EC addresses that are safe to write (fan control only).
+        /// IMPORTANT: Keyboard RGB EC addresses (0xB0-0xBE) are NOT included because
+        /// they vary by model and can cause system crashes on some hardware (e.g., OMEN 17-ck2xxx).
+        /// Keyboard lighting should use WMI BIOS only.
         /// </summary>
         private static readonly HashSet<ushort> AllowedWriteAddresses = new()
         {
@@ -74,9 +77,9 @@ namespace OmenCore.Hardware
             // OMCC (Omen Control Center) register
             0x96, // OMCC control register
             
-            // Keyboard backlight
-            0xBA, // Keyboard brightness
-            0xBB, // Keyboard RGB zone control
+            // NOTE: Keyboard backlight EC addresses (0xB2-0xBE) are NOT safe to write!
+            // These registers vary by model and caused hard crashes on OMEN 17-ck2xxx.
+            // Use WMI BIOS SetColorTable() for keyboard lighting instead.
         };
 
         // EC mutex to prevent concurrent access

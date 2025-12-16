@@ -46,6 +46,32 @@ namespace OmenCore.Services
                 Name = "OmenCore.Logging"
             };
             _writerThread.Start();
+            
+            // Clean up old logs asynchronously
+            Task.Run(CleanupOldLogs);
+        }
+
+        private void CleanupOldLogs()
+        {
+            try
+            {
+                var cutoff = DateTime.Now.AddDays(-7);
+                var files = Directory.GetFiles(_logDirectory, "OmenCore_*.log");
+                
+                foreach (var file in files)
+                {
+                    var fi = new FileInfo(file);
+                    if (fi.CreationTime < cutoff)
+                    {
+                        fi.Delete();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Don't log this error to avoid recursion if logging fails
+                System.Diagnostics.Debug.WriteLine($"Failed to clean up logs: {ex.Message}");
+            }
         }
 
         /// <summary>

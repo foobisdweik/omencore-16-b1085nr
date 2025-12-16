@@ -532,6 +532,13 @@ namespace OmenCore
 
         private static void ShowFatalDialog(Exception ex)
         {
+            // Ensure we're on the UI thread
+            if (Current?.Dispatcher.CheckAccess() == false)
+            {
+                Current.Dispatcher.Invoke(() => ShowFatalDialog(ex));
+                return;
+            }
+            
             MessageBox.Show($"OmenCore hit an unexpected error:\n{ex.Message}\n\nSee %LOCALAPPDATA%\\OmenCore for full logs.", "OmenCore Crash", MessageBoxButton.OK, MessageBoxImage.Error);
             Current?.Shutdown();
         }

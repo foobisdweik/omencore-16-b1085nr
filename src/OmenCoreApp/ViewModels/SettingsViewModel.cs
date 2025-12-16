@@ -104,6 +104,8 @@ namespace OmenCore.ViewModels
             RefreshDriverStatusCommand = new RelayCommand(_ => CheckDriverStatus());
             CheckBiosUpdatesCommand = new AsyncRelayCommand(async _ => await CheckBiosUpdatesAsync(), _ => !IsBiosCheckInProgress);
             DownloadBiosUpdateCommand = new RelayCommand(_ => DownloadBiosUpdate(), _ => BiosUpdateAvailable && !string.IsNullOrEmpty(BiosDownloadUrl));
+            ScanBloatwareCommand = new AsyncRelayCommand(async _ => await ScanBloatwareAsync(), _ => !IsScanningBloatware);
+            RemoveBloatwareCommand = new AsyncRelayCommand(async _ => await RemoveBloatwareAsync(), _ => !IsScanningBloatware && BloatwareCount > 0);
 
             // Check fan cleaning availability
             CheckFanCleaningAvailability();
@@ -582,6 +584,46 @@ namespace OmenCore.ViewModels
         }
 
         public string[] OmenKeyActionOptions => new[] { "ShowQuickPopup", "ShowWindow", "ToggleFanMode", "TogglePerformanceMode" };
+
+        public bool ExperimentalEcKeyboardEnabled
+        {
+            get => _config.ExperimentalEcKeyboardEnabled;
+            set
+            {
+                if (_config.ExperimentalEcKeyboardEnabled != value)
+                {
+                    // Show warning dialog before enabling
+                    if (value)
+                    {
+                        var result = MessageBox.Show(
+                            "⚠️ WARNING: EXPERIMENTAL FEATURE ⚠️\n\n" +
+                            "Direct EC keyboard writes can cause HARD SYSTEM CRASHES on some OMEN models.\n\n" +
+                            "EC keyboard registers (0xB2-0xBE) vary by laptop model. Writing to wrong addresses " +
+                            "caused system crashes on OMEN 17-ck2xxx requiring forced restart.\n\n" +
+                            "Only enable this if:\n" +
+                            "• WMI keyboard lighting doesn't work on your model\n" +
+                            "• You are willing to risk a system crash\n" +
+                            "• You have important work saved\n\n" +
+                            "Enable experimental EC keyboard control?",
+                            "Experimental Feature Warning",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Warning,
+                            MessageBoxResult.No);
+                        
+                        if (result != MessageBoxResult.Yes)
+                        {
+                            return; // User cancelled
+                        }
+                        
+                        _logging.Warn("⚠️ User enabled experimental EC keyboard writes - system crash risk!");
+                    }
+                    
+                    _config.ExperimentalEcKeyboardEnabled = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
 
         #endregion
 
@@ -1656,31 +1698,53 @@ namespace OmenCore.ViewModels
                     PawnIOAvailable = false;
                 }
                 
-                // Check OGH installation
+                // Check OGH installation - use ServiceController to check if services are actually running
                 try
                 {
-                    var processes = new[] { "OmenCommandCenterBackground", "OmenCap", "omenmqtt" };
                     OghInstalled = false;
-                    foreach (var proc in processes)
+                    
+                    // Check for OGH services (most reliable)
+                    var oghServiceNames = new[] { "HPOmenCap", "HPOmenCommandCenter" };
+                    foreach (var serviceName in oghServiceNames)
                     {
                         try
                         {
-                            var procs = System.Diagnostics.Process.GetProcessesByName(proc);
-                            if (procs.Length > 0)
+                            using var sc = new System.ServiceProcess.ServiceController(serviceName);
+                            // Only count if service is RUNNING, not just installed
+                            if (sc.Status == System.ServiceProcess.ServiceControllerStatus.Running)
                             {
                                 OghInstalled = true;
-                                foreach (var p in procs) p.Dispose();
                                 break;
                             }
                         }
-                        catch { }
+                        catch (InvalidOperationException)
+                        {
+                            // Service doesn't exist - expected after uninstall
+                        }
+                        catch (System.ComponentModel.Win32Exception)
+                        {
+                            // Service doesn't exist or access denied
+                        }
                     }
                     
-                    // Also check service
+                    // Also check for running processes as backup
                     if (!OghInstalled)
                     {
-                        using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\HPOmenCap");
-                        OghInstalled = key != null;
+                        var processes = new[] { "OmenCommandCenterBackground", "OmenCap", "omenmqtt" };
+                        foreach (var proc in processes)
+                        {
+                            try
+                            {
+                                var procs = System.Diagnostics.Process.GetProcessesByName(proc);
+                                if (procs.Length > 0)
+                                {
+                                    OghInstalled = true;
+                                    foreach (var p in procs) p.Dispose();
+                                    break;
+                                }
+                            }
+                            catch { }
+                        }
                     }
                 }
                 catch
@@ -1798,6 +1862,217 @@ namespace OmenCore.ViewModels
             }
         }
 
+        #endregion
+        
+        #region HP Bloatware Removal
+        
+        private bool _isScanningBloatware;
+        private int _bloatwareCount;
+        private string _bloatwareList = "";
+        
+        public bool IsScanningBloatware
+        {
+            get => _isScanningBloatware;
+            set { _isScanningBloatware = value; OnPropertyChanged(); }
+        }
+        
+        public int BloatwareCount
+        {
+            get => _bloatwareCount;
+            set { _bloatwareCount = value; OnPropertyChanged(); }
+        }
+        
+        public string BloatwareList
+        {
+            get => _bloatwareList;
+            set { _bloatwareList = value; OnPropertyChanged(); }
+        }
+        
+        public ICommand ScanBloatwareCommand { get; }
+        public ICommand RemoveBloatwareCommand { get; }
+        
+        private async Task ScanBloatwareAsync()
+        {
+            if (IsScanningBloatware) return;
+            
+            IsScanningBloatware = true;
+            BloatwareList = "Scanning for HP bloatware...";
+            BloatwareCount = 0;
+            
+            try
+            {
+                var bloatware = new System.Collections.Generic.List<string>();
+                
+                // Common HP bloatware package names
+                var bloatwarePackages = new[]
+                {
+                    "AD2F1837.HPSystemEventUtility",
+                    "AD2F1837.HPAudioSwitch", 
+                    "AD2F1837.HPConnectionOptimizer",
+                    "AD2F1837.HPDocumentation",
+                    "AD2F1837.HPJumpStarts",
+                    "AD2F1837.HPPrivacySettings",
+                    "AD2F1837.HPQuickDrop",
+                    "AD2F1837.HPSureClick",
+                    "AD2F1837.HPSureRun",
+                    "AD2F1837.HPSureSense",
+                    "AD2F1837.HPTouchpointManager",
+                    "AD2F1837.myHP",
+                    "AD2F1837.HPEnhancedLighting",
+                    "AD2F1837.HPSmart",
+                    "AD2F1837.HPPCHardwareDiagnosticsWindows",
+                    "AD2F1837.HPDesktopSupportUtilities",
+                    "AD2F1837.HPInc.EnergyStar"
+                };
+                
+                await Task.Run(() =>
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = "-NoProfile -Command \"Get-AppxPackage | Where-Object { $_.Name -like 'AD2F1837.HP*' -or $_.Name -like 'RealtekSemiconductorCorp*' } | Select-Object -ExpandProperty Name\"",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true
+                    };
+                    
+                    using var process = Process.Start(psi);
+                    if (process != null)
+                    {
+                        var output = process.StandardOutput.ReadToEnd();
+                        process.WaitForExit();
+                        
+                        var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (var line in lines)
+                        {
+                            var trimmed = line.Trim();
+                            if (!string.IsNullOrEmpty(trimmed) && !bloatware.Contains(trimmed))
+                            {
+                                bloatware.Add(trimmed);
+                            }
+                        }
+                    }
+                });
+                
+                BloatwareCount = bloatware.Count;
+                
+                if (bloatware.Count == 0)
+                {
+                    BloatwareList = "✓ No HP bloatware detected!\n\nYour system is clean.";
+                }
+                else
+                {
+                    BloatwareList = $"Found {bloatware.Count} HP bloatware package(s):\n\n" +
+                                  string.Join("\n", bloatware.Select(p => $"• {p.Replace("AD2F1837.", "")}"));
+                }
+                
+                _logging.Info($"Bloatware scan complete: {bloatware.Count} package(s) found");
+            }
+            catch (Exception ex)
+            {
+                _logging.Error("Failed to scan for bloatware", ex);
+                BloatwareList = $"❌ Scan failed: {ex.Message}";
+            }
+            finally
+            {
+                IsScanningBloatware = false;
+            }
+        }
+        
+        private async Task RemoveBloatwareAsync()
+        {
+            if (BloatwareCount == 0)
+            {
+                MessageBox.Show("No bloatware detected. Run a scan first.", "OmenCore", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            
+            var result = MessageBox.Show(
+                $"This will remove {BloatwareCount} HP bloatware package(s).\n\n" +
+                "⚠️ WARNING:\n" +
+                "• This action cannot be undone\n" +
+                "• Some HP features may stop working\n" +
+                "• HP Support Assistant will NOT be removed\n" +
+                "• System restart may be required\n\n" +
+                "Continue with removal?",
+                "Remove HP Bloatware - Confirmation Required",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+                
+            if (result != MessageBoxResult.Yes)
+                return;
+                
+            IsScanningBloatware = true;
+            BloatwareList = "Removing HP bloatware packages...\n\nThis may take a few minutes...";
+            
+            try
+            {
+                var removed = 0;
+                var failed = 0;
+                
+                await Task.Run(() =>
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = "-NoProfile -ExecutionPolicy Bypass -Command \"Get-AppxPackage | Where-Object { $_.Name -like 'AD2F1837.HP*' -and $_.Name -notlike '*HPSupportAssistant*' } | ForEach-Object { try { Remove-AppxPackage -Package $_.PackageFullName -ErrorAction Stop; Write-Output \"OK:$($_.Name)\" } catch { Write-Output \"FAIL:$($_.Name)\" } }\"",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true
+                    };
+                    
+                    using var process = Process.Start(psi);
+                    if (process != null)
+                    {
+                        var output = process.StandardOutput.ReadToEnd();
+                        process.WaitForExit();
+                        
+                        var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (var line in lines)
+                        {
+                            if (line.StartsWith("OK:"))
+                            {
+                                removed++;
+                                _logging.Info($"Removed: {line.Substring(3)}");
+                            }
+                            else if (line.StartsWith("FAIL:"))
+                            {
+                                failed++;
+                                _logging.Warn($"Failed to remove: {line.Substring(5)}");
+                            }
+                        }
+                    }
+                });
+                
+                BloatwareList = $"✓ Bloatware removal complete!\n\n" +
+                              $"• Removed: {removed} package(s)\n" +
+                              $"• Failed: {failed} package(s)\n\n" +
+                              $"Run a new scan to verify.";
+                              
+                BloatwareCount = 0;
+                
+                _logging.Info($"Bloatware removal complete: {removed} removed, {failed} failed");
+                
+                MessageBox.Show(
+                    $"Removed {removed} bloatware package(s).\n\n" +
+                    (failed > 0 ? $"{failed} package(s) could not be removed.\n\n" : "") +
+                    "Some changes may require a system restart.",
+                    "Bloatware Removal Complete",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                _logging.Error("Failed to remove bloatware", ex);
+                BloatwareList = $"❌ Removal failed: {ex.Message}";
+                MessageBox.Show($"Failed to remove bloatware: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsScanningBloatware = false;
+            }
+        }
+        
         #endregion
         
         private static class NativeMethods
