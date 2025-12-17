@@ -18,48 +18,22 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Grid Grid.Row="0" Margin="0,0,0,20">
+        <Grid Grid.Row="0" Margin="0,0,0,24">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             
             <StackPanel Grid.Column="0">
                 <TextBlock Text="Hardware Monitoring" Style="{StaticResource Heading1}"/>
                 <TextBlock Text="Real-time performance metrics and system status" 
                            Style="{StaticResource Caption}"
-                           Margin="0,0,0,0"/>
+                           Opacity="0.9"
+                           Margin="0,2,0,0"/>
             </StackPanel>
             
-            <!-- Performance Mode Status -->
-            <Border Grid.Column="1" 
-                    Background="{StaticResource SurfaceDarkBrush}"
-                    BorderBrush="{StaticResource AccentBrush}"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="14,8"
-                    Margin="20,0,0,0"
-                    HorizontalAlignment="Left"
-                    VerticalAlignment="Center">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource IconPerformance}" Width="16" Height="16" Fill="{StaticResource AccentBrush}" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding CurrentPerformanceMode, FallbackValue=Auto}" 
-                               FontSize="13" FontWeight="SemiBold"
-                               Foreground="{StaticResource AccentBrush}" 
-                               VerticalAlignment="Center"/>
-                    <Rectangle Width="1" Height="18" Fill="{StaticResource BorderBrush}" Margin="14,0"/>
-                    <Path Data="{StaticResource IconFan}" Width="14" Height="14" Fill="{StaticResource AccentBlueBrush}" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding CurrentFanMode, FallbackValue=Auto}" 
-                               FontSize="13" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimaryBrush}" 
-                               VerticalAlignment="Center"/>
-                </StackPanel>
-            </Border>
-            
             <!-- Throttling Status Indicator with pulse animation -->
-            <Border x:Name="ThrottlingIndicator" Grid.Column="2"
+            <Border x:Name="ThrottlingIndicator" Grid.Column="1"
                     Visibility="{Binding IsThrottling, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}"
                     Background="{StaticResource SurfaceDarkBrush}"
                     BorderBrush="#FFAA33"
@@ -92,13 +66,6 @@
                                VerticalAlignment="Center"/>
                 </StackPanel>
             </Border>
-            
-            <ToggleButton Grid.Column="3" 
-                          IsChecked="{Binding MonitoringLowOverheadMode}" 
-                          Content="Reduce CPU Usage" 
-                          Style="{StaticResource ToggleButtonStyle}" 
-                          Width="170" Height="38"
-                          ToolTip="Disable charts to reduce monitoring overhead"/>
         </Grid>
 
         <!-- Hardware Summary Cards -->

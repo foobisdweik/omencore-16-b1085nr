@@ -72,7 +72,7 @@ namespace OmenCore.Models
         
         // OMEN Key Interception settings
         /// <summary>Enable OMEN key interception to prevent OGH from launching</summary>
-        public bool OmenKeyEnabled { get; set; } = false;
+        public bool OmenKeyEnabled { get; set; } = true;
         
         /// <summary>Whether to block the key (true) or let it pass through (false)</summary>
         public bool OmenKeyIntercept { get; set; } = true;
@@ -90,6 +90,39 @@ namespace OmenCore.Models
         /// Only enable this if WMI keyboard lighting doesn't work and you accept the risk.
         /// </summary>
         public bool ExperimentalEcKeyboardEnabled { get; set; } = false;
+        
+        /// <summary>
+        /// Preferred keyboard lighting backend: "Auto" (default), "WmiBios", "Wmi", "Ec".
+        /// Auto will use WMI BIOS > WMI > EC priority.
+        /// Setting a specific backend forces that backend if available.
+        /// </summary>
+        public string PreferredKeyboardBackend { get; set; } = "Auto";
+        
+        /// <summary>
+        /// Saved keyboard zone colors (4 zones). Applied on startup.
+        /// </summary>
+        public KeyboardLightingSettings KeyboardLighting { get; set; } = new();
+    }
+    
+    /// <summary>
+    /// Settings for HP OMEN keyboard 4-zone RGB lighting.
+    /// </summary>
+    public class KeyboardLightingSettings
+    {
+        /// <summary>Zone 1 (Left) color in hex format (e.g., "#E6002E")</summary>
+        public string Zone1Color { get; set; } = "#E6002E";
+        
+        /// <summary>Zone 2 (Middle-Left) color in hex format</summary>
+        public string Zone2Color { get; set; } = "#E6002E";
+        
+        /// <summary>Zone 3 (Middle-Right) color in hex format</summary>
+        public string Zone3Color { get; set; } = "#E6002E";
+        
+        /// <summary>Zone 4 (Right) color in hex format</summary>
+        public string Zone4Color { get; set; } = "#E6002E";
+        
+        /// <summary>Whether to apply keyboard colors on startup</summary>
+        public bool ApplyOnStartup { get; set; } = true;
     }
     
     /// <summary>
@@ -139,14 +172,14 @@ namespace OmenCore.Models
         /// <summary>Master toggle - when disabled, no OSD process runs at all</summary>
         public bool Enabled { get; set; } = false;
         
-        /// <summary>Toggle hotkey (e.g., F12)</summary>
-        public string ToggleHotkey { get; set; } = "F12";
+        /// <summary>Toggle hotkey (e.g., Ctrl+Shift+F12)</summary>
+        public string ToggleHotkey { get; set; } = "Ctrl+Shift+F12";
         
         /// <summary>Position: TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight</summary>
-        public string Position { get; set; } = "TopLeft";
+        public string Position { get; set; } = "TopRight";
         
-        /// <summary>Opacity 0.0-1.0</summary>
-        public double Opacity { get; set; } = 0.85;
+        /// <summary>Opacity 0.0-1.0 (lower = more transparent)</summary>
+        public double Opacity { get; set; } = 0.6;
         
         /// <summary>Show CPU temperature</summary>
         public bool ShowCpuTemp { get; set; } = true;
@@ -154,10 +187,10 @@ namespace OmenCore.Models
         /// <summary>Show GPU temperature</summary>
         public bool ShowGpuTemp { get; set; } = true;
         
-        /// <summary>Show CPU load</summary>
+        /// <summary>Show CPU load percentage</summary>
         public bool ShowCpuLoad { get; set; } = true;
         
-        /// <summary>Show GPU load</summary>
+        /// <summary>Show GPU load percentage</summary>
         public bool ShowGpuLoad { get; set; } = true;
         
         /// <summary>Show fan speeds</summary>
@@ -166,8 +199,35 @@ namespace OmenCore.Models
         /// <summary>Show RAM usage</summary>
         public bool ShowRamUsage { get; set; } = false;
         
-        /// <summary>Show current FPS (requires integration)</summary>
+        /// <summary>Show current fan/performance mode</summary>
+        public bool ShowCurrentMode { get; set; } = true;
+        
+        /// <summary>Show current FPS (estimated from GPU metrics)</summary>
         public bool ShowFps { get; set; } = false;
+        
+        /// <summary>Show current fan mode (Auto, Performance, Silent, Max)</summary>
+        public bool ShowFanMode { get; set; } = true;
+        
+        /// <summary>Show performance mode (Balanced, Performance, Silent)</summary>
+        public bool ShowPerformanceMode { get; set; } = false;
+        
+        /// <summary>Show frametime in milliseconds (inverse of FPS)</summary>
+        public bool ShowFrametime { get; set; } = false;
+        
+        /// <summary>Show current clock time</summary>
+        public bool ShowTime { get; set; } = false;
+        
+        /// <summary>Show GPU power consumption in watts</summary>
+        public bool ShowGpuPower { get; set; } = false;
+        
+        /// <summary>Show CPU power consumption in watts</summary>
+        public bool ShowCpuPower { get; set; } = false;
+        
+        /// <summary>Show network latency (ping to common servers)</summary>
+        public bool ShowNetworkLatency { get; set; } = false;
+        
+        /// <summary>Show GPU memory usage</summary>
+        public bool ShowVramUsage { get; set; } = false;
     }
     
     /// <summary>

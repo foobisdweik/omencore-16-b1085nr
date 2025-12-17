@@ -6,6 +6,7 @@ namespace OmenCore.Corsair
         Mouse,
         Headset,
         MouseMat,
-        Accessory
+        Accessory,
+        WirelessDongle  // USB receiver for wireless devices - actual device connects through it
     }
 }

@@ -46,6 +46,7 @@ namespace OmenCore.ViewModels
         private readonly BiosUpdateService _biosUpdateService;
         private readonly PowerAutomationService _powerAutomationService;
         private readonly OmenKeyService _omenKeyService;
+        private OsdService? _osdService;
         private HpWmiBios? _wmiBios;
         private OghServiceProxy? _oghProxy;
         private HotkeyOsdWindow? _hotkeyOsd;
@@ -141,7 +142,7 @@ namespace OmenCore.ViewModels
             {
                 if (_settings == null)
                 {
-                    _settings = new SettingsViewModel(_logging, _configService, _systemInfoService, _fanCleaningService, _biosUpdateService);
+                    _settings = new SettingsViewModel(_logging, _configService, _systemInfoService, _fanCleaningService, _biosUpdateService, _omenKeyService, _osdService);
                     OnPropertyChanged(nameof(Settings));
                 }
                 return _settings;
@@ -155,7 +156,7 @@ namespace OmenCore.ViewModels
             {
                 if (_general == null)
                 {
-                    _general = new GeneralViewModel(_fanService, _performanceModeService, _configService, _logging);
+                    _general = new GeneralViewModel(_fanService, _performanceModeService, _configService, _logging, _systemInfoService);
                     // Wire up the FanControlViewModel reference for preset sync
                     _general.SetFanControlViewModel(FanControl);
                     OnPropertyChanged(nameof(General));
@@ -982,8 +983,15 @@ namespace OmenCore.ViewModels
                 _logging.Info("Power limit controller skipped (EC not available)");
             }
             
+            // Enable experimental EC keyboard writes if user has opted in
+            if (_config.ExperimentalEcKeyboardEnabled)
+            {
+                Hardware.PawnIOEcAccess.EnableExperimentalKeyboardWrites = true;
+                _logging.Info("⚠️ Experimental EC keyboard writes ENABLED (user opted in)");
+            }
+            
             _performanceModeService = new PerformanceModeService(fanController, powerPlanService, powerLimitController, _logging);
-            _keyboardLightingService = new KeyboardLightingService(_logging, ec, _wmiBios);
+            _keyboardLightingService = new KeyboardLightingService(_logging, ec, _wmiBios, _configService);
             _systemOptimizationService = new SystemOptimizationService(_logging);
             _gpuSwitchService = new GpuSwitchService(_logging);
             
@@ -1016,6 +1024,11 @@ namespace OmenCore.ViewModels
             _notificationService = new NotificationService(_logging);
             _powerAutomationService = new PowerAutomationService(_logging, _fanService, _performanceModeService, _configService, _gpuSwitchService);
             _omenKeyService = new OmenKeyService(_logging, _configService);
+            
+            // Initialize OSD service (will only activate if enabled in settings)
+            // Pass ThermalProvider from FanService for temperature data
+            _osdService = new OsdService(_configService, _logging, _fanService?.ThermalProvider, _fanService);
+            
             _autoUpdateService.DownloadProgressChanged += OnUpdateDownloadProgressChanged;
             _autoUpdateService.UpdateCheckCompleted += OnBackgroundUpdateCheckCompleted;
             
@@ -2036,8 +2049,14 @@ namespace OmenCore.ViewModels
                     
                     if (hasPeripherals || hasKeyboardLighting)
                     {
-                        Lighting = new LightingViewModel(_corsairDeviceService, _logitechDeviceService, _logging, _keyboardLightingService);
+                        Lighting = new LightingViewModel(_corsairDeviceService, _logitechDeviceService, _logging, _keyboardLightingService, _configService);
                         OnPropertyChanged(nameof(Lighting));
+                        
+                        // Apply saved keyboard colors on startup
+                        if (hasKeyboardLighting)
+                        {
+                            _ = Lighting.ApplySavedKeyboardColorsAsync();
+                        }
                         
                         if (hasKeyboardLighting && !hasPeripherals)
                         {
@@ -2388,17 +2407,38 @@ namespace OmenCore.ViewModels
             Application.Current?.Dispatcher?.BeginInvoke(() =>
             {
                 var mainWindow = Application.Current.MainWindow;
-                if (mainWindow == null) return;
-                
-                if (mainWindow.IsVisible && mainWindow.WindowState != WindowState.Minimized)
+                if (mainWindow == null)
                 {
+                    _logging.Warn("Toggle window: MainWindow is null");
+                    return;
+                }
+                
+                _logging.Info($"Toggle window: IsVisible={mainWindow.IsVisible}, WindowState={mainWindow.WindowState}, ShowInTaskbar={mainWindow.ShowInTaskbar}");
+                
+                // Check if window is currently shown and not minimized
+                bool isWindowShown = mainWindow.IsVisible && mainWindow.WindowState != WindowState.Minimized;
+                
+                if (isWindowShown)
+                {
+                    // Hide the window
                     mainWindow.Hide();
+                    mainWindow.ShowInTaskbar = false;
+                    _logging.Info("Window hidden to tray");
                 }
                 else
                 {
+                    // Show the window - ensure it's properly restored
                     mainWindow.Show();
+                    mainWindow.ShowInTaskbar = true;
                     mainWindow.WindowState = WindowState.Normal;
+                    
+                    // Bring to foreground
+                    mainWindow.Topmost = true;  // Force to front
                     mainWindow.Activate();
+                    mainWindow.Focus();
+                    mainWindow.Topmost = false; // Allow other windows to go on top
+                    
+                    _logging.Info("Window shown and activated");
                 }
             });
         }
@@ -2450,11 +2490,17 @@ namespace OmenCore.ViewModels
                 PushEvent("⌨️ Global hotkeys enabled");
                 
                 // Start OMEN key interception if enabled
-                if (_config.OmenKeyEnabled)
+                var omenKeyEnabled = _config.Features?.OmenKeyInterceptionEnabled ?? _config.OmenKeyEnabled;
+                if (omenKeyEnabled)
                 {
                     _omenKeyService.StartInterception();
                     _logging.Info("OMEN key interception started");
                 }
+                
+                // Initialize OSD overlay (if enabled in settings)
+                // Pass monitoring sample source for accurate CPU/GPU load data
+                _osdService?.SetMonitoringSampleSource(() => LatestMonitoringSample);
+                _osdService?.Initialize();
             }
             catch (Exception ex)
             {
@@ -2551,7 +2597,8 @@ namespace OmenCore.ViewModels
             // Dispose power automation service
             _powerAutomationService?.Dispose();
 
-            // Dispose OSD window
+            // Dispose OSD services
+            _osdService?.Dispose();
             _hotkeyOsd?.Close();
 
             // Dispose device services

@@ -79,6 +79,7 @@ namespace OmenCore.Controls
         private Point _dragStartOffset;
         private readonly List<Ellipse> _pointEllipses = new();
         private Line? _currentTempLine;
+        private bool _suppressRender;  // Prevents re-render during programmatic updates
         
         #endregion
 
@@ -167,6 +168,9 @@ namespace OmenCore.Controls
         
         private void RenderCurve()
         {
+            // Don't re-render during programmatic updates (prevents slider jitter)
+            if (_suppressRender) return;
+            
             ChartCanvas.Children.Clear();
             YAxisLabels.Children.Clear();
             XAxisLabels.Children.Clear();
@@ -471,15 +475,27 @@ namespace OmenCore.Controls
                 }
             }
             
-            CurvePoints.Add(new FanCurvePoint { TemperatureC = temp, FanPercent = fan });
-            
-            // Sort by temperature
-            var sorted = CurvePoints.OrderBy(p => p.TemperatureC).ToList();
-            CurvePoints.Clear();
-            foreach (var p in sorted)
+            // Suppress render during batch update to prevent visual jitter
+            _suppressRender = true;
+            try
             {
-                CurvePoints.Add(p);
+                CurvePoints.Add(new FanCurvePoint { TemperatureC = temp, FanPercent = fan });
+                
+                // Sort by temperature
+                var sorted = CurvePoints.OrderBy(p => p.TemperatureC).ToList();
+                CurvePoints.Clear();
+                foreach (var p in sorted)
+                {
+                    CurvePoints.Add(p);
+                }
             }
+            finally
+            {
+                _suppressRender = false;
+            }
+            
+            // Single render after batch update is complete
+            RenderCurve();
         }
         
         private void Point_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -560,12 +576,24 @@ namespace OmenCore.Controls
                 // Sort points by temperature after drag
                 if (CurvePoints != null)
                 {
-                    var sorted = CurvePoints.OrderBy(p => p.TemperatureC).ToList();
-                    CurvePoints.Clear();
-                    foreach (var p in sorted)
+                    // Suppress render during batch update to prevent visual jitter
+                    _suppressRender = true;
+                    try
                     {
-                        CurvePoints.Add(p);
+                        var sorted = CurvePoints.OrderBy(p => p.TemperatureC).ToList();
+                        CurvePoints.Clear();
+                        foreach (var p in sorted)
+                        {
+                            CurvePoints.Add(p);
+                        }
                     }
+                    finally
+                    {
+                        _suppressRender = false;
+                    }
+                    
+                    // Single render after batch update is complete
+                    RenderCurve();
                 }
             }
         }

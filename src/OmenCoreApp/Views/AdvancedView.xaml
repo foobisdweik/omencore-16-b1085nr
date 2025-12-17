@@ -15,9 +15,82 @@
             <!-- Header -->
             <StackPanel Margin="0,0,0,24">
                 <TextBlock Text="Advanced Controls" Style="{StaticResource Heading1}"/>
-                <TextBlock Text="Fine-tune fan curves, CPU undervolting, GPU power, and other advanced settings" 
-                           Style="{StaticResource Caption}"/>
+                <TextBlock Text="Fine-tune fan curves, CPU undervolting, GPU power limits, and temperature targets" 
+                           Style="{StaticResource Caption}"
+                           Opacity="0.9"/>
             </StackPanel>
+
+            <!-- Performance Mode Section -->
+            <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,20">
+                <StackPanel>
+                    <TextBlock Text="Performance Mode" FontSize="20" FontWeight="SemiBold" 
+                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
+                    <TextBlock Text="Select system power and cooling profile" 
+                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,16"/>
+                    
+                    <!-- Mode Selection Buttons -->
+                    <UniformGrid Rows="1" Margin="0,0,0,16">
+                        <RadioButton x:Name="QuietModeRadio"
+                                     GroupName="PerformanceMode"
+                                     IsChecked="{Binding SystemControl.IsQuietMode, Mode=OneWay}"
+                                     Command="{Binding SystemControl.SelectPerformanceModeCommand}"
+                                     CommandParameter="Quiet"
+                                     Style="{StaticResource PerformanceModeRadioStyle}"
+                                     Margin="0,0,8,0">
+                            <StackPanel>
+                                <TextBlock Text="🌙" FontSize="24" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                <TextBlock Text="Quiet" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Silent operation" FontSize="11" Opacity="0.7" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </RadioButton>
+                        
+                        <RadioButton x:Name="BalancedModeRadio"
+                                     GroupName="PerformanceMode"
+                                     IsChecked="{Binding SystemControl.IsBalancedMode, Mode=OneWay}"
+                                     Command="{Binding SystemControl.SelectPerformanceModeCommand}"
+                                     CommandParameter="Balanced"
+                                     Style="{StaticResource PerformanceModeRadioStyle}"
+                                     Margin="4,0,4,0">
+                            <StackPanel>
+                                <TextBlock Text="⚖️" FontSize="24" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                <TextBlock Text="Balanced" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Optimal balance" FontSize="11" Opacity="0.7" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </RadioButton>
+                        
+                        <RadioButton x:Name="PerformanceModeRadio"
+                                     GroupName="PerformanceMode"
+                                     IsChecked="{Binding SystemControl.IsPerformanceMode, Mode=OneWay}"
+                                     Command="{Binding SystemControl.SelectPerformanceModeCommand}"
+                                     CommandParameter="Performance"
+                                     Style="{StaticResource PerformanceModeRadioStyle}"
+                                     Margin="8,0,0,0">
+                            <StackPanel>
+                                <TextBlock Text="🚀" FontSize="24" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                <TextBlock Text="Performance" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Maximum power" FontSize="11" Opacity="0.7" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </RadioButton>
+                    </UniformGrid>
+                    
+                    <!-- Current Mode Status -->
+                    <Border Background="{StaticResource SurfaceDarkBrush}" CornerRadius="8" Padding="12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Active Mode:" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" 
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="1" 
+                                       Text="{Binding SystemControl.CurrentPerformanceModeName}" 
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
 
             <!-- Fan Curve Editor Section -->
             <GroupBox Header="Custom Fan Curve" Style="{StaticResource ModernGroupBox}" Margin="0,0,0,20">
@@ -176,7 +249,7 @@
                     <TextBlock Text="GPU Power Boost (TGP/Dynamic Boost)" FontSize="20" FontWeight="SemiBold" 
                                Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
                     
-                    <TextBlock Text="Control GPU Total Graphics Power (TGP) and Dynamic Boost (+15W PPAB). Higher settings enable more GPU wattage for better gaming performance." 
+                    <TextBlock Text="Control GPU Total Graphics Power (TGP) and Dynamic Boost (PPAB). Higher settings enable more GPU wattage. Extended option is for RTX 5080 and newer GPUs that may support +25W boost." 
                                FontSize="12" 
                                Foreground="{StaticResource TextSecondaryBrush}"
                                Margin="0,0,0,16" TextWrapping="Wrap"/>

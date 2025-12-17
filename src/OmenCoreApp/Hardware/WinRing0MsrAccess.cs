@@ -7,8 +7,12 @@ namespace OmenCore.Hardware
     /// <summary>
     /// WinRing0-based MSR (Model-Specific Register) access for CPU voltage control.
     /// Requires WinRing0 kernel driver to be installed and running.
+    /// 
+    /// DEPRECATED: Use PawnIOMsrAccess instead. WinRing0 is blocked by Secure Boot.
+    /// This class will be removed in a future version.
     /// </summary>
-    public class WinRing0MsrAccess : IDisposable
+    [Obsolete("Use PawnIOMsrAccess instead. WinRing0 is blocked by Secure Boot.")]
+    public class WinRing0MsrAccess : IMsrAccess
     {
         // Try multiple device paths for different WinRing0 versions
         private static readonly string[] DevicePaths = new[]

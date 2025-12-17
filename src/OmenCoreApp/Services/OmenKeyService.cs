@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Management;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,11 +9,17 @@ namespace OmenCore.Services
 {
     /// <summary>
     /// Service for intercepting the physical OMEN key on HP OMEN laptops.
+    /// 
+    /// Uses two methods to detect the OMEN key:
+    /// 1. Low-level keyboard hook (catches most key codes)
+    /// 2. WMI BIOS event monitoring (catches HP BIOS-level events)
     /// Uses low-level keyboard hook to detect the OMEN key press and allow
     /// custom actions instead of launching HP OMEN Gaming Hub.
     /// 
     /// The OMEN key typically sends one of:
     /// - VK_LAUNCH_APP2 (0xB7) - Media key for app launch
+    /// - VK 157 (0x9D) - Used on some OMEN models
+    /// - F24 (0x87) - Used on some OMEN models
     /// - Custom OEM key code via HP WMI
     /// </summary>
     public class OmenKeyService : IDisposable
@@ -27,14 +34,20 @@ namespace OmenCore.Services
         private string _externalAppPath = string.Empty;
         private DateTime _lastKeyPress = DateTime.MinValue;
         private const int DebounceMs = 300;
+        
+        // WMI event watcher for HP BIOS events
+        private ManagementEventWatcher? _wmiEventWatcher;
 
-        // Common key codes for OMEN key
+        // Common key codes for OMEN key (varies by laptop model)
         private const int VK_LAUNCH_APP2 = 0xB7;  // Media key often used by OEM
+        private const int VK_LAUNCH_APP1 = 0xB6;  // Some models use this
+        private const int VK_OMEN_157 = 0x9D;     // 157 decimal - some OMEN models
+        private const int VK_F24 = 0x87;          // F24 - some OMEN models
         private const int VK_OEM_1 = 0xBA;
-        private const int VK_OEM_OMEN = 0xFF;  // Some models use this
+        private const int VK_OEM_OMEN = 0xFF;     // Some models use this
 
         // HP OMEN-specific scan codes (varies by model)
-        private static readonly int[] OmenScanCodes = { 0xE045, 0xE046, 0x0046 };
+        private static readonly int[] OmenScanCodes = { 0xE045, 0xE046, 0x0046, 0x009D };
 
         #region Win32 API
 
@@ -188,6 +201,12 @@ namespace OmenCore.Services
                     return false;
                 }
 
+                // Enumerate available HP WMI event classes for diagnostics
+                EnumerateHpWmiClasses();
+                
+                // Also start WMI event monitoring for HP BIOS hotkey events
+                StartWmiEventWatcher();
+
                 _logging.Info("✓ OMEN key interception started");
                 return true;
             }
@@ -197,12 +216,135 @@ namespace OmenCore.Services
                 return false;
             }
         }
+        
+        /// <summary>
+        /// Enumerate HP-related WMI classes to help identify OMEN key event source
+        /// </summary>
+        private void EnumerateHpWmiClasses()
+        {
+            try
+            {
+                // Check root\wmi for HP/OMEN related event classes
+                using var searcher = new ManagementObjectSearcher(@"root\wmi", 
+                    "SELECT * FROM meta_class WHERE __CLASS LIKE '%BIOS%' OR __CLASS LIKE '%HP%' OR __CLASS LIKE '%OMEN%' OR __CLASS LIKE '%aborpc%'");
+                
+                var classes = new System.Collections.Generic.List<string>();
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    var className = obj["__CLASS"]?.ToString();
+                    if (!string.IsNullOrEmpty(className) && className.Contains("Event", StringComparison.OrdinalIgnoreCase))
+                    {
+                        classes.Add(className);
+                    }
+                }
+                
+                if (classes.Count > 0)
+                {
+                    _logging.Debug($"Available HP WMI event classes in root\\wmi: {string.Join(", ", classes)}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Debug($"Could not enumerate WMI classes: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Start WMI event watcher for HP BIOS events (OMEN key may fire via this path)
+        /// OmenMon uses: SELECT * FROM hpqBEvnt WHERE eventData = 8613 AND eventId = 29
+        /// </summary>
+        private void StartWmiEventWatcher()
+        {
+            _logging.Debug("Attempting to start WMI BIOS event watchers...");
+            
+            // HP OMEN key fires via hpqBEvnt WMI event class
+            // From OmenMon: eventData = 8613 AND eventId = 29
+            // 
+            // IMPORTANT: Only use queries that specifically target the OMEN key event.
+            // DO NOT use broad queries like "SELECT * FROM hpqBEvnt" as this catches
+            // ALL BIOS events (fan changes, thermal events, power state changes) and
+            // causes focus-stealing behavior where OmenCore repeatedly comes to front.
+            var wmiSources = new[]
+            {
+                // OmenMon's exact query for OMEN key - THIS IS THE ONLY SAFE OPTION
+                (@"root\wmi", "SELECT * FROM hpqBEvnt WHERE eventData = 8613 AND eventId = 29"),
+            };
+            
+            foreach (var (ns, queryStr) in wmiSources)
+            {
+                try
+                {
+                    var watcher = new ManagementEventWatcher(ns, queryStr);
+                    watcher.EventArrived += OnWmiEventArrived;
+                    watcher.Start();
+                    
+                    _wmiEventWatcher = watcher;
+                    var shortQuery = queryStr.Length > 50 ? queryStr.Substring(0, 50) + "..." : queryStr;
+                    _logging.Info($"✓ WMI event watcher started: {ns} - {shortQuery}");
+                    return; // Success, stop trying
+                }
+                catch (Exception ex)
+                {
+                    _logging.Debug($"WMI source not available ({ns}): {ex.Message}");
+                }
+            }
+            
+            // If specific OMEN key query fails, rely only on keyboard hook - much safer
+            // than catching all BIOS events which causes focus-stealing
+            _logging.Info("OMEN key WMI event not available - using keyboard hook only (safer)");
+            _logging.Debug("TIP: If OMEN key doesn't work via keyboard hook, try OmenMon's Task Scheduler trigger");
+        }
+        
+        private void TryAlternativeWmiWatcher()
+        {
+            // This is now handled in StartWmiEventWatcher
+        }
+        
+        private void OnWmiEventArrived(object sender, EventArrivedEventArgs e)
+        {
+            try
+            {
+                // Since we only register for the specific OMEN key event query
+                // (eventId=29, eventData=8613), any event we receive here IS the OMEN key
+                var eventData = e.NewEvent;
+                var className = eventData.ClassPath?.ClassName ?? "Unknown";
+                
+                _logging.Info($"🔑 OMEN key detected via WMI ({className})");
+                
+                // Debounce to prevent double-triggers
+                if ((DateTime.Now - _lastKeyPress).TotalMilliseconds < DebounceMs)
+                {
+                    _logging.Debug("OMEN key debounced (too soon after last press)");
+                    return;
+                }
+                _lastKeyPress = DateTime.Now;
+                
+                // Fire events on background thread to avoid blocking WMI
+                Task.Run(() =>
+                {
+                    OmenKeyPressed?.Invoke(this, EventArgs.Empty);
+                    ExecuteAction();
+                });
+            }
+            catch (Exception ex)
+            {
+                _logging.Debug($"WMI event processing error: {ex.Message}");
+            }
+        }
 
         /// <summary>
         /// Stop intercepting the OMEN key.
         /// </summary>
         public void StopInterception()
         {
+            // Stop WMI watcher
+            if (_wmiEventWatcher != null)
+            {
+                _wmiEventWatcher.Stop();
+                _wmiEventWatcher.Dispose();
+                _wmiEventWatcher = null;
+            }
+            
             if (_hookHandle != IntPtr.Zero)
             {
                 UnhookWindowsHookEx(_hookHandle);
@@ -217,12 +359,29 @@ namespace OmenCore.Services
             if (nCode >= 0 && _isEnabled)
             {
                 var hookStruct = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
+                int msg = wParam.ToInt32();
+                
+                // Log ALL key presses to help identify the OMEN key
+                if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
+                {
+                    // Enable verbose logging for all keys (helps identify OMEN key)
+                    // Log: all special keys, function keys, extended keys, AND high VK codes
+                    bool isSpecialKey = hookStruct.vkCode >= 0x70 ||  // F1 and above, all special keys
+                                       hookStruct.vkCode == 0x5B || hookStruct.vkCode == 0x5C || // Win keys
+                                       (hookStruct.flags & 0x01) != 0 || // Extended key
+                                       hookStruct.scanCode > 0x50; // Non-standard scan codes
+                    
+                    if (isSpecialKey)
+                    {
+                        // Use Info level temporarily to see all special key presses
+                        _logging.Info($"[KeyHook] VK=0x{hookStruct.vkCode:X2} ({hookStruct.vkCode}), Scan=0x{hookStruct.scanCode:X4}, Flags=0x{hookStruct.flags:X}");
+                    }
+                }
+                
                 bool isOmenKey = IsOmenKey(hookStruct.vkCode, hookStruct.scanCode);
 
                 if (isOmenKey)
                 {
-                    int msg = wParam.ToInt32();
-                    
                     if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
                     {
                         // Debounce check
@@ -232,7 +391,7 @@ namespace OmenCore.Services
                         }
                         _lastKeyPress = DateTime.Now;
                         
-                        _logging.Debug($"OMEN key detected: VK=0x{hookStruct.vkCode:X2}, Scan=0x{hookStruct.scanCode:X4}");
+                        _logging.Info($"🔑 OMEN key detected: VK=0x{hookStruct.vkCode:X2}, Scan=0x{hookStruct.scanCode:X4}");
                         
                         // Fire event and execute action on a separate thread to avoid blocking the hook
                         Task.Run(() => 
@@ -317,10 +476,13 @@ namespace OmenCore.Services
             
             try
             {
-                _isEnabled = _configService.Config.OmenKeyEnabled;
+                // Check both old and new config locations for backwards compatibility
+                _isEnabled = _configService.Config.Features?.OmenKeyInterceptionEnabled ?? _configService.Config.OmenKeyEnabled;
                 _externalAppPath = _configService.Config.OmenKeyExternalApp ?? string.Empty;
                 
-                if (Enum.TryParse<OmenKeyAction>(_configService.Config.OmenKeyAction, out var action))
+                // Try Features.OmenKeyAction first, fall back to OmenKeyAction
+                var actionStr = _configService.Config.Features?.OmenKeyAction ?? _configService.Config.OmenKeyAction;
+                if (Enum.TryParse<OmenKeyAction>(actionStr, out var action))
                 {
                     _currentAction = action;
                 }
@@ -362,17 +524,50 @@ namespace OmenCore.Services
                 {
                     if (scanCode == omenScan) return true;
                 }
+                
+                // Also accept any scan code with VK_LAUNCH_APP2 on OMEN devices
+                // since some models use different scan codes
+                _logging.Debug($"VK_LAUNCH_APP2 with scan code: 0x{scanCode:X4} - treating as OMEN key");
+                return true;
             }
 
             // Some OMEN models use a dedicated virtual key
             if (vkCode == VK_OEM_OMEN)
             {
+                _logging.Debug($"VK_OEM_OMEN (0xFF) detected - OMEN key");
                 return true;
             }
-
-            // Log unknown keys in debug mode to help identify OMEN key on different models
-            // Uncomment this to discover the OMEN key code on your specific laptop:
-            // _logging.Debug($"Key press: VK=0x{vkCode:X2}, Scan=0x{scanCode:X4}");
+            
+            // Some newer OMEN models use VK_LAUNCH_APP1 (0xB6)
+            if (vkCode == VK_LAUNCH_APP1)
+            {
+                _logging.Debug($"VK_LAUNCH_APP1 (0xB6) with scan code: 0x{scanCode:X4} - treating as OMEN key");
+                return true;
+            }
+            
+            // VK 157 (0x9D) - reported on some OMEN models
+            if (vkCode == VK_OMEN_157)
+            {
+                _logging.Debug($"VK 157 (0x9D) detected with scan code: 0x{scanCode:X4} - OMEN key");
+                return true;
+            }
+            
+            // F24 (0x87) - reported on some OMEN models
+            if (vkCode == VK_F24)
+            {
+                _logging.Debug($"F24 (0x87) detected with scan code: 0x{scanCode:X4} - OMEN key");
+                return true;
+            }
+            
+            // Check scan code even if VK doesn't match (some models send odd VK codes)
+            foreach (var omenScan in OmenScanCodes)
+            {
+                if (scanCode == omenScan)
+                {
+                    _logging.Debug($"OMEN scan code 0x{scanCode:X4} matched (VK=0x{vkCode:X2}) - OMEN key");
+                    return true;
+                }
+            }
 
             return false;
         }

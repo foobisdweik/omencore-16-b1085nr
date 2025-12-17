@@ -120,6 +120,32 @@ namespace OmenCore.Services
         /// </summary>
         public string? GetCurrentMode() => _currentMode;
 
+        /// <summary>
+        /// Whether EC-level power limit control is available.
+        /// When false, performance modes only change Windows power plan and fan policy.
+        /// </summary>
+        public bool EcPowerControlAvailable => _powerLimitController != null && _powerLimitController.IsAvailable;
+        
+        /// <summary>
+        /// Get a human-readable description of what controls are available.
+        /// Useful for UI to show users what changing performance mode actually does.
+        /// </summary>
+        public string ControlCapabilityDescription
+        {
+            get
+            {
+                var capabilities = new List<string> { "Windows Power Plan" };
+                
+                if (_fanController.IsAvailable)
+                    capabilities.Add("Fan Policy");
+                    
+                if (_powerLimitController != null && _powerLimitController.IsAvailable)
+                    capabilities.Add("CPU/GPU Power Limits");
+                    
+                return string.Join(", ", capabilities);
+            }
+        }
+
         public IReadOnlyList<PerformanceMode> GetModes(AppConfig config) => config.PerformanceModes;
     }
 }

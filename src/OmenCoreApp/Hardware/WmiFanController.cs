@@ -100,6 +100,11 @@ namespace OmenCore.Hardware
                 // For Max preset, we need to:
                 // 1. First set Performance mode (for aggressive thermal management)
                 // 2. Then enable SetFanMax for 100% immediate fan speed
+                // 
+                // NOTE: We intentionally do NOT change GPU power here.
+                // "Max cooling" means maximum fan speed to reduce temps, not increased GPU power.
+                // Increasing GPU power (TGP/PPAB) would generate MORE heat, counteracting cooling.
+                // User can independently control GPU power via the dedicated GPU Power settings.
                 
                 if (isMaxPreset)
                 {
@@ -116,9 +121,7 @@ namespace OmenCore.Hardware
                     {
                         _logging?.Info("✓ Max fan speed enabled - fans should ramp to 100%");
                         IsManualControlActive = true; // Mark as manual since we're forcing max
-                        
-                        // Apply GPU power for maximum cooling
-                        _wmiBios.SetGpuPower(HpWmiBios.GpuPowerLevel.Maximum);
+                        // GPU power left unchanged - max fans is for COOLING, not more power
                         return true;
                     }
                     else

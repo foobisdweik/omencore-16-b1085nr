@@ -46,6 +46,8 @@ namespace OmenCore.Services
         public bool IsEnabled => _config.Config.Osd.Enabled;
         public bool IsVisible => _isVisible;
         
+        private Func<OmenCore.Models.MonitoringSample?>? _getMonitoringSample;
+        
         public OsdService(
             ConfigurationService config, 
             LoggingService logging,
@@ -56,6 +58,15 @@ namespace OmenCore.Services
             _logging = logging;
             _thermalProvider = thermalProvider;
             _fanService = fanService;
+        }
+        
+        /// <summary>
+        /// Set the monitoring sample source for accurate CPU/GPU load data
+        /// </summary>
+        public void SetMonitoringSampleSource(Func<OmenCore.Models.MonitoringSample?> getMonitoringSample)
+        {
+            _getMonitoringSample = getMonitoringSample;
+            _overlayWindow?.SetMonitoringSampleSource(getMonitoringSample);
         }
         
         /// <summary>
@@ -77,6 +88,10 @@ namespace OmenCore.Services
                     _config.Config.Osd,
                     _thermalProvider,
                     _fanService);
+                
+                // Pass monitoring sample source if available
+                if (_getMonitoringSample != null)
+                    _overlayWindow.SetMonitoringSampleSource(_getMonitoringSample);
                 
                 // Register global hotkey
                 RegisterToggleHotkey();
@@ -132,6 +147,50 @@ namespace OmenCore.Services
                 Hide();
             else
                 Show();
+        }
+        
+        /// <summary>
+        /// Update the current mode displayed on OSD
+        /// </summary>
+        public void SetCurrentMode(string mode)
+        {
+            Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                _overlayWindow?.SetCurrentMode(mode);
+            });
+        }
+        
+        /// <summary>
+        /// Update the performance mode displayed on OSD
+        /// </summary>
+        public void SetPerformanceMode(string mode)
+        {
+            Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                _overlayWindow?.SetPerformanceMode(mode);
+            });
+        }
+        
+        /// <summary>
+        /// Update the fan mode displayed on OSD
+        /// </summary>
+        public void SetFanMode(string mode)
+        {
+            Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                _overlayWindow?.SetFanMode(mode);
+            });
+        }
+        
+        /// <summary>
+        /// Update OSD settings at runtime
+        /// </summary>
+        public void UpdateSettings()
+        {
+            Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                _overlayWindow?.UpdateSettings(_config.Config.Osd);
+            });
         }
         
         /// <summary>

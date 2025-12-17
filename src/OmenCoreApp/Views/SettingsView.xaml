@@ -14,10 +14,16 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <TextBlock Grid.Row="0" Text="Settings" 
-                   FontSize="28" FontWeight="Bold" 
-                   Foreground="{StaticResource TextPrimaryBrush}" 
-                   Margin="0,0,0,16"/>
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="Settings" 
+                       FontSize="28" FontWeight="Bold" 
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="Configure application behavior, startup options, and driver settings" 
+                       FontSize="12" 
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       Opacity="0.9"
+                       Margin="0,4,0,0"/>
+        </StackPanel>
 
         <ScrollViewer Grid.Row="1" Style="{StaticResource SmoothScrollViewer}" utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="1.2">
             <StackPanel>
@@ -67,7 +73,7 @@
                                 <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
-                                            <Setter Property="Text" Value="Secure Boot is disabled - WinRing0 driver available"/>
+                                            <Setter Property="Text" Value="Secure Boot is disabled - legacy drivers available"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding SecureBootEnabled}" Value="True">
                                                     <Setter Property="Text" Value="Secure Boot blocks unsigned drivers. Use PawnIO or WMI BIOS."/>
@@ -156,6 +162,14 @@
                                            Foreground="{StaticResource TextPrimaryBrush}"/>
                                 <TextBlock Text="HP's official control software - provides WMI access" FontSize="12" 
                                            Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <!-- Show detection detail when OGH is detected -->
+                                <TextBlock Text="{Binding OghDetectionDetail}" 
+                                           FontSize="10" 
+                                           Foreground="#FF9800"
+                                           FontFamily="Consolas"
+                                           Margin="0,4,0,0"
+                                           TextWrapping="Wrap"
+                                           Visibility="{Binding OghInstalled, Converter={StaticResource BoolToVisibility}}"/>
                             </StackPanel>
                             <Border Grid.Column="1" CornerRadius="4" Padding="12,6">
                                 <Border.Style>
@@ -163,7 +177,7 @@
                                         <Setter Property="Background" Value="#1A808080"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding OghInstalled}" Value="True">
-                                                <Setter Property="Background" Value="#1A4CAF50"/>
+                                                <Setter Property="Background" Value="#1AFF9800"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -171,12 +185,12 @@
                                 <TextBlock FontSize="13" FontWeight="SemiBold">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
-                                            <Setter Property="Text" Value="Not Installed"/>
+                                            <Setter Property="Text" Value="Not Detected"/>
                                             <Setter Property="Foreground" Value="#808080"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding OghInstalled}" Value="True">
-                                                    <Setter Property="Text" Value="✓ Installed"/>
-                                                    <Setter Property="Foreground" Value="#4CAF50"/>
+                                                    <Setter Property="Text" Value="⚠ Running"/>
+                                                    <Setter Property="Foreground" Value="#FF9800"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -248,6 +262,23 @@
                             <ToggleButton Grid.Column="1" 
                                           Style="{StaticResource ModernToggleButton}"
                                           IsChecked="{Binding MinimizeToTrayOnClose}"/>
+                        </Grid>
+
+                        <!-- Show Temperature on Tray Icon -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Show temperature on tray icon" FontSize="14" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="Display live CPU/GPU temperature on the system tray icon" FontSize="12" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1" 
+                                          Style="{StaticResource ModernToggleButton}"
+                                          IsChecked="{Binding TrayTempDisplayEnabled}"/>
                         </Grid>
                     </StackPanel>
                 </Border>
@@ -703,12 +734,11 @@
                                    Foreground="{StaticResource TextSecondaryBrush}" 
                                    Margin="0,0,0,12">
                             On modern Windows systems, Secure Boot and Memory Integrity can block legacy drivers.
-                            OmenCore prefers driverless control paths (WMI/OGH) when available, and recommends PawnIO for Secure Boot compatible EC access.
-                            WinRing0 is a legacy fallback for certain features.
+                            OmenCore prefers driverless control paths (WMI/OGH) when available, and recommends PawnIO for Secure Boot compatible MSR/EC access.
                         </TextBlock>
 
                         <StackPanel Orientation="Horizontal">
-                            <Button Content="📥 Get Driver Backend (PawnIO / LibreHardwareMonitor)" 
+                            <Button Content="📥 Get PawnIO (Recommended)" 
                                     Style="{StaticResource ModernButton}"
                                     Background="#9575CD"
                                     Command="{Binding InstallDriverCommand}"
@@ -968,9 +998,9 @@
                         <!-- Scanning Progress -->
                         <StackPanel Visibility="{Binding IsScanningBloatware, Converter={StaticResource BooleanToVisibilityConverter}}"
                                     Margin="0,16,0,0">
-                            <TextBlock Text="Scanning for HP bloatware packages..." 
-                                       FontSize="14" 
-                                       Foreground="{StaticResource TextPrimaryBrush}"
+                            <TextBlock Text="{Binding BloatwareProgress}" 
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="#42A5F5"
                                        Margin="0,0,0,8"/>
                             <ProgressBar IsIndeterminate="True" Height="8"
                                          Foreground="#42A5F5"/>
@@ -1060,9 +1090,8 @@
                                           IsChecked="{Binding KeyboardLightingEnabled}"/>
                         </Grid>
                         
-                        <!-- Experimental EC Keyboard - WARNING SECTION -->
-                        <Border Background="#1AFF6B00" CornerRadius="8" Padding="16" Margin="0,8,0,12"
-                                Visibility="{Binding KeyboardLightingEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <!-- Experimental EC Keyboard - WARNING SECTION (Always visible to help users) -->
+                        <Border Background="#1AFF6B00" CornerRadius="8" Padding="16" Margin="0,8,0,12">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                     <TextBlock Text="⚠️" FontSize="18" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -1092,6 +1121,26 @@
                                                   Style="{StaticResource ModernToggleButton}"
                                                   IsChecked="{Binding ExperimentalEcKeyboardEnabled}"
                                                   VerticalAlignment="Center"/>
+                                </Grid>
+                                
+                                <!-- Keyboard Backend Selector -->
+                                <Grid Margin="0,12,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Keyboard Backend" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap">
+                                            <Run Text="Auto = WMI BIOS → WMI → EC. Set specific if auto-detection fails."/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" 
+                                              Width="110"
+                                              VerticalAlignment="Center"
+                                              ItemsSource="{Binding KeyboardBackendOptions}"
+                                              SelectedItem="{Binding PreferredKeyboardBackend}"/>
                                 </Grid>
                                 
                                 <TextBlock Text="💡 Safe alternative: Use HP Omen Gaming Hub for keyboard lighting" 
@@ -1280,13 +1329,40 @@
                                 <!-- Metrics Selection -->
                                 <TextBlock Text="Metrics to Display" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}" Margin="0,4,0,8"/>
-                                <WrapPanel>
-                                    <CheckBox Content="CPU Temp" IsChecked="{Binding OsdShowCpuTemp}" Margin="0,0,16,8"/>
-                                    <CheckBox Content="GPU Temp" IsChecked="{Binding OsdShowGpuTemp}" Margin="0,0,16,8"/>
-                                    <CheckBox Content="CPU Load" IsChecked="{Binding OsdShowCpuLoad}" Margin="0,0,16,8"/>
-                                    <CheckBox Content="GPU Load" IsChecked="{Binding OsdShowGpuLoad}" Margin="0,0,16,8"/>
-                                    <CheckBox Content="Fan Speed" IsChecked="{Binding OsdShowFanSpeed}" Margin="0,0,16,8"/>
-                                    <CheckBox Content="RAM Usage" IsChecked="{Binding OsdShowRamUsage}" Margin="0,0,16,8"/>
+                                
+                                <!-- Temperature & Load -->
+                                <TextBlock Text="Temperature &amp; Load" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,0,0,4"/>
+                                <WrapPanel Margin="0,0,0,8">
+                                    <CheckBox Content="CPU Temp" IsChecked="{Binding OsdShowCpuTemp}" Margin="0,0,16,4"/>
+                                    <CheckBox Content="GPU Temp" IsChecked="{Binding OsdShowGpuTemp}" Margin="0,0,16,4"/>
+                                    <CheckBox Content="CPU Load %" IsChecked="{Binding OsdShowCpuLoad}" Margin="0,0,16,4"/>
+                                    <CheckBox Content="GPU Load %" IsChecked="{Binding OsdShowGpuLoad}" Margin="0,0,16,4"/>
+                                </WrapPanel>
+                                
+                                <!-- Power & Memory -->
+                                <TextBlock Text="Power &amp; Memory" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,4,0,4"/>
+                                <WrapPanel Margin="0,0,0,8">
+                                    <CheckBox Content="CPU Power (W)" IsChecked="{Binding OsdShowCpuPower}" Margin="0,0,16,4"/>
+                                    <CheckBox Content="GPU Power (W)" IsChecked="{Binding OsdShowGpuPower}" Margin="0,0,16,4"/>
+                                    <CheckBox Content="RAM Usage" IsChecked="{Binding OsdShowRamUsage}" Margin="0,0,16,4"/>
+                                    <CheckBox Content="VRAM Usage" IsChecked="{Binding OsdShowVramUsage}" Margin="0,0,16,4"/>
+                                </WrapPanel>
+                                
+                                <!-- Performance -->
+                                <TextBlock Text="Performance" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,4,0,4"/>
+                                <WrapPanel Margin="0,0,0,8">
+                                    <CheckBox Content="Est. FPS" IsChecked="{Binding OsdShowFps}" Margin="0,0,16,4"/>
+                                    <CheckBox Content="Frametime (ms)" IsChecked="{Binding OsdShowFrametime}" Margin="0,0,16,4"/>
+                                    <CheckBox Content="Network Ping" IsChecked="{Binding OsdShowNetworkLatency}" Margin="0,0,16,4"/>
+                                </WrapPanel>
+                                
+                                <!-- System Status -->
+                                <TextBlock Text="System Status" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,4,0,4"/>
+                                <WrapPanel Margin="0,0,0,4">
+                                    <CheckBox Content="Fan Speed (RPM)" IsChecked="{Binding OsdShowFanSpeed}" Margin="0,0,16,4"/>
+                                    <CheckBox Content="Fan Mode" IsChecked="{Binding OsdShowFanMode}" Margin="0,0,16,4"/>
+                                    <CheckBox Content="Perf. Mode" IsChecked="{Binding OsdShowPerformanceMode}" Margin="0,0,16,4"/>
+                                    <CheckBox Content="Clock Time" IsChecked="{Binding OsdShowTime}" Margin="0,0,16,4"/>
                                 </WrapPanel>
                             </StackPanel>
                         </Border>
@@ -1522,11 +1598,19 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Grid.Column="0" 
-                                       Text="{Binding CleanupStatusText}" 
-                                       FontSize="12" 
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="{Binding CleanupStatusText}" 
+                                           FontSize="12" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           VerticalAlignment="Center"/>
+                                <!-- Progress indicator during cleanup -->
+                                <ProgressBar IsIndeterminate="True" 
+                                             Height="4" 
+                                             Margin="0,8,24,0"
+                                             Background="#1AFFFFFF"
+                                             Foreground="#FF9800"
+                                             Visibility="{Binding CleanupInProgress, Converter={StaticResource BoolToVisibility}}"/>
+                            </StackPanel>
                             
                             <Button Grid.Column="1" 
                                     Content="🗑️ Run Cleanup" 
@@ -1535,6 +1619,45 @@
                                     Padding="16,8"
                                     Background="OrangeRed"/>
                         </Grid>
+                        
+                        <!-- Cleanup Steps Log (visible during/after cleanup) -->
+                        <Border Background="#0AFFFFFF" 
+                                CornerRadius="6" 
+                                Padding="12" 
+                                Margin="0,12,0,0"
+                                MaxHeight="200"
+                                Visibility="{Binding HasCleanupSteps, Converter={StaticResource BoolToVisibility}}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding OmenCleanupSteps}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding}" 
+                                                       FontSize="11" 
+                                                       FontFamily="Consolas"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       Margin="0,2"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
+                        
+                        <!-- Restart prompt after cleanup -->
+                        <Border Background="#1A2196F3" 
+                                CornerRadius="6" 
+                                Padding="12" 
+                                Margin="0,12,0,0"
+                                Visibility="{Binding CleanupComplete, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="💡 Restart recommended to complete cleanup" 
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="#2196F3"/>
+                                <TextBlock Text="Some components may still be running until you restart Windows." 
+                                           FontSize="11" 
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
 

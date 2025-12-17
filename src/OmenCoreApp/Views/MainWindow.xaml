@@ -29,11 +29,13 @@
             
             <!-- Custom Title Bar -->
             <Border Grid.Row="0" Background="{StaticResource SurfaceDarkBrush}" CornerRadius="12,12,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
-                <Grid Height="40">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0">
-                        <Image Source="pack://application:,,,/Assets/logo-small.png" Width="28" Height="28" Margin="0,0,10,0" />
-                        <TextBlock Text="OmenCore" FontSize="15" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding AppVersionLabel}" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="8,1,0,0" Opacity="0.8" />
+                <Grid Height="44">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0">
+                        <Image Source="pack://application:,,,/Assets/logo-small.png" Width="26" Height="26" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="HighQuality" />
+                        <TextBlock Text="OmenCore" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                        <Border Background="{StaticResource SurfaceMediumBrush}" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding AppVersionLabel}" FontSize="10" Foreground="{StaticResource AccentBrush}" FontWeight="Medium" />
+                        </Border>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,4,0">
                         <Button Content="—" Click="MinimizeButton_Click" Style="{StaticResource WindowControlButton}" ToolTip="Minimize" FontSize="12" />
@@ -45,17 +47,17 @@
 
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="200" MinWidth="180" MaxWidth="240" />
+                    <ColumnDefinition Width="260" MinWidth="230" MaxWidth="300" />
                     <ColumnDefinition Width="*" MinWidth="800" />
                 </Grid.ColumnDefinitions>
 
                 <!-- Sidebar -->
                 <Border Grid.Column="0" Background="{StaticResource SurfaceDarkBrush}" CornerRadius="0,0,0,12">
-                    <DockPanel LastChildFill="True" Margin="12,8,12,8">
-                        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6" HorizontalAlignment="Center">
-                            <Image Source="pack://application:,,,/Assets/logo.png" Width="44" Height="44" Stretch="Uniform" />
-                            <TextBlock Text="OmenCore" Foreground="{StaticResource TextPrimaryBrush}" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,4,0,0" />
-                            <TextBlock Text="Gaming Control" Foreground="{StaticResource TextTertiaryBrush}" FontSize="9" HorizontalAlignment="Center" Margin="0,1,0,0" />
+                    <DockPanel LastChildFill="True" Margin="12,10,12,10">
+                        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8" HorizontalAlignment="Center">
+                            <Image Source="pack://application:,,,/Assets/logo.png" Width="56" Height="56" Stretch="Uniform" />
+                            <TextBlock Text="OmenCore" Foreground="{StaticResource TextPrimaryBrush}" FontSize="15" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,6,0,0" />
+                            <TextBlock Text="Gaming Control" Foreground="{StaticResource TextTertiaryBrush}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0" />
                             
                             <!-- System Status Indicator -->
                             <Border Background="{StaticResource SurfaceMediumBrush}"
@@ -63,7 +65,7 @@
                                     BorderThickness="1"
                                     CornerRadius="5"
                                     Padding="6,5"
-                                    Margin="0,5,0,0">
+                                    Margin="0,8,0,0">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,4">
                                         <Grid.ColumnDefinitions>
@@ -118,32 +120,32 @@
                                 </StackPanel>
                             </Border>
                         </StackPanel>
-                        <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                            <Button Command="{Binding CheckForUpdatesCommand}" Style="{StaticResource SecondaryButton}" Height="28" Margin="0,0,0,4" ToolTip="Manually check for a new version">
+                        <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+                            <Button Command="{Binding CheckForUpdatesCommand}" Style="{StaticResource SecondaryButton}" Height="30" Margin="0,0,0,5" ToolTip="Manually check for a new version">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Data="{StaticResource IconUpdate}" Width="12" Height="12" Fill="{StaticResource TextSecondaryBrush}" Stretch="Uniform" Margin="0,0,6,0"/>
                                     <TextBlock Text="Check for Updates" FontSize="10" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button Command="{Binding OpenGameProfileManagerCommand}" Style="{StaticResource SecondaryButton}" Height="28" Margin="0,0,0,4" ToolTip="Manage per-game settings">
+                            <Button Command="{Binding OpenGameProfileManagerCommand}" Style="{StaticResource SecondaryButton}" Height="30" Margin="0,0,0,5" ToolTip="Manage per-game settings">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Data="{StaticResource IconGamepad}" Width="12" Height="12" Fill="{StaticResource AccentBrush}" Stretch="Uniform" Margin="0,0,6,0"/>
                                     <TextBlock Text="Game Profiles" FontSize="10" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button Command="{Binding ExportConfigurationCommand}" Style="{StaticResource SecondaryButton}" Height="28" Margin="0,0,0,4">
+                            <Button Command="{Binding ExportConfigurationCommand}" Style="{StaticResource SecondaryButton}" Height="30" Margin="0,0,0,5">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Data="{StaticResource IconExport}" Width="12" Height="12" Fill="{StaticResource TextSecondaryBrush}" Stretch="Uniform" Margin="0,0,6,0"/>
                                     <TextBlock Text="Export Config" FontSize="10" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button Command="{Binding ImportConfigurationCommand}" Style="{StaticResource SecondaryButton}" Height="28" Margin="0,0,0,4">
+                            <Button Command="{Binding ImportConfigurationCommand}" Style="{StaticResource SecondaryButton}" Height="30" Margin="0,0,0,5">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Data="{StaticResource IconImport}" Width="12" Height="12" Fill="{StaticResource TextSecondaryBrush}" Stretch="Uniform" Margin="0,0,6,0"/>
                                     <TextBlock Text="Import Config" FontSize="10" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
-                            <Button Command="{Binding OpenAboutCommand}" Style="{StaticResource SecondaryButton}" Height="28">
+                            <Button Command="{Binding OpenAboutCommand}" Style="{StaticResource SecondaryButton}" Height="30">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Data="{StaticResource IconAbout}" Width="12" Height="12" Fill="{StaticResource AccentBlueBrush}" Stretch="Uniform" Margin="0,0,6,0"/>
                                     <TextBlock Text="About" FontSize="10" VerticalAlignment="Center"/>
@@ -152,7 +154,7 @@
                         </StackPanel>
                         <ScrollViewer Style="{StaticResource SmoothScrollViewer}" utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="1.2">
                             <StackPanel>
-                                <TextBlock Text="QUICK ACTIONS" Foreground="{StaticResource TextTertiaryBrush}" FontSize="8" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBlock Text="QUICK ACTIONS" Foreground="{StaticResource TextTertiaryBrush}" FontSize="8" FontWeight="SemiBold" Margin="0,4,0,6" />
                                 <Button Command="{Binding ApplyFanPresetCommand}" Style="{StaticResource ModernButton}" Margin="0,0,0,3" HorizontalContentAlignment="Left" Padding="6,4" Height="26">
                                     <StackPanel Orientation="Horizontal">
                                         <Path Data="{StaticResource IconFan}" Width="12" Height="12" Fill="{StaticResource TextPrimaryBrush}" Stretch="Uniform" Margin="0,0,6,0"/>
@@ -185,7 +187,7 @@
                                 </Button>
                                 
                                 <!-- System Information -->
-                                <TextBlock Text="SYSTEM INFO" Foreground="{StaticResource TextTertiaryBrush}" FontSize="8" FontWeight="SemiBold" Margin="0,10,0,4" />
+                                <TextBlock Text="SYSTEM INFO" Foreground="{StaticResource TextTertiaryBrush}" FontSize="8" FontWeight="SemiBold" Margin="0,14,0,6" />
                                 <Border Style="{StaticResource SurfaceCard}" Padding="8">
                                     <StackPanel>
                                         <!-- HP OMEN Model (shown for HP gaming systems) -->

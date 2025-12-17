@@ -17,6 +17,7 @@ namespace OmenCore.ViewModels
         private readonly PerformanceModeService _performanceModeService;
         private readonly LoggingService _logging;
         private readonly ConfigurationService _configService;
+        private readonly SystemInfoService? _systemInfoService;
         private readonly DispatcherTimer _updateTimer;
         private FanControlViewModel? _fanControlViewModel;
 
@@ -34,12 +35,14 @@ namespace OmenCore.ViewModels
             FanService fanService,
             PerformanceModeService performanceModeService,
             ConfigurationService configService,
-            LoggingService logging)
+            LoggingService logging,
+            SystemInfoService? systemInfoService = null)
         {
             _fanService = fanService;
             _performanceModeService = performanceModeService;
             _configService = configService;
             _logging = logging;
+            _systemInfoService = systemInfoService;
 
             // Use timer to poll telemetry updates (avoids protected CollectionChanged issue)
             _updateTimer = new DispatcherTimer
@@ -64,6 +67,30 @@ namespace OmenCore.ViewModels
         public void SetFanControlViewModel(FanControlViewModel? fanControlViewModel)
         {
             _fanControlViewModel = fanControlViewModel;
+        }
+        
+        /// <summary>
+        /// Returns the brand logo path based on detected system type.
+        /// HP Spectre systems get the Spectre logo, others get OMEN logo.
+        /// </summary>
+        public string BrandLogoPath
+        {
+            get
+            {
+                try
+                {
+                    var sysInfo = _systemInfoService?.GetSystemInfo();
+                    if (sysInfo?.IsHpSpectre == true)
+                    {
+                        return "pack://application:,,,/Assets/spectre.png";
+                    }
+                }
+                catch
+                {
+                    // Fallback to OMEN logo on any detection failure
+                }
+                return "pack://application:,,,/Assets/omen.png";
+            }
         }
 
         #region Properties

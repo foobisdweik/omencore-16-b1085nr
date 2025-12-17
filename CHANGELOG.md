@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.0-beta] - 2025-12-17
+
+### Added
+- **🔍 OmenCap.exe Detection** - Detects HP OmenCap running from Windows DriverStore
+  - This component persists after OGH uninstall and blocks MSR access
+  - Shows warning with detailed removal instructions
+  - Prevents false "XTU blocking undervolt" errors
+- **🧹 DriverStore Cleanup Info** - OGH cleanup now detects OmenCap in DriverStore
+  - Provides pnputil commands for complete removal
+  - Logs detailed instructions for manual cleanup
+- **🔧 Experimental EC Keyboard Setting** - Now always visible in Settings > Features
+  - Previously was hidden until Keyboard Lighting was enabled
+
+### Fixed
+- **💥 System Tray Crash** - Fixed crash when right-clicking tray icon
+  - Bad ControlTemplate tried to put Popup inside Border
+  - Replaced with simpler style-based approach
+- **📐 Sidebar Width** - Increased sidebar from 200px to 230px for better readability
+- **🔢 Version Display** - Updated to v1.5.0-beta throughout app
+
+### Changed
+- Process kill list now includes OmenCap.exe
+- Undervolt provider detects OmenCap as external controller
+- SystemControl view shows specific OmenCap removal instructions
+
+See [CHANGELOG_v1.5.0-beta.md](docs/CHANGELOG_v1.5.0-beta.md) for full details.
+
+---
+
 ## [1.4.0-beta] - 2025-12-16
 
 ### Added

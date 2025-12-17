@@ -1,7 +1,9 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using OmenCore.Corsair;
@@ -9,6 +11,7 @@ using OmenCore.Logitech;
 using OmenCore.Models;
 using OmenCore.Services;
 using OmenCore.Utils;
+using OmenCore.Views;
 
 namespace OmenCore.ViewModels
 {
@@ -17,6 +20,7 @@ namespace OmenCore.ViewModels
         private readonly CorsairDeviceService _corsairService;
         private readonly LogitechDeviceService _logitechService;
         private readonly KeyboardLightingService? _keyboardLightingService;
+        private readonly ConfigurationService? _configService;
         private readonly LoggingService _logging;
         
         private CorsairDevice? _selectedCorsairDevice;
@@ -322,12 +326,16 @@ namespace OmenCore.ViewModels
         public ICommand SetZone3ColorCommand { get; }
         public ICommand SetZone4ColorCommand { get; }
 
-        public LightingViewModel(CorsairDeviceService corsairService, LogitechDeviceService logitechService, LoggingService logging, KeyboardLightingService? keyboardLightingService = null)
+        public LightingViewModel(CorsairDeviceService corsairService, LogitechDeviceService logitechService, LoggingService logging, KeyboardLightingService? keyboardLightingService = null, ConfigurationService? configService = null)
         {
             _corsairService = corsairService;
             _logitechService = logitechService;
             _keyboardLightingService = keyboardLightingService;
+            _configService = configService;
             _logging = logging;
+            
+            // Load saved keyboard colors from config
+            LoadKeyboardColorsFromConfig();
 
             DiscoverCorsairCommand = new AsyncRelayCommand(async _ => await _corsairService.DiscoverAsync());
             DiscoverCorsairDevicesCommand = new AsyncRelayCommand(async _ => await _corsairService.DiscoverAsync());
@@ -343,10 +351,10 @@ namespace OmenCore.ViewModels
             // 4-Zone Keyboard Commands
             ApplyKeyboardColorsCommand = new AsyncRelayCommand(async _ => await ApplyKeyboardColorsAsync());
             ApplyAllZonesSameColorCommand = new AsyncRelayCommand(async _ => await ApplyAllZonesSameColorAsync());
-            SetZone1ColorCommand = new RelayCommand(_ => { }); // Color picker handles this via binding
-            SetZone2ColorCommand = new RelayCommand(_ => { });
-            SetZone3ColorCommand = new RelayCommand(_ => { });
-            SetZone4ColorCommand = new RelayCommand(_ => { });
+            SetZone1ColorCommand = new RelayCommand(_ => OpenColorPickerForZone(1, "WASD"));
+            SetZone2ColorCommand = new RelayCommand(_ => OpenColorPickerForZone(2, "Left"));
+            SetZone3ColorCommand = new RelayCommand(_ => OpenColorPickerForZone(3, "Right"));
+            SetZone4ColorCommand = new RelayCommand(_ => OpenColorPickerForZone(4, "Far Right"));
 
             // Initialize lighting presets
             CorsairLightingPresets.Add(new CorsairLightingPreset { Name = "Red", ColorHex = "#FF0000" });
@@ -376,6 +384,49 @@ namespace OmenCore.ViewModels
             MacroProfiles.Add(new MacroProfile { Name = "Gaming" });
             MacroProfiles.Add(new MacroProfile { Name = "Productivity" });
             SelectedMacroProfile = MacroProfiles.FirstOrDefault();
+        }
+
+        private void OpenColorPickerForZone(int zoneNumber, string zoneName)
+        {
+            // Get the current color for this zone
+            string currentColor = zoneNumber switch
+            {
+                1 => Zone1ColorHex,
+                2 => Zone2ColorHex,
+                3 => Zone3ColorHex,
+                4 => Zone4ColorHex,
+                _ => "#E6002E"
+            };
+
+            // Create and show the color picker dialog
+            var dialog = new ColorPickerDialog
+            {
+                Owner = Application.Current.MainWindow
+            };
+            dialog.SetZoneInfo(zoneNumber, zoneName);
+            dialog.SetInitialColor(currentColor);
+
+            if (dialog.ShowDialog() == true && dialog.DialogResultOk)
+            {
+                // Update the zone color
+                switch (zoneNumber)
+                {
+                    case 1:
+                        Zone1ColorHex = dialog.SelectedHexColor;
+                        break;
+                    case 2:
+                        Zone2ColorHex = dialog.SelectedHexColor;
+                        break;
+                    case 3:
+                        Zone3ColorHex = dialog.SelectedHexColor;
+                        break;
+                    case 4:
+                        Zone4ColorHex = dialog.SelectedHexColor;
+                        break;
+                }
+                
+                _logging.Info($"Zone {zoneNumber} color set to {dialog.SelectedHexColor}");
+            }
         }
 
         private void UpdateLogitechHexFromRgb()
@@ -456,15 +507,31 @@ namespace OmenCore.ViewModels
             
             await ExecuteWithLoadingAsync(async () =>
             {
+                // WMI Zone mapping (per HP BIOS/OmenMon):
+                // WMI Z0 = Right (arrows, nav block, right modifiers)
+                // WMI Z1 = Middle-R (right QWERTY: F6-F12, Y-P area)
+                // WMI Z2 = Middle-L (left QWERTY: F1-F5, Q-T area)  
+                // WMI Z3 = WASD (W/A/S/D keys area)
+                //
+                // UI Zone mapping (user-facing):
+                // Zone1 = WASD (left-most, where WASD is)
+                // Zone2 = Middle-L (left QWERTY area)
+                // Zone3 = Middle-R (right QWERTY area)
+                // Zone4 = Right (arrows, numpad area)
+                //
+                // So we need to reorder: UI [Z1,Z2,Z3,Z4] -> WMI [Z4,Z3,Z2,Z1]
                 var colors = new System.Drawing.Color[]
                 {
-                    ParseDrawingColor(_zone1ColorHex),
-                    ParseDrawingColor(_zone2ColorHex),
-                    ParseDrawingColor(_zone3ColorHex),
-                    ParseDrawingColor(_zone4ColorHex)
+                    ParseDrawingColor(_zone4ColorHex), // WMI Z0 (Right) = UI Zone4
+                    ParseDrawingColor(_zone3ColorHex), // WMI Z1 (Middle-R) = UI Zone3
+                    ParseDrawingColor(_zone2ColorHex), // WMI Z2 (Middle-L) = UI Zone2
+                    ParseDrawingColor(_zone1ColorHex)  // WMI Z3 (WASD) = UI Zone1
                 };
                 
                 _keyboardLightingService.SetAllZoneColors(colors);
+                
+                // Save colors to config for persistence
+                SaveKeyboardColorsToConfig();
                 
                 // Log telemetry to help user understand which backend works
                 var telemetry = _keyboardLightingService.GetTelemetry();
@@ -503,9 +570,94 @@ namespace OmenCore.ViewModels
                 Zone3ColorHex = _zone1ColorHex;
                 Zone4ColorHex = _zone1ColorHex;
                 
+                // Save colors to config for persistence
+                SaveKeyboardColorsToConfig();
+                
                 _logging.Info($"✓ Applied {_zone1ColorHex} to all keyboard zones");
                 await Task.CompletedTask;
             }, "Applying color to all zones...");
+        }
+        
+        private void LoadKeyboardColorsFromConfig()
+        {
+            try
+            {
+                var config = _configService?.Config?.KeyboardLighting;
+                if (config == null) return;
+                
+                _zone1ColorHex = config.Zone1Color ?? "#E6002E";
+                _zone2ColorHex = config.Zone2Color ?? "#E6002E";
+                _zone3ColorHex = config.Zone3Color ?? "#E6002E";
+                _zone4ColorHex = config.Zone4Color ?? "#E6002E";
+                
+                _logging.Info($"Loaded keyboard colors from config: Z1={_zone1ColorHex}, Z2={_zone2ColorHex}, Z3={_zone3ColorHex}, Z4={_zone4ColorHex}");
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to load keyboard colors: {ex.Message}");
+            }
+        }
+        
+        private void SaveKeyboardColorsToConfig()
+        {
+            try
+            {
+                if (_configService == null) return;
+                
+                if (_configService.Config.KeyboardLighting == null)
+                    _configService.Config.KeyboardLighting = new KeyboardLightingSettings();
+                
+                _configService.Config.KeyboardLighting.Zone1Color = _zone1ColorHex;
+                _configService.Config.KeyboardLighting.Zone2Color = _zone2ColorHex;
+                _configService.Config.KeyboardLighting.Zone3Color = _zone3ColorHex;
+                _configService.Config.KeyboardLighting.Zone4Color = _zone4ColorHex;
+                
+                _configService.Save(_configService.Config);
+                _logging.Info("Keyboard colors saved to config");
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to save keyboard colors: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Applies saved keyboard colors on app startup.
+        /// Call this after the keyboard lighting service is ready.
+        /// </summary>
+        public async Task ApplySavedKeyboardColorsAsync()
+        {
+            try
+            {
+                var config = _configService?.Config?.KeyboardLighting;
+                if (config == null || !config.ApplyOnStartup)
+                {
+                    _logging.Info("Keyboard color restore disabled or no saved colors");
+                    return;
+                }
+                
+                if (_keyboardLightingService == null || !_keyboardLightingService.IsAvailable)
+                {
+                    _logging.Warn("Keyboard lighting not available for color restore");
+                    return;
+                }
+                
+                // Apply the saved colors
+                var colors = new System.Drawing.Color[]
+                {
+                    ParseDrawingColor(_zone1ColorHex),
+                    ParseDrawingColor(_zone2ColorHex),
+                    ParseDrawingColor(_zone3ColorHex),
+                    ParseDrawingColor(_zone4ColorHex)
+                };
+                
+                _keyboardLightingService.SetAllZoneColors(colors);
+                _logging.Info($"✓ Restored keyboard colors on startup: Z1={_zone1ColorHex}, Z2={_zone2ColorHex}, Z3={_zone3ColorHex}, Z4={_zone4ColorHex}");
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to restore keyboard colors: {ex.Message}");
+            }
         }
         
         private void ApplyKeyboardPresetColors(KeyboardPreset preset)

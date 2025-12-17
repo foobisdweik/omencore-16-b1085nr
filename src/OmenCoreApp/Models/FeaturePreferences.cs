@@ -76,12 +76,18 @@ namespace OmenCore.Models
         /// Enable OMEN key interception.
         /// When enabled, pressing the OMEN key shows OmenCore instead of HP OMEN Gaming Hub.
         /// </summary>
-        public bool OmenKeyInterceptionEnabled { get; set; } = false;
+        public bool OmenKeyInterceptionEnabled { get; set; } = true;
         
         /// <summary>
         /// Action to perform when OMEN key is pressed.
-        /// Options: "ShowWindow", "ShowQuickPopup", "ToggleFanMode", "TogglePerformanceMode"
+        /// Options: "ToggleOmenCore", "CyclePerformance", "CycleFanMode", "ToggleMaxCooling", "LaunchExternalApp", "DoNothing"
         /// </summary>
-        public string OmenKeyAction { get; set; } = "ShowQuickPopup";
+        public string OmenKeyAction { get; set; } = "ToggleOmenCore";
+        
+        /// <summary>
+        /// Show CPU temperature on the system tray icon.
+        /// When disabled, shows the static OmenCore logo instead.
+        /// </summary>
+        public bool TrayTempDisplayEnabled { get; set; } = true;
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -34,17 +35,19 @@ namespace OmenCore.Utils
         private string _currentFanMode = "Auto";
         private string _currentPerformanceMode = "Balanced";
         private bool _disposed;
+        private readonly ConfigurationService? _configService;
 
         public event Action<string>? FanModeChangeRequested;
         public event Action<string>? PerformanceModeChangeRequested;
         public event Action<string>? QuickProfileChangeRequested;
 
-        public TrayIconService(TaskbarIcon trayIcon, Action showMainWindow, Action shutdownApp)
+        public TrayIconService(TaskbarIcon trayIcon, Action showMainWindow, Action shutdownApp, ConfigurationService? configService = null)
         {
             _trayIcon = trayIcon;
             _showMainWindow = showMainWindow;
             _shutdownApp = shutdownApp;
             _displayService = new DisplayService(App.Logging);
+            _configService = configService;
 
             _baseIconSource = LoadBaseIcon();
             _trayIcon.IconSource = _baseIconSource;
@@ -86,25 +89,26 @@ namespace OmenCore.Utils
             contextMenu.Foreground = textPrimary;
             contextMenu.BorderBrush = borderBrush;
             contextMenu.BorderThickness = new Thickness(1);
-            contextMenu.Padding = new Thickness(4);
+            contextMenu.Padding = new Thickness(0); // Remove default padding
+            contextMenu.HasDropShadow = true;
 
-            // Override system colors for proper dark theme in submenus
+            // Override system colors for proper dark theme
             contextMenu.Resources.Add(SystemColors.MenuBarBrushKey, surfaceDark);
             contextMenu.Resources.Add(SystemColors.MenuBrushKey, surfaceDark);
             contextMenu.Resources.Add(SystemColors.MenuTextBrushKey, textPrimary);
             contextMenu.Resources.Add(SystemColors.HighlightBrushKey, hoverBrush);
             contextMenu.Resources.Add(SystemColors.HighlightTextBrushKey, Brushes.White);
             contextMenu.Resources.Add(SystemColors.MenuHighlightBrushKey, hoverBrush);
-            
-            // Hide the icon column (the white strip on the left)
             contextMenu.Resources.Add(SystemColors.ControlBrushKey, surfaceDark);
             contextMenu.Resources.Add(SystemColors.ControlLightBrushKey, surfaceDark);
             contextMenu.Resources.Add(SystemColors.ControlLightLightBrushKey, surfaceDark);
+            contextMenu.Resources.Add(SystemColors.ControlDarkBrushKey, surfaceDark);
+            contextMenu.Resources.Add(SystemColors.ControlDarkDarkBrushKey, surfaceDark);
             contextMenu.Resources.Add(SystemColors.WindowBrushKey, surfaceDark);
             contextMenu.Resources.Add(MenuItem.SeparatorStyleKey, CreateSeparatorStyle(borderBrush));
             
-            // Create a style to hide the icon column completely
-            var menuItemStyle = CreateDarkMenuItemStyleWithNoIconColumn(surfaceDark, hoverBrush);
+            // Create custom MenuItem style with ControlTemplate to remove icon gutter completely
+            var menuItemStyle = CreateCustomMenuItemStyle(surfaceDark, hoverBrush, gradientBg);
             contextMenu.Resources.Add(typeof(MenuItem), menuItemStyle);
 
             // Create styles
@@ -115,7 +119,7 @@ namespace OmenCore.Utils
             var headerPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
             headerPanel.Children.Add(new TextBlock { Text = "🎮", FontSize = 14, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
             headerPanel.Children.Add(new TextBlock { Text = "OmenCore", FontWeight = FontWeights.Bold, FontSize = 13, Foreground = accentPrimary, VerticalAlignment = VerticalAlignment.Center });
-            headerPanel.Children.Add(new TextBlock { Text = " v1.4.0", FontSize = 11, Foreground = textSecondary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 1, 0, 0) });
+            headerPanel.Children.Add(new TextBlock { Text = " v1.5.0", FontSize = 11, Foreground = textSecondary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 1, 0, 0) });
             
             var headerItem = new MenuItem
             {
@@ -385,7 +389,7 @@ namespace OmenCore.Utils
                 var memTotalGb = _latestSample.RamTotalGb;
                 var memPercent = memTotalGb > 0 ? (memUsedGb * 100.0 / memTotalGb) : 0;
                 
-                _trayIcon.ToolTipText = $"🎮 OmenCore v1.4.0\n" +
+                _trayIcon.ToolTipText = $"🎮 OmenCore v1.5.0\n" +
                                        $"━━━━━━━━━━━━━━━━━━\n" +
                                        $"🔥 CPU: {cpuTemp:F0}°C @ {cpuLoad:F0}%\n" +
                                        $"🎯 GPU: {gpuTemp:F0}°C @ {gpuLoad:F0}%\n" +
@@ -406,11 +410,21 @@ namespace OmenCore.Utils
                 }
 
                 // Update tray icon with max temperature badge (shows highest of CPU/GPU)
-                var maxTemp = Math.Max(cpuTemp, gpuTemp);
-                var badge = CreateTempIcon(maxTemp);
-                if (badge != null)
+                // But only if tray temp display is enabled in settings
+                var showTempOnTray = _configService?.Config?.Features?.TrayTempDisplayEnabled ?? true;
+                if (showTempOnTray)
                 {
-                    _trayIcon.IconSource = badge;
+                    var maxTemp = Math.Max(cpuTemp, gpuTemp);
+                    var badge = CreateTempIcon(maxTemp);
+                    if (badge != null)
+                    {
+                        _trayIcon.IconSource = badge;
+                    }
+                }
+                else
+                {
+                    // Show base icon without temperature
+                    _trayIcon.IconSource = _baseIconSource;
                 }
             }
             catch (Exception ex)
@@ -648,6 +662,8 @@ namespace OmenCore.Utils
         /// </summary>
         private ImageSource? CreateTempIcon(double temp)
         {
+            // System tray icons are rendered at 16x16 or 32x32 depending on DPI
+            // We create at 32x32 for best quality at high DPI
             const int size = 32;
             var visual = new DrawingVisual();
 
@@ -668,22 +684,24 @@ namespace OmenCore.Utils
                 else
                     bgColor = Color.FromRgb(200, 0, 100);      // Magenta - Critical
 
-                // Draw colored circular background
+                // Draw colored square background (fills more of the tray space)
                 var background = new SolidColorBrush(bgColor);
-                dc.DrawEllipse(background, null, new Point(size / 2.0, size / 2.0), size / 2.0 - 1, size / 2.0 - 1);
+                dc.DrawRoundedRectangle(background, null, new Rect(0, 0, size, size), 4, 4);
 
-                // Draw temperature text
+                // Draw temperature text - use largest font that fits
                 var text = temp.ToString("F0");
+                var fontSize = temp >= 100 ? 13 : 16; // Adjusted for 32x32 icon
                 var formatted = new FormattedText(
                     text,
                     CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight,
-                    new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
-                    temp >= 100 ? 11 : 13, // Smaller font for 3-digit temps
+                    new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.ExtraBold, FontStretches.Normal),
+                    fontSize,
                     Brushes.White,
                     1.25);
 
-                var origin = new Point((size - formatted.Width) / 2, (size - formatted.Height) / 2 + 1);
+                // Center the text
+                var origin = new Point((size - formatted.Width) / 2, (size - formatted.Height) / 2);
                 dc.DrawText(formatted, origin);
             }
 
@@ -778,6 +796,41 @@ namespace OmenCore.Utils
             };
             hoverTrigger.Setters.Add(new Setter(MenuItem.BackgroundProperty, hoverBg));
             style.Triggers.Add(hoverTrigger);
+            
+            return style;
+        }
+        
+        /// <summary>
+        /// Creates a custom MenuItem style for dark theme appearance.
+        /// Uses simple property setters instead of complex ControlTemplate to ensure stability.
+        /// </summary>
+        private static Style CreateCustomMenuItemStyle(Brush darkBg, Brush hoverBg, Brush popupBg)
+        {
+            var style = new Style(typeof(MenuItem));
+            
+            // Simple property-based styling (no ControlTemplate override)
+            style.Setters.Add(new Setter(MenuItem.ForegroundProperty, Brushes.White));
+            style.Setters.Add(new Setter(MenuItem.BackgroundProperty, Brushes.Transparent));
+            style.Setters.Add(new Setter(MenuItem.BorderThicknessProperty, new Thickness(0)));
+            style.Setters.Add(new Setter(MenuItem.PaddingProperty, new Thickness(8, 6, 8, 6)));
+            style.Setters.Add(new Setter(MenuItem.SnapsToDevicePixelsProperty, true));
+            style.Setters.Add(new Setter(MenuItem.FontFamilyProperty, new FontFamily("Segoe UI")));
+            style.Setters.Add(new Setter(MenuItem.FontSizeProperty, 12.0));
+            
+            // Hover trigger using simple styling
+            var hoverTrigger = new Trigger { Property = MenuItem.IsHighlightedProperty, Value = true };
+            hoverTrigger.Setters.Add(new Setter(MenuItem.BackgroundProperty, hoverBg));
+            style.Triggers.Add(hoverTrigger);
+            
+            // Submenu open trigger
+            var submenuTrigger = new Trigger { Property = MenuItem.IsSubmenuOpenProperty, Value = true };
+            submenuTrigger.Setters.Add(new Setter(MenuItem.BackgroundProperty, hoverBg));
+            style.Triggers.Add(submenuTrigger);
+            
+            // Disabled trigger
+            var disabledTrigger = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
+            disabledTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 0.56));
+            style.Triggers.Add(disabledTrigger);
             
             return style;
         }

@@ -86,6 +86,8 @@ namespace OmenCore.Hardware
         private const uint CMD_BACKLIGHT_SET = 0x05;  // SetBacklight - uses Keyboard cmd
         private const uint CMD_COLOR_GET = 0x02;      // GetColorTable - uses Keyboard cmd
         private const uint CMD_COLOR_SET = 0x03;      // SetColorTable - uses Keyboard cmd
+        private const uint CMD_KBD_TYPE_GET = 0x01;   // GetKbdType - uses Keyboard cmd
+        private const uint CMD_HAS_BACKLIGHT = 0x06;  // HasBacklight check - uses Keyboard cmd
         private const uint CMD_THROTTLE_GET = 0x35;
         private const uint CMD_IDLE_SET = 0x31;       // SetIdle (OmenMon 0x31)
         private const uint CMD_BATTERY_CARE = 0x24;   // Battery care mode (charge limit)
@@ -108,12 +110,24 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// GPU power preset levels.
+        /// Standard levels work on most models. Extended levels may be available on RTX 4080/5080.
         /// </summary>
         public enum GpuPowerLevel : byte
         {
-            Minimum = 0x00,  // Base TGP only
-            Medium = 0x01,   // Custom TGP
-            Maximum = 0x02   // Custom TGP + PPAB
+            /// <summary>Base TGP only (no boost).</summary>
+            Minimum = 0x00,
+            
+            /// <summary>Custom TGP enabled (+15W on most models).</summary>
+            Medium = 0x01,
+            
+            /// <summary>Custom TGP + PPAB enabled (Dynamic Boost, +15-25W depending on model).</summary>
+            Maximum = 0x02,
+            
+            /// <summary>Extended boost level 3 (RTX 4080/5080 may support +25W or more).</summary>
+            Extended3 = 0x03,
+            
+            /// <summary>Extended boost level 4 (future models).</summary>
+            Extended4 = 0x04
         }
 
         /// <summary>
@@ -546,7 +560,14 @@ namespace OmenCore.Hardware
                         break;
                     case GpuPowerLevel.Maximum:
                         data[0] = 1; // CustomTgp on
-                        data[1] = 1; // PPAB on
+                        data[1] = 1; // PPAB on (Dynamic Boost)
+                        break;
+                    case GpuPowerLevel.Extended3:
+                    case GpuPowerLevel.Extended4:
+                        // Extended levels: try raw byte value for PPAB
+                        // RTX 5080 may support PPAB values > 1 for +25W boost
+                        data[0] = 1; // CustomTgp on
+                        data[1] = (byte)(level - GpuPowerLevel.Maximum + 1); // PPAB = 2, 3, etc.
                         break;
                 }
                 data[2] = 0x01; // DState = D1
@@ -555,7 +576,7 @@ namespace OmenCore.Hardware
                 var result = SendBiosCommand(BiosCmd.Default, CMD_GPU_SET_POWER, data, 0);
                 if (result != null)
                 {
-                    _logging?.Info($"✓ GPU power set to: {level}");
+                    _logging?.Info($"✓ GPU power set to: {level} (CustomTgp={data[0]}, PPAB={data[1]})");
                     return true;
                 }
             }
@@ -645,6 +666,69 @@ namespace OmenCore.Hardware
             return false;
         }
 
+        #region Keyboard
+        
+        /// <summary>
+        /// Keyboard type enumeration (per OmenMon).
+        /// </summary>
+        public enum KbdType : byte
+        {
+            Standard = 0x00,    // Standard layout
+            WithNumPad = 0x01,  // Standard layout with numerical block
+            TenKeyLess = 0x02,  // Extra navigation keys but no numerical block (most OMEN laptops)
+            PerKeyRgb = 0x03    // Per-key RGB (not supported for zone control)
+        }
+        
+        /// <summary>
+        /// Get keyboard type.
+        /// OmenMon: Cmd.Keyboard, 0x01
+        /// </summary>
+        public KbdType? GetKeyboardType()
+        {
+            if (!_isAvailable) return null;
+            
+            try
+            {
+                var result = SendBiosCommand(BiosCmd.Keyboard, CMD_KBD_TYPE_GET, new byte[4], 4);
+                if (result != null && result.Length > 0)
+                {
+                    var kbdType = (KbdType)result[0];
+                    _logging?.Info($"Keyboard type: {kbdType} (0x{result[0]:X2})");
+                    return kbdType;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging?.Warn($"Failed to get keyboard type: {ex.Message}");
+            }
+            return null;
+        }
+        
+        /// <summary>
+        /// Check if keyboard backlight is supported.
+        /// OmenMon: Cmd.Keyboard, 0x06
+        /// </summary>
+        public bool HasBacklight()
+        {
+            if (!_isAvailable) return false;
+            
+            try
+            {
+                var result = SendBiosCommand(BiosCmd.Keyboard, CMD_HAS_BACKLIGHT, new byte[4], 4);
+                if (result != null && result.Length > 0)
+                {
+                    var supported = result[0] != 0;
+                    _logging?.Info($"Keyboard backlight supported: {supported}");
+                    return supported;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging?.Warn($"Failed to check backlight support: {ex.Message}");
+            }
+            return false;
+        }
+
         /// <summary>
         /// Set keyboard backlight on/off.
         /// OmenMon: Cmd.Keyboard, 0x05
@@ -680,13 +764,21 @@ namespace OmenCore.Hardware
         /// Set keyboard color table for 4-zone keyboards.
         /// OmenMon: Cmd.Keyboard, 0x03
         /// 
-        /// Data format (12 bytes for 4 zones, each zone is RGB):
-        /// Zone1: [R, G, B]
-        /// Zone2: [R, G, B]
-        /// Zone3: [R, G, B]
-        /// Zone4: [R, G, B]
+        /// ColorTable structure (128 bytes total, matching OmenMon):
+        /// Byte 0:      ZoneCount (4)
+        /// Bytes 1-24:  Padding (24 bytes, must be 0)
+        /// Bytes 25-36: RGB colors for each zone (3 bytes per zone x 4 zones = 12 bytes)
+        /// Bytes 37+:   Unused (0)
+        /// 
+        /// Zone order (per OmenMon):
+        /// Zone 0 (Right):       Arrows, nav block, right modifiers
+        /// Zone 1 (Middle):      Right QWERTY (F6-F12), T/G/B boundary  
+        /// Zone 2 (Left):        Left QWERTY (F1-F5), R/F/V boundary
+        /// Zone 3 (WASD):        W/A/S/D keys
         /// </summary>
-        public bool SetColorTable(byte[] zoneColors)
+        /// <param name="zoneColors">12-byte array: [R0,G0,B0,R1,G1,B1,R2,G2,B2,R3,G3,B3]</param>
+        /// <param name="ensureBacklightOn">If true, ensures backlight is enabled first</param>
+        public bool SetColorTable(byte[] zoneColors, bool ensureBacklightOn = true)
         {
             if (!_isAvailable)
             {
@@ -696,15 +788,44 @@ namespace OmenCore.Hardware
 
             try
             {
-                // Ensure we have the right data size (12 bytes for 4 zones, 3 bytes each for RGB)
-                var data = new byte[128]; // Larger buffer for safety
-                Array.Copy(zoneColors, 0, data, 0, Math.Min(zoneColors.Length, data.Length));
+                // Ensure backlight is on first (OmenMon behavior)
+                if (ensureBacklightOn)
+                {
+                    _logging?.Info("SetColorTable: Ensuring backlight is ON before setting colors...");
+                    SetBacklight(true);
+                    System.Threading.Thread.Sleep(50); // Brief delay for hardware
+                }
+                
+                // Build proper 128-byte ColorTable structure per OmenMon format
+                var data = new byte[128];
+                
+                // Byte 0: Zone count (always 4 for standard 4-zone keyboards)
+                data[0] = 4;
+                
+                // Bytes 1-24: Padding (leave as zeros)
+                const int COLOR_TABLE_PAD = 24;
+                
+                // Bytes 25+: Zone colors (RGB per zone)
+                // Input zoneColors should be 12 bytes: [R1,G1,B1,R2,G2,B2,R3,G3,B3,R4,G4,B4]
+                int colorOffset = 1 + COLOR_TABLE_PAD; // Byte 25
+                int colorsToCopy = Math.Min(zoneColors.Length, 12); // Max 4 zones x 3 bytes
+                Array.Copy(zoneColors, 0, data, colorOffset, colorsToCopy);
+                
+                _logging?.Info($"SetColorTable: ZoneCount={data[0]}, Colors at offset {colorOffset}: " +
+                    $"Z0=#{data[colorOffset]:X2}{data[colorOffset+1]:X2}{data[colorOffset+2]:X2}, " +
+                    $"Z1=#{data[colorOffset+3]:X2}{data[colorOffset+4]:X2}{data[colorOffset+5]:X2}, " +
+                    $"Z2=#{data[colorOffset+6]:X2}{data[colorOffset+7]:X2}{data[colorOffset+8]:X2}, " +
+                    $"Z3=#{data[colorOffset+9]:X2}{data[colorOffset+10]:X2}{data[colorOffset+11]:X2}");
 
                 var result = SendBiosCommand(BiosCmd.Keyboard, CMD_COLOR_SET, data, 0);
                 if (result != null)
                 {
-                    _logging?.Info($"✓ Keyboard color table set ({zoneColors.Length} bytes)");
+                    _logging?.Info($"✓ Keyboard color table set (128-byte OmenMon format)");
                     return true;
+                }
+                else
+                {
+                    _logging?.Warn("SetColorTable: BIOS command returned null (may indicate failure)");
                 }
             }
             catch (Exception ex)
@@ -716,6 +837,7 @@ namespace OmenCore.Hardware
         
         /// <summary>
         /// Set a single keyboard zone color.
+        /// Uses the same 128-byte ColorTable format as SetColorTable.
         /// </summary>
         public bool SetZoneColor(int zone, byte r, byte g, byte b)
         {
@@ -725,17 +847,38 @@ namespace OmenCore.Hardware
                 return false;
             }
 
+            if (zone < 0 || zone > 3)
+            {
+                _logging?.Warn($"Invalid zone {zone}, must be 0-3");
+                return false;
+            }
+
             try
             {
-                // Create a 128-byte buffer with the zone color data
-                // Format varies by keyboard type, but typically:
-                // Byte 0: Zone number (0-3)
-                // Byte 1-3: RGB values
+                // Build proper 128-byte ColorTable structure
+                // First get current colors so we only change the requested zone
+                var currentColors = GetColorTable();
+                
                 var data = new byte[128];
-                data[0] = (byte)zone;
-                data[1] = r;
-                data[2] = g;
-                data[3] = b;
+                data[0] = 4; // Zone count
+                
+                const int COLOR_TABLE_PAD = 24;
+                int colorOffset = 1 + COLOR_TABLE_PAD; // Byte 25
+                
+                // Copy existing colors if available
+                if (currentColors != null && currentColors.Length >= 37)
+                {
+                    // Colors start at byte 25 in existing data
+                    Array.Copy(currentColors, colorOffset, data, colorOffset, 12);
+                }
+                
+                // Set the specific zone color
+                int zoneOffset = colorOffset + (zone * 3);
+                data[zoneOffset] = r;
+                data[zoneOffset + 1] = g;
+                data[zoneOffset + 2] = b;
+                
+                _logging?.Info($"SetZoneColor: Zone {zone} = R:{r} G:{g} B:{b} at offset {zoneOffset}");
 
                 var result = SendBiosCommand(BiosCmd.Keyboard, CMD_COLOR_SET, data, 0);
                 if (result != null)
@@ -774,6 +917,8 @@ namespace OmenCore.Hardware
             }
             return null;
         }
+        
+        #endregion
 
         /// <summary>
         /// Set idle mode (affects power management).

@@ -162,7 +162,8 @@ namespace OmenCore
                 ToolTipText = "OmenCore - Gaming Laptop Control\n\nLeft-click: Open Dashboard\nMiddle-click: Quick Popup\nRight-click: Menu"
             };
 
-            _trayIconService = new TrayIconService(_trayIcon, ShowMainWindow, () => Shutdown());
+            var configService = _serviceProvider?.GetService<ConfigurationService>();
+            _trayIconService = new TrayIconService(_trayIcon, ShowMainWindow, () => Shutdown(), configService);
             _trayIcon.TrayLeftMouseUp += (s, e) => ShowMainWindow();
             _trayIcon.TrayMiddleMouseUp += (s, e) => _trayIconService?.ShowQuickPopup();
 

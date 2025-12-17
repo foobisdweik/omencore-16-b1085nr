@@ -41,7 +41,8 @@ namespace OmenCore.Services
             "OmenCommandCenterBackground",
             "OmenInstallMonitor",
             "HP.Omen.OmenCommandCenter",
-            "HPSystemOptimizer"
+            "HPSystemOptimizer",
+            "OmenCap"  // HP Omen HSA - runs from DriverStore even after OGH uninstall
         };
 
         private readonly string[] _residualDirectories =
@@ -51,6 +52,17 @@ namespace OmenCore.Services
             @"C:\\Program Files\\HP\\OmenInstallMonitor",
             @"C:\\Program Files (x86)\\HP\\HP OMEN Gaming Hub",
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\\Packages"
+        };
+        
+        /// <summary>
+        /// DriverStore inf packages that contain OmenCap.exe - these persist after OGH uninstall
+        /// and can block MSR access for undervolting.
+        /// </summary>
+        private readonly string[] _driverStorePatterns =
+        {
+            "hpomencustomcapcomp.inf_*",  // Contains OmenCap.exe - blocks MSR/undervolt
+            "hpomenhsacomp.inf_*",        // HP Omen HSA component
+            "hpomenwmicap.inf_*"          // HP Omen WMI capability
         };
 
         private readonly string _windowsAppsRoot = @"C:\\Program Files\\WindowsApps";
@@ -78,7 +90,9 @@ namespace OmenCore.Services
             "HPAppHelperCap",
             "HPOmenCap",              // HP Omen HSA Service (primary OGH service)
             "HPOmenCommandCenter",    // Older OGH service name
-            "OmenInstallMonitor"
+            "OmenInstallMonitor",
+            "HpTouchpointAnalyticsService", // HP Analytics
+            "HPDiagsCap"              // HP Diagnostics
         };
 
         public OmenGamingHubCleanupService(LoggingService logging)
@@ -144,6 +158,31 @@ namespace OmenCore.Services
                     ReportProgress("Cleaning up services and scheduled tasks...");
                     result.ServicesCleaned = await CleanupServicesAndTasksAsync(options.DryRun, token);
                     ReportProgress(result.ServicesCleaned ? "✓ Services/tasks cleaned" : "⚠ Services/tasks cleanup incomplete");
+                }
+                
+                // Check for OmenCap in DriverStore (persists after OGH uninstall and blocks MSR)
+                if (options.RemoveResidualFiles)
+                {
+                    var driverStoreInfo = DetectDriverStoreOmenCap();
+                    if (!string.IsNullOrEmpty(driverStoreInfo))
+                    {
+                        _logging.Warn("═══════════════════════════════════════════════════");
+                        _logging.Warn("⚠️ OmenCap.exe detected in Windows DriverStore!");
+                        _logging.Warn("═══════════════════════════════════════════════════");
+                        _logging.Warn(driverStoreInfo);
+                        _logging.Warn("This component runs automatically and may block:");
+                        _logging.Warn("  - CPU undervolting (MSR access)");
+                        _logging.Warn("  - Direct EC access");
+                        _logging.Warn("═══════════════════════════════════════════════════");
+                        _logging.Warn("To remove manually (requires admin):");
+                        _logging.Warn("  1. Run: pnputil /enum-drivers | findstr /i omen");
+                        _logging.Warn("  2. Find the oem##.inf for hpomencustomcapcomp");
+                        _logging.Warn("  3. Run: pnputil /delete-driver oem##.inf /force");
+                        _logging.Warn("  4. Reboot your computer");
+                        _logging.Warn("═══════════════════════════════════════════════════");
+                        result.Warnings.Add($"OmenCap.exe found in DriverStore: {driverStoreInfo}. Manual removal required.");
+                        ReportProgress("⚠ OmenCap detected in DriverStore - see log for removal instructions");
+                    }
                 }
 
                 if (options.PreserveFirewallRules)
@@ -520,6 +559,83 @@ namespace OmenCore.Services
         private Task<bool> RunProcessAsync(string fileName, string arguments, bool dryRun, CancellationToken token)
         {
             return RunProcessWithTimeoutAsync(fileName, arguments, DefaultCommandTimeout, dryRun, token);
+        }
+        
+        /// <summary>
+        /// Detects if OmenCap.exe exists in Windows DriverStore.
+        /// This component persists after OGH uninstall and blocks MSR access for undervolting.
+        /// </summary>
+        /// <returns>Path info if found, null otherwise</returns>
+        private string? DetectDriverStoreOmenCap()
+        {
+            try
+            {
+                var driverStoreRoot = @"C:\Windows\System32\DriverStore\FileRepository";
+                if (!Directory.Exists(driverStoreRoot))
+                {
+                    return null;
+                }
+                
+                foreach (var pattern in _driverStorePatterns)
+                {
+                    try
+                    {
+                        var matches = Directory.GetDirectories(driverStoreRoot, pattern, SearchOption.TopDirectoryOnly);
+                        foreach (var dir in matches)
+                        {
+                            // Check if OmenCap.exe exists in this driver package
+                            var omenCapPath = Path.Combine(dir, "OmenCap.exe");
+                            if (File.Exists(omenCapPath))
+                            {
+                                return omenCapPath;
+                            }
+                            
+                            // Also check subdirectories
+                            try
+                            {
+                                var subFiles = Directory.GetFiles(dir, "OmenCap.exe", SearchOption.AllDirectories);
+                                if (subFiles.Length > 0)
+                                {
+                                    return subFiles[0];
+                                }
+                            }
+                            catch
+                            {
+                                // Ignore access denied errors
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore pattern match failures
+                    }
+                }
+                
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to check DriverStore for OmenCap: {ex.Message}");
+                return null;
+            }
+        }
+        
+        /// <summary>
+        /// Checks if OmenCap.exe process is currently running (regardless of source).
+        /// </summary>
+        public static bool IsOmenCapRunning()
+        {
+            try
+            {
+                var procs = Process.GetProcessesByName("OmenCap");
+                var running = procs.Length > 0;
+                foreach (var p in procs) p.Dispose();
+                return running;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

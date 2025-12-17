@@ -33,6 +33,7 @@ namespace OmenCore.Models
         
         public bool IsHpOmen { get; set; }
         public bool IsHpVictus { get; set; }
+        public bool IsHpSpectre { get; set; }
         
         /// <summary>
         /// True if this is any HP Gaming laptop (OMEN or Victus)

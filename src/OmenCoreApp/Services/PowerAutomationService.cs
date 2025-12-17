@@ -128,46 +128,78 @@ namespace OmenCore.Services
         {
             try
             {
-                // Use System.Windows.Forms.SystemInformation for reliable AC detection
+                // Method 1: Use System.Windows.Forms.SystemInformation for reliable AC detection
                 var powerStatus = System.Windows.Forms.SystemInformation.PowerStatus;
-                return powerStatus.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Online;
+                var isOnAc = powerStatus.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Online;
+                _logging.Debug($"AC detection (SystemInformation): PowerLineStatus={powerStatus.PowerLineStatus}, IsOnAc={isOnAc}");
+                return isOnAc;
             }
-            catch
+            catch (Exception ex)
             {
-                // Fallback to WMI if SystemInformation fails
+                _logging.Warn($"SystemInformation power detection failed: {ex.Message}");
+                
+                // Method 2: Try WinRT Battery API
+                try
+                {
+                    var report = Battery.AggregateBattery.GetReport();
+                    var status = report.Status;
+                    var isOnAc = status == Windows.System.Power.BatteryStatus.Charging ||
+                                 status == Windows.System.Power.BatteryStatus.Idle ||
+                                 status == Windows.System.Power.BatteryStatus.NotPresent;
+                    _logging.Debug($"AC detection (WinRT): BatteryStatus={status}, IsOnAc={isOnAc}");
+                    return isOnAc;
+                }
+                catch (Exception ex2)
+                {
+                    _logging.Warn($"WinRT battery detection failed: {ex2.Message}");
+                }
+                
+                // Method 3: Fallback to WMI
                 try
                 {
                     using var searcher = new System.Management.ManagementObjectSearcher(
-                        "SELECT * FROM Win32_Battery");
+                        "SELECT BatteryStatus FROM Win32_Battery");
                     
                     foreach (var obj in searcher.Get())
                     {
                         var batteryStatus = (ushort)obj["BatteryStatus"];
                         // 2 = On AC, 1 = Discharging
-                        return batteryStatus == 2;
+                        var isOnAc = batteryStatus == 2;
+                        _logging.Debug($"AC detection (WMI): BatteryStatus={batteryStatus}, IsOnAc={isOnAc}");
+                        return isOnAc;
                     }
                 }
-                catch
+                catch (Exception ex3)
                 {
-                    // If all else fails, assume AC (desktop or detection failure)
-                    return true;
+                    _logging.Warn($"WMI battery detection failed: {ex3.Message}");
                 }
             }
             
+            // If all methods fail, assume AC (desktop or detection failure)
+            _logging.Warn("All AC detection methods failed, assuming AC power");
             return true;
         }
 
         private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
         {
+            _logging.Info($"PowerModeChanged event received: Mode={e.Mode}");
+            
             // Only respond to actual power line changes
             if (e.Mode != PowerModes.StatusChange)
+            {
+                _logging.Info($"Ignoring non-StatusChange event: {e.Mode}");
                 return;
+            }
 
             var currentAcState = GetCurrentAcState();
+            _logging.Info($"Current AC state detected: {currentAcState} (was: {_lastKnownAcState})");
             
             // Only act if state actually changed
             if (currentAcState == _lastKnownAcState)
+            {
+                _logging.Info("Power state unchanged, skipping profile application");
                 return;
+            }
 
             _lastKnownAcState = currentAcState;
             
@@ -179,7 +211,12 @@ namespace OmenCore.Services
             // Apply automation if enabled
             if (_isEnabled)
             {
+                _logging.Info("Power automation is enabled, applying profile...");
                 ApplyPowerProfile(currentAcState);
+            }
+            else
+            {
+                _logging.Info("Power automation is disabled, skipping profile application");
             }
         }
 

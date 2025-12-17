@@ -21,7 +21,7 @@ namespace OmenCore.ViewModels
         private readonly ConfigurationService _configService;
         private readonly HpWmiBios? _wmiBios;
         private readonly OghServiceProxy? _oghProxy;
-        private WinRing0MsrAccess? _msrAccess;
+        private IMsrAccess? _msrAccess;  // Changed from WinRing0MsrAccess to IMsrAccess
 
         private PerformanceMode? _selectedPerformanceMode;
         private UndervoltStatus _undervoltStatus = UndervoltStatus.CreateUnknown();
@@ -43,6 +43,10 @@ namespace OmenCore.ViewModels
                 {
                     _selectedPerformanceMode = value;
                     OnPropertyChanged();
+                    OnPropertyChanged(nameof(CurrentPerformanceModeName));  // Notify sidebar to update
+                    OnPropertyChanged(nameof(IsQuietMode));
+                    OnPropertyChanged(nameof(IsBalancedMode));
+                    OnPropertyChanged(nameof(IsPerformanceMode));
                 }
             }
         }
@@ -169,6 +173,7 @@ namespace OmenCore.ViewModels
             "ThrottleStop" => "ThrottleStop is running and managing CPU voltage. It may conflict with OmenCore's undervolt settings.",
             "Intel DTT" => "Intel Dynamic Tuning Technology service is active and may be controlling voltage settings.",
             "OMEN Gaming Hub" => "OMEN Gaming Hub is managing CPU settings. While OGH is installed, some voltage controls may be handled by HP's software.",
+            "HP OmenCap (DriverStore)" => "OmenCap.exe is running from Windows DriverStore. This HP component persists after OMEN Gaming Hub uninstall and blocks MSR access for undervolting.",
             _ => $"{UndervoltStatus?.ExternalController ?? "An external program"} is controlling CPU voltage settings and may conflict with OmenCore."
         };
         
@@ -189,6 +194,13 @@ namespace OmenCore.ViewModels
             "OMEN Gaming Hub" => "1. Use OmenCore's 'Clean OMEN Gaming Hub' feature in Settings\n" +
                                  "2. Or uninstall OGH from Control Panel → Programs\n" +
                                  "3. Restart your computer after removal",
+            "HP OmenCap (DriverStore)" => "OmenCap persists in Windows DriverStore after OGH uninstall:\n" +
+                                          "1. Open Admin Command Prompt\n" +
+                                          "2. Run: pnputil /enum-drivers | findstr /i omen\n" +
+                                          "3. Note the oem##.inf for hpomencustomcapcomp\n" +
+                                          "4. Run: pnputil /delete-driver oem##.inf /force\n" +
+                                          "5. Reboot your computer\n" +
+                                          "6. This fully removes HP's hardware access component",
             _ => "Close or disable the external application, then restart OmenCore."
         };
 
@@ -199,6 +211,24 @@ namespace OmenCore.ViewModels
             "Eco" => "Power saving mode - reduced wattage",
             _ => "Select a performance mode"
         };
+        
+        /// <summary>
+        /// Whether EC-level power limit control is available for performance modes.
+        /// When false, performance modes only change Windows power plan and fan policy.
+        /// </summary>
+        public bool PerformanceModeEcControlAvailable => _performanceModeService?.EcPowerControlAvailable ?? false;
+        
+        /// <summary>
+        /// Human-readable description of what controls are available for performance modes.
+        /// </summary>
+        public string PerformanceModeCapabilities => _performanceModeService?.ControlCapabilityDescription ?? "Windows Power Plan";
+        
+        /// <summary>
+        /// Short status message for performance mode capabilities shown in UI.
+        /// </summary>
+        public string PerformanceModeCapabilityStatus => PerformanceModeEcControlAvailable
+            ? "✓ Full control (Power Plan + Fan + CPU/GPU Limits)"
+            : "ℹ️ Partial control (Power Plan + Fan only - EC unavailable)";
 
         private string _currentGpuMode = "Detecting...";
         public string CurrentGpuMode
@@ -263,10 +293,11 @@ namespace OmenCore.ViewModels
             "Minimum" => "Base TGP only - Lower power, quieter operation, better battery life",
             "Medium" => "Custom TGP enabled - Balanced performance and thermals",
             "Maximum" => "Custom TGP + Dynamic Boost (PPAB) - Maximum GPU wattage (+15W boost)",
+            "Extended" => "Extended Boost (PPAB+) - For RTX 5080/newer GPUs that support +25W or more",
             _ => "Select GPU power level"
         };
         
-        public ObservableCollection<string> GpuPowerBoostLevels { get; } = new() { "Minimum", "Medium", "Maximum" };
+        public ObservableCollection<string> GpuPowerBoostLevels { get; } = new() { "Minimum", "Medium", "Maximum", "Extended" };
         
         // TCC Offset (CPU Temperature Limit)
         private TccOffsetStatus _tccStatus = TccOffsetStatus.CreateUnsupported();
@@ -330,10 +361,27 @@ namespace OmenCore.ViewModels
                 {
                     _cleanupInProgress = value;
                     OnPropertyChanged();
+                    OnPropertyChanged(nameof(HasCleanupSteps));
                     (CleanupOmenHubCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
                 }
             }
         }
+        
+        private bool _cleanupComplete;
+        public bool CleanupComplete
+        {
+            get => _cleanupComplete;
+            private set
+            {
+                if (_cleanupComplete != value)
+                {
+                    _cleanupComplete = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public bool HasCleanupSteps => OmenCleanupSteps.Count > 0;
 
         public string CleanupStatus
         {
@@ -386,6 +434,7 @@ namespace OmenCore.ViewModels
             };
 
             ApplyPerformanceModeCommand = new RelayCommand(_ => ApplyPerformanceMode(), _ => SelectedPerformanceMode != null);
+            SelectPerformanceModeCommand = new RelayCommand(param => SelectPerformanceMode(param?.ToString() ?? "Balanced"));
             ApplyUndervoltCommand = new AsyncRelayCommand(_ => ApplyUndervoltAsync(), _ => !RespectExternalUndervolt || !UndervoltStatus.HasExternalController);
             ResetUndervoltCommand = new AsyncRelayCommand(async _ => await _undervoltService.ResetAsync());
             ApplyUndervoltPresetCommand = new AsyncRelayCommand(ApplyUndervoltPresetAsync);
@@ -397,21 +446,34 @@ namespace OmenCore.ViewModels
             ApplyTccOffsetCommand = new RelayCommand(_ => ApplyTccOffset(), _ => TccStatus.IsSupported);
             ResetTccOffsetCommand = new RelayCommand(_ => ResetTccOffset(), _ => TccStatus.IsSupported);
 
-            // Initialize performance modes
-            PerformanceModes.Add(new PerformanceMode { Name = "Balanced" });
-            PerformanceModes.Add(new PerformanceMode { Name = "Performance" });
-            PerformanceModes.Add(new PerformanceMode { Name = "Quiet" });
+            // Initialize performance modes with descriptions
+            PerformanceModes.Add(new PerformanceMode { Name = "Quiet", Description = "Power saving mode - reduced fan noise, lower power limits. Best for quiet environments and light tasks." });
+            PerformanceModes.Add(new PerformanceMode { Name = "Balanced", Description = "Default mode - balanced performance and power consumption. Good for everyday use." });
+            PerformanceModes.Add(new PerformanceMode { Name = "Performance", Description = "High performance mode - maximum CPU/GPU power, fans ramp up faster. Best for gaming and heavy workloads." });
             
-            // Restore last selected performance mode from config, or default to first
+            // Restore last selected performance mode from config, or default to Balanced
             var savedModeName = _configService.Config.LastPerformanceModeName;
             var savedMode = !string.IsNullOrEmpty(savedModeName) 
                 ? PerformanceModes.FirstOrDefault(m => m.Name == savedModeName) 
-                : null;
+                : PerformanceModes.FirstOrDefault(m => m.Name == "Balanced");
             SelectedPerformanceMode = savedMode ?? PerformanceModes.FirstOrDefault();
             
             if (savedMode != null)
             {
                 _logging.Info($"Restored last performance mode: {savedModeName}");
+                
+                // Actually apply the saved performance mode on startup
+                // Schedule with delay to ensure BIOS is ready
+                _ = Task.Run(async () =>
+                {
+                    await ReapplySettingWithRetryAsync(
+                        "Performance Mode",
+                        () => ReapplySavedPerformanceMode(savedMode),
+                        maxRetries: 3,
+                        initialDelayMs: 2000,
+                        maxDelayMs: 5000
+                    );
+                });
             }
             
             // Restore last GPU Power Boost level from config
@@ -421,13 +483,17 @@ namespace OmenCore.ViewModels
                 _gpuPowerBoostLevel = savedGpuBoostLevel;
                 _logging.Info($"Restored last GPU Power Boost level from config: {savedGpuBoostLevel}");
                 
-                // Reapply the saved GPU Power Boost level on startup
+                // Reapply the saved GPU Power Boost level on startup with proper retry logic
                 // This fixes the issue where GPU TGP resets to Minimum after reboot
                 _ = Task.Run(async () =>
                 {
-                    // Wait a moment for WMI/BIOS to be fully ready
-                    await Task.Delay(2000);
-                    ReapplySavedGpuPowerBoost(savedGpuBoostLevel);
+                    await ReapplySettingWithRetryAsync(
+                        "GPU Power Boost",
+                        () => ReapplySavedGpuPowerBoost(savedGpuBoostLevel),
+                        maxRetries: 5,
+                        initialDelayMs: 1500,
+                        maxDelayMs: 5000
+                    );
                 });
             }
 
@@ -452,30 +518,36 @@ namespace OmenCore.ViewModels
         {
             try
             {
-                _msrAccess = new WinRing0MsrAccess();
-                if (_msrAccess.IsAvailable)
+                // Use factory to get best available MSR backend (PawnIO preferred over WinRing0)
+                _msrAccess = MsrAccessFactory.Create(_logging);
+                if (_msrAccess != null && _msrAccess.IsAvailable)
                 {
                     var tjMax = _msrAccess.ReadTjMax();
                     var currentOffset = _msrAccess.ReadTccOffset();
                     TccStatus = TccOffsetStatus.CreateSupported(tjMax, currentOffset);
                     RequestedTccOffset = currentOffset;
-                    _logging.Info($"TCC offset available: TjMax={tjMax}°C, Current offset={currentOffset}°C, Effective limit={tjMax - currentOffset}°C");
+                    _logging.Info($"TCC offset available via {MsrAccessFactory.ActiveBackend}: TjMax={tjMax}°C, Current offset={currentOffset}°C, Effective limit={tjMax - currentOffset}°C");
                     
                     // Restore saved TCC offset from config if different from current
                     var savedOffset = _configService.Config.LastTccOffset;
                     if (savedOffset.HasValue && savedOffset.Value != currentOffset && savedOffset.Value > 0)
                     {
-                        // Schedule reapply after a delay to ensure system is ready
+                        // Schedule reapply with proper retry logic to ensure system is ready
                         _ = Task.Run(async () =>
                         {
-                            await Task.Delay(3000); // Wait 3 seconds for system to stabilize
-                            ReapplySavedTccOffset(savedOffset.Value);
+                            await ReapplySettingWithRetryAsync(
+                                "TCC Offset",
+                                () => ReapplySavedTccOffset(savedOffset.Value),
+                                maxRetries: 5,
+                                initialDelayMs: 2000,
+                                maxDelayMs: 6000
+                            );
                         });
                     }
                 }
                 else
                 {
-                    TccStatus = TccOffsetStatus.CreateUnsupported("WinRing0 driver not available");
+                    TccStatus = TccOffsetStatus.CreateUnsupported("No MSR access available (install PawnIO for TCC control)");
                 }
             }
             catch (Exception ex)
@@ -488,39 +560,84 @@ namespace OmenCore.ViewModels
         
         /// <summary>
         /// Reapply saved TCC offset on startup to maintain temperature limits after reboot.
+        /// Throws an exception if the operation fails, enabling retry logic.
         /// </summary>
         private void ReapplySavedTccOffset(int savedOffset)
         {
             if (_msrAccess == null || !TccStatus.IsSupported)
-                return;
+                throw new InvalidOperationException("MSR access not available or TCC not supported");
                 
-            try
+            _logging.Info($"Reapplying saved TCC offset on startup: {savedOffset}°C");
+            _msrAccess.SetTccOffset(savedOffset);
+            
+            // Verify it was applied
+            var verifiedOffset = _msrAccess.ReadTccOffset();
+            if (verifiedOffset == savedOffset)
             {
-                _logging.Info($"Reapplying saved TCC offset on startup: {savedOffset}°C");
-                _msrAccess.SetTccOffset(savedOffset);
+                _logging.Info($"✓ TCC offset restored on startup: {savedOffset}°C (effective limit: {TccStatus.TjMax - savedOffset}°C)");
                 
-                // Verify it was applied
-                var verifiedOffset = _msrAccess.ReadTccOffset();
-                if (verifiedOffset == savedOffset)
+                // Update UI on dispatcher thread
+                App.Current?.Dispatcher?.BeginInvoke(() =>
                 {
-                    _logging.Info($"✓ TCC offset restored on startup: {savedOffset}°C (effective limit: {TccStatus.TjMax - savedOffset}°C)");
+                    RequestedTccOffset = savedOffset;
+                    TccStatus = TccOffsetStatus.CreateSupported(TccStatus.TjMax, savedOffset);
+                });
+            }
+            else
+            {
+                throw new InvalidOperationException($"TCC offset verification failed: requested {savedOffset}°C, got {verifiedOffset}°C");
+            }
+        }
+        
+        /// <summary>
+        /// Helper method to reapply a setting with exponential backoff retry.
+        /// This fixes the issue where settings don't survive reboot because WMI/BIOS
+        /// may not be ready immediately after Windows login.
+        /// </summary>
+        /// <param name="settingName">Name of the setting for logging</param>
+        /// <param name="applyAction">Action that applies the setting (should throw on failure)</param>
+        /// <param name="maxRetries">Maximum number of retry attempts</param>
+        /// <param name="initialDelayMs">Initial delay before first attempt</param>
+        /// <param name="maxDelayMs">Maximum delay between retries</param>
+        private async Task ReapplySettingWithRetryAsync(
+            string settingName,
+            Action applyAction,
+            int maxRetries = 5,
+            int initialDelayMs = 1500,
+            int maxDelayMs = 5000)
+        {
+            // Initial delay to let system stabilize after login
+            await Task.Delay(initialDelayMs);
+            
+            int attempt = 0;
+            int currentDelay = initialDelayMs;
+            
+            while (attempt < maxRetries)
+            {
+                attempt++;
+                try
+                {
+                    applyAction();
+                    _logging.Info($"✓ {settingName} restored on attempt {attempt}/{maxRetries}");
+                    return; // Success!
+                }
+                catch (Exception ex)
+                {
+                    _logging.Warn($"{settingName} restoration attempt {attempt}/{maxRetries} failed: {ex.Message}");
                     
-                    // Update UI on dispatcher thread
-                    App.Current?.Dispatcher?.BeginInvoke(() =>
+                    if (attempt < maxRetries)
                     {
-                        RequestedTccOffset = savedOffset;
-                        TccStatus = TccOffsetStatus.CreateSupported(TccStatus.TjMax, savedOffset);
-                    });
-                }
-                else
-                {
-                    _logging.Warn($"TCC offset restoration mismatch: requested {savedOffset}°C, got {verifiedOffset}°C");
+                        // Exponential backoff with jitter
+                        var jitter = new Random().Next(0, 500);
+                        var nextDelay = Math.Min(currentDelay * 2 + jitter, maxDelayMs);
+                        _logging.Info($"Retrying {settingName} in {nextDelay}ms...");
+                        await Task.Delay(nextDelay);
+                        currentDelay = nextDelay;
+                    }
                 }
             }
-            catch (Exception ex)
-            {
-                _logging.Warn($"Failed to restore TCC offset on startup: {ex.Message}");
-            }
+            
+            _logging.Warn($"× {settingName} restoration failed after {maxRetries} attempts");
         }
         
         private void ApplyTccOffset()
@@ -591,8 +708,10 @@ namespace OmenCore.ViewModels
                 var gpuPower = _wmiBios.GetGpuPower();
                 if (gpuPower.HasValue)
                 {
+                    // Check for extended PPAB values (RTX 5080 etc.)
                     if (gpuPower.Value.customTgp && gpuPower.Value.ppab)
                     {
+                        // Standard Maximum level - can't distinguish extended via bool
                         GpuPowerBoostLevel = "Maximum";
                         GpuPowerBoostStatus = "Maximum (Custom TGP + Dynamic Boost)";
                     }
@@ -622,8 +741,17 @@ namespace OmenCore.ViewModels
                 if (success)
                 {
                     GpuPowerBoostAvailable = true;
-                    GpuPowerBoostLevel = levelName;
-                    GpuPowerBoostStatus = $"{levelName} (via OGH)";
+                    // Map OGH level to our names including Extended
+                    var mappedLevel = level switch
+                    {
+                        0 => "Minimum",
+                        1 => "Medium",
+                        2 => "Maximum",
+                        3 => "Extended",
+                        _ => levelName
+                    };
+                    GpuPowerBoostLevel = mappedLevel;
+                    GpuPowerBoostStatus = $"{mappedLevel} (via OGH)";
                     _logging.Info($"✓ GPU Power Boost available via OGH. Current: {GpuPowerBoostStatus}");
                     return;
                 }
@@ -652,6 +780,7 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                     "Minimum" => HpWmiBios.GpuPowerLevel.Minimum,
                     "Medium" => HpWmiBios.GpuPowerLevel.Medium,
                     "Maximum" => HpWmiBios.GpuPowerLevel.Maximum,
+                    "Extended" => HpWmiBios.GpuPowerLevel.Extended3,
                     _ => HpWmiBios.GpuPowerLevel.Medium
                 };
 
@@ -662,6 +791,7 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                         "Minimum" => "✓ Minimum (Base TGP only)",
                         "Medium" => "✓ Medium (Custom TGP enabled)",
                         "Maximum" => "✓ Maximum (Custom TGP + Dynamic Boost +15W)",
+                        "Extended" => "✓ Extended (PPAB+ for RTX 5080, +25W if supported)",
                         _ => "Applied"
                     };
                     _logging.Info($"✓ GPU Power Boost set to: {GpuPowerBoostLevel} via WMI BIOS");
@@ -680,6 +810,7 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                     "Minimum" => 0,
                     "Medium" => 1,
                     "Maximum" => 2,
+                    "Extended" => 3,  // Try extended value for OGH
                     _ => 1
                 };
                 
@@ -690,6 +821,7 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                         "Minimum" => "✓ Minimum (Base TGP only, via OGH)",
                         "Medium" => "✓ Medium (Custom TGP, via OGH)",
                         "Maximum" => "✓ Maximum (Dynamic Boost, via OGH)",
+                        "Extended" => "✓ Extended (PPAB+, via OGH)",
                         _ => "Applied via OGH"
                     };
                     _logging.Info($"✓ GPU Power Boost set to: {GpuPowerBoostLevel} via OGH");
@@ -707,72 +839,69 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
         /// <summary>
         /// Reapply the saved GPU Power Boost level on startup.
         /// This is called after a delay to ensure WMI/BIOS is ready.
+        /// <summary>
+        /// Reapply saved GPU Power Boost level on startup.
+        /// Throws an exception if the operation fails, enabling retry logic.
         /// </summary>
         private void ReapplySavedGpuPowerBoost(string savedLevel)
         {
-            try
+            _logging.Info($"Reapplying saved GPU Power Boost level on startup: {savedLevel}");
+            
+            // Try WMI BIOS first
+            if (_wmiBios != null && _wmiBios.IsAvailable)
             {
-                _logging.Info($"Reapplying saved GPU Power Boost level on startup: {savedLevel}");
-                
-                // Try WMI BIOS first
-                if (_wmiBios != null && _wmiBios.IsAvailable)
+                var level = savedLevel switch
                 {
-                    var level = savedLevel switch
-                    {
-                        "Minimum" => HpWmiBios.GpuPowerLevel.Minimum,
-                        "Medium" => HpWmiBios.GpuPowerLevel.Medium,
-                        "Maximum" => HpWmiBios.GpuPowerLevel.Maximum,
-                        _ => HpWmiBios.GpuPowerLevel.Medium
-                    };
+                    "Minimum" => HpWmiBios.GpuPowerLevel.Minimum,
+                    "Medium" => HpWmiBios.GpuPowerLevel.Medium,
+                    "Maximum" => HpWmiBios.GpuPowerLevel.Maximum,
+                    _ => HpWmiBios.GpuPowerLevel.Medium
+                };
 
-                    if (_wmiBios.SetGpuPower(level))
-                    {
-                        _logging.Info($"✓ GPU Power Boost reapplied on startup: {savedLevel} via WMI BIOS");
-                        
-                        // Update status on UI thread
-                        App.Current?.Dispatcher?.BeginInvoke(() =>
-                        {
-                            GpuPowerBoostStatus = savedLevel switch
-                            {
-                                "Minimum" => "Minimum (Base TGP only) - Restored",
-                                "Medium" => "Medium (Custom TGP) - Restored",
-                                "Maximum" => "Maximum (Custom TGP + Dynamic Boost) - Restored",
-                                _ => $"{savedLevel} - Restored"
-                            };
-                        });
-                        return;
-                    }
-                }
-                
-                // Fallback: Try OGH proxy
-                if (_oghProxy != null && _oghProxy.Status.WmiAvailable)
+                if (_wmiBios.SetGpuPower(level))
                 {
-                    var levelValue = savedLevel switch
-                    {
-                        "Minimum" => 0,
-                        "Medium" => 1,
-                        "Maximum" => 2,
-                        _ => 1
-                    };
+                    _logging.Info($"✓ GPU Power Boost reapplied on startup: {savedLevel} via WMI BIOS");
                     
-                    if (_oghProxy.SetGpuPowerLevel(levelValue))
+                    // Update status on UI thread
+                    App.Current?.Dispatcher?.BeginInvoke(() =>
                     {
-                        _logging.Info($"✓ GPU Power Boost reapplied on startup: {savedLevel} via OGH");
-                        
-                        App.Current?.Dispatcher?.BeginInvoke(() =>
+                        GpuPowerBoostStatus = savedLevel switch
                         {
-                            GpuPowerBoostStatus = $"{savedLevel} (via OGH) - Restored";
-                        });
-                        return;
-                    }
+                            "Minimum" => "Minimum (Base TGP only) - Restored",
+                            "Medium" => "Medium (Custom TGP) - Restored",
+                            "Maximum" => "Maximum (Custom TGP + Dynamic Boost) - Restored",
+                            _ => $"{savedLevel} - Restored"
+                        };
+                    });
+                    return;
                 }
-                
-                _logging.Warn($"Could not reapply GPU Power Boost on startup - WMI commands not available");
             }
-            catch (Exception ex)
+            
+            // Fallback: Try OGH proxy
+            if (_oghProxy != null && _oghProxy.Status.WmiAvailable)
             {
-                _logging.Warn($"Failed to reapply GPU Power Boost on startup: {ex.Message}");
+                var levelValue = savedLevel switch
+                {
+                    "Minimum" => 0,
+                    "Medium" => 1,
+                    "Maximum" => 2,
+                    _ => 1
+                };
+                
+                if (_oghProxy.SetGpuPowerLevel(levelValue))
+                {
+                    _logging.Info($"✓ GPU Power Boost reapplied on startup: {savedLevel} via OGH");
+                    
+                    App.Current?.Dispatcher?.BeginInvoke(() =>
+                    {
+                        GpuPowerBoostStatus = $"{savedLevel} (via OGH) - Restored";
+                    });
+                    return;
+                }
             }
+            
+            // Neither WMI nor OGH succeeded - throw to trigger retry
+            throw new InvalidOperationException("GPU Power Boost restoration failed - WMI BIOS and OGH both unavailable or returned failure");
         }
         
         private void SaveGpuPowerBoostToConfig()
@@ -787,6 +916,35 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
             catch (Exception ex)
             {
                 _logging.Warn($"Failed to save GPU Power Boost level to config: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Reapply saved performance mode on startup.
+        /// Throws an exception if the operation fails, enabling retry logic.
+        /// </summary>
+        private void ReapplySavedPerformanceMode(PerformanceMode mode)
+        {
+            _logging.Info($"Reapplying saved performance mode on startup: {mode.Name}");
+            
+            try
+            {
+                // Apply the performance mode via the service
+                _performanceModeService.Apply(mode);
+                
+                _logging.Info($"✓ Performance mode reapplied on startup: {mode.Name}");
+                
+                // Update UI on dispatcher thread
+                App.Current?.Dispatcher?.BeginInvoke(() =>
+                {
+                    OnPropertyChanged(nameof(CurrentPerformanceModeName));
+                    OnPropertyChanged(nameof(SelectedPerformanceMode));
+                });
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to reapply performance mode: {ex.Message}");
+                throw; // Re-throw to trigger retry logic
             }
         }
         
@@ -826,10 +984,31 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                 
                 OnPropertyChanged(nameof(CurrentPerformanceModeName));
                 OnPropertyChanged(nameof(SelectedPerformanceMode));
+                OnPropertyChanged(nameof(IsQuietMode));
+                OnPropertyChanged(nameof(IsBalancedMode));
+                OnPropertyChanged(nameof(IsPerformanceMode));
             }
         }
         
         public string CurrentPerformanceModeName => SelectedPerformanceMode?.Name ?? "Auto";
+        
+        // Mode boolean properties for UI binding
+        public bool IsQuietMode => SelectedPerformanceMode?.Name == "Quiet";
+        public bool IsBalancedMode => SelectedPerformanceMode?.Name == "Balanced";
+        public bool IsPerformanceMode => SelectedPerformanceMode?.Name == "Performance";
+        
+        // Command for selecting performance mode from Advanced view
+        public ICommand SelectPerformanceModeCommand { get; }
+        
+        private void SelectPerformanceMode(string modeName)
+        {
+            var mode = PerformanceModes.FirstOrDefault(m => m.Name == modeName);
+            if (mode != null)
+            {
+                SelectedPerformanceMode = mode;
+                ApplyPerformanceMode();
+            }
+        }
 
         private async Task ApplyUndervoltAsync()
         {
@@ -1001,6 +1180,8 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                 OmenCleanupSteps.Add($"✓ Restore point created (#{restoreResult.SequenceNumber})");
             }
             
+            OnPropertyChanged(nameof(HasCleanupSteps));
+            
             // Subscribe to real-time progress updates
             void OnStepCompleted(string step)
             {
@@ -1008,6 +1189,7 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                 {
                     OmenCleanupSteps.Add(step);
                     CleanupStatus = step;
+                    OnPropertyChanged(nameof(HasCleanupSteps));
                 });
             }
             
@@ -1029,7 +1211,8 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                         PreserveFirewallRules = true
                     };
                     var result = await _cleanupService.CleanupAsync(options);
-                    CleanupStatus = result.Success ? "✓ Cleanup complete" : "⚠ Cleanup failed";
+                    CleanupStatus = result.Success ? "✓ Cleanup complete - restart recommended" : "⚠ Cleanup failed";
+                    CleanupComplete = result.Success;
                 }, "Running HP Omen cleanup...");
             }
             finally

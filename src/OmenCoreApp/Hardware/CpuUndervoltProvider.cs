@@ -90,48 +90,21 @@ namespace OmenCore.Hardware
     {
         private readonly object _stateLock = new();
         private UndervoltOffset _lastApplied = new() { CoreMv = 0, CacheMv = 0 };
-        private WinRing0MsrAccess? _msrAccess;
-        private PawnIOMsrAccess? _pawnIOMsrAccess;
-        private string _activeBackend = "None";
+        private IMsrAccess? _msrAccess;
 
-        public string ActiveBackend => _activeBackend;
+        public string ActiveBackend { get; private set; } = "None";
 
         public IntelUndervoltProvider()
         {
-            // Try PawnIO first (Secure Boot compatible)
-            try
+            // Use MsrAccessFactory to get best available backend
+            _msrAccess = MsrAccessFactory.Create(null);
+            if (_msrAccess != null && _msrAccess.IsAvailable)
             {
-                _pawnIOMsrAccess = new PawnIOMsrAccess();
-                if (_pawnIOMsrAccess.IsAvailable)
-                {
-                    _activeBackend = "PawnIO";
-                    return; // PawnIO available, skip WinRing0
-                }
-                _pawnIOMsrAccess.Dispose();
-                _pawnIOMsrAccess = null;
-            }
-            catch
-            {
-                _pawnIOMsrAccess = null;
-            }
-
-            // Fall back to WinRing0
-            try
-            {
-                _msrAccess = new WinRing0MsrAccess();
-                if (_msrAccess.IsAvailable)
-                {
-                    _activeBackend = "WinRing0";
-                }
-            }
-            catch
-            {
-                // WinRing0 driver not available - will operate in stub mode
-                _msrAccess = null;
+                ActiveBackend = MsrAccessFactory.ActiveBackend.ToString();
             }
         }
 
-        private bool HasMsrAccess => (_pawnIOMsrAccess?.IsAvailable ?? false) || (_msrAccess?.IsAvailable ?? false);
+        private bool HasMsrAccess => _msrAccess?.IsAvailable ?? false;
 
         public Task ApplyOffsetAsync(UndervoltOffset offset, CancellationToken token)
         {
@@ -139,29 +112,16 @@ namespace OmenCore.Hardware
             {
                 _lastApplied = offset.Clone();
                 
-                if (_pawnIOMsrAccess != null && _pawnIOMsrAccess.IsAvailable)
+                if (_msrAccess != null && _msrAccess.IsAvailable)
                 {
                     try
                     {
-                        _pawnIOMsrAccess.ApplyCoreVoltageOffset((int)offset.CoreMv);
-                        _pawnIOMsrAccess.ApplyCacheVoltageOffset((int)offset.CacheMv);
-                    }
-                    catch (Exception ex)
-                    {
-                        throw new InvalidOperationException($"Failed to apply voltage offset via PawnIO: {ex.Message}", ex);
-                    }
-                }
-                else if (_msrAccess != null && _msrAccess.IsAvailable)
-                {
-                    try
-                    {
-                        // Apply actual MSR writes
                         _msrAccess.ApplyCoreVoltageOffset((int)offset.CoreMv);
                         _msrAccess.ApplyCacheVoltageOffset((int)offset.CacheMv);
                     }
                     catch (Exception ex)
                     {
-                        throw new InvalidOperationException($"Failed to apply voltage offset: {ex.Message}", ex);
+                        throw new InvalidOperationException($"Failed to apply voltage offset via {ActiveBackend}: {ex.Message}", ex);
                     }
                 }
             }
@@ -174,29 +134,16 @@ namespace OmenCore.Hardware
             {
                 _lastApplied = new UndervoltOffset();
                 
-                if (_pawnIOMsrAccess != null && _pawnIOMsrAccess.IsAvailable)
+                if (_msrAccess != null && _msrAccess.IsAvailable)
                 {
                     try
                     {
-                        _pawnIOMsrAccess.ApplyCoreVoltageOffset(0);
-                        _pawnIOMsrAccess.ApplyCacheVoltageOffset(0);
-                    }
-                    catch (Exception ex)
-                    {
-                        throw new InvalidOperationException($"Failed to reset voltage offset via PawnIO: {ex.Message}", ex);
-                    }
-                }
-                else if (_msrAccess != null && _msrAccess.IsAvailable)
-                {
-                    try
-                    {
-                        // Reset to 0mV offset
                         _msrAccess.ApplyCoreVoltageOffset(0);
                         _msrAccess.ApplyCacheVoltageOffset(0);
                     }
                     catch (Exception ex)
                     {
-                        throw new InvalidOperationException($"Failed to reset voltage offset: {ex.Message}", ex);
+                        throw new InvalidOperationException($"Failed to reset voltage offset via {ActiveBackend}: {ex.Message}", ex);
                     }
                 }
             }
@@ -216,21 +163,8 @@ namespace OmenCore.Hardware
             {
                 copy = _lastApplied.Clone();
                 
-                // Try to read actual MSR values - PawnIO first, then WinRing0
-                if (_pawnIOMsrAccess != null && _pawnIOMsrAccess.IsAvailable)
-                {
-                    try
-                    {
-                        actualCore = _pawnIOMsrAccess.ReadCoreVoltageOffset();
-                        actualCache = _pawnIOMsrAccess.ReadCacheVoltageOffset();
-                        canReadMsr = true;
-                    }
-                    catch
-                    {
-                        canReadMsr = false;
-                    }
-                }
-                else if (_msrAccess != null && _msrAccess.IsAvailable)
+                // Try to read actual MSR values via unified IMsrAccess interface
+                if (_msrAccess != null && _msrAccess.IsAvailable)
                 {
                     try
                     {
@@ -279,7 +213,7 @@ namespace OmenCore.Hardware
             }
             else if (!HasMsrAccess && copy.CoreMv == 0 && copy.CacheMv == 0)
             {
-                status.Warning = "No MSR access backend available. Install PawnIO (Secure Boot) or WinRing0 driver to enable CPU undervolting.";
+                status.Warning = "No MSR access backend available. Install PawnIO (Secure Boot compatible) to enable CPU undervolting.";
             }
             else if (!canReadMsr)
             {
@@ -329,7 +263,8 @@ namespace OmenCore.Hardware
             // Check for PROCESSES (ThrottleStop runs as process, not service)
             var processProbes = new[] 
             { 
-                ("ThrottleStop", "ThrottleStop")
+                ("ThrottleStop", "ThrottleStop"),
+                ("OmenCap", "HP OmenCap (DriverStore)")  // HP component that blocks MSR access
             };
             
             foreach (var (processName, displayName) in processProbes)

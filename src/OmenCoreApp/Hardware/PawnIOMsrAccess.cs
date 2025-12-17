@@ -8,8 +8,9 @@ namespace OmenCore.Hardware
     /// <summary>
     /// PawnIO-based MSR access provider for Secure Boot compatible systems.
     /// Uses the signed PawnIO driver with IntelMSR module.
+    /// This is the recommended MSR backend for v1.5+.
     /// </summary>
-    public sealed class PawnIOMsrAccess : IDisposable
+    public sealed class PawnIOMsrAccess : IMsrAccess
     {
         private IntPtr _handle = IntPtr.Zero;
         private IntPtr _pawnIOLib = IntPtr.Zero;
@@ -283,6 +284,88 @@ namespace OmenCore.Hardware
         {
             if (_disposed) throw new ObjectDisposedException(nameof(PawnIOMsrAccess));
             if (!IsAvailable) throw new InvalidOperationException("PawnIO MSR access is not available");
+        }
+
+        // ==========================================
+        // TCC Offset (Thermal Control Circuit)
+        // ==========================================
+        
+        /// <summary>
+        /// MSR 0x1A2 - IA32_TEMPERATURE_TARGET
+        /// Bits 29:24 contain the TCC activation temperature offset (0-63°C reduction)
+        /// </summary>
+        private const uint MSR_IA32_TEMPERATURE_TARGET = 0x1A2;
+        
+        /// <summary>
+        /// Read the current TCC offset (temperature limit reduction).
+        /// Returns 0-63, where 0 = no limit, 63 = max 63°C below TjMax.
+        /// </summary>
+        public int ReadTccOffset()
+        {
+            EnsureAvailable();
+            try
+            {
+                ulong value = ReadMsr(MSR_IA32_TEMPERATURE_TARGET);
+                // Bits 29:24 contain the TCC offset
+                int offset = (int)((value >> 24) & 0x3F);
+                return offset;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+        
+        /// <summary>
+        /// Read the TjMax (maximum junction temperature) from MSR.
+        /// This is the base temperature before TCC offset is applied.
+        /// </summary>
+        public int ReadTjMax()
+        {
+            EnsureAvailable();
+            try
+            {
+                ulong value = ReadMsr(MSR_IA32_TEMPERATURE_TARGET);
+                // Bits 23:16 contain TjMax
+                int tjMax = (int)((value >> 16) & 0xFF);
+                return tjMax > 0 ? tjMax : 100; // Default to 100°C if not readable
+            }
+            catch
+            {
+                return 100; // Default TjMax
+            }
+        }
+        
+        /// <summary>
+        /// Set the TCC offset to limit maximum CPU temperature.
+        /// Offset of N means CPU will throttle at (TjMax - N)°C.
+        /// </summary>
+        /// <param name="offset">Offset in degrees (0-63). 0 = no limit, 15 = throttle 15°C below TjMax</param>
+        public void SetTccOffset(int offset)
+        {
+            EnsureAvailable();
+            if (offset < 0 || offset > 63)
+            {
+                throw new ArgumentException("TCC offset must be between 0 and 63");
+            }
+            
+            // Read current value to preserve other bits
+            ulong currentValue = ReadMsr(MSR_IA32_TEMPERATURE_TARGET);
+            
+            // Clear bits 29:24 and set new offset
+            ulong newValue = (currentValue & ~(0x3FUL << 24)) | ((ulong)offset << 24);
+            
+            WriteMsr(MSR_IA32_TEMPERATURE_TARGET, newValue);
+        }
+        
+        /// <summary>
+        /// Get the effective temperature limit (TjMax - TCC offset).
+        /// </summary>
+        public int GetEffectiveTempLimit()
+        {
+            int tjMax = ReadTjMax();
+            int offset = ReadTccOffset();
+            return tjMax - offset;
         }
 
         public void Dispose()

@@ -1,0 +1,82 @@
+<Window x:Class="OmenCore.Views.ColorPickerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:OmenCore.Controls"
+        Title="Select Color" Height="320" Width="400" 
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        KeyDown="Window_KeyDown">
+    <Border Background="{StaticResource BackgroundDarkBrush}" 
+            BorderBrush="{StaticResource BorderBrush}" 
+            BorderThickness="1" 
+            CornerRadius="12"
+            MouseLeftButtonDown="Border_MouseLeftButtonDown">
+        <Grid Margin="20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Grid Grid.Row="0" Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock x:Name="TitleText" Text="Select Zone Color" 
+                               FontSize="18" FontWeight="SemiBold" 
+                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <TextBlock x:Name="SubtitleText" Text="Zone 1 - Left" 
+                               FontSize="12" 
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,4,0,0"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="✕" Width="32" Height="32"
+                        Style="{StaticResource SecondaryButton}"
+                        Click="CancelButton_Click"
+                        ToolTip="Cancel (Esc)"/>
+            </Grid>
+
+            <!-- Color Picker Control -->
+            <Border Grid.Row="1" 
+                    Background="{StaticResource SurfaceMediumBrush}"
+                    CornerRadius="8" 
+                    Padding="16">
+                <controls:ColorPickerControl x:Name="ColorPicker" 
+                                              HexValue="#E6002E"/>
+            </Border>
+
+            <!-- Hex Input and Buttons -->
+            <Grid Grid.Row="2" Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Grid.Column="0" Text="Hex:" 
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Margin="0,0,8,0"/>
+                <TextBox Grid.Column="1" x:Name="HexTextBox"
+                         Text="{Binding HexValue, ElementName=ColorPicker, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         Style="{StaticResource ModernTextBox}"
+                         VerticalAlignment="Center"
+                         Margin="0,0,16,0"/>
+                
+                <Button Grid.Column="2" Content="Cancel" Width="80"
+                        Style="{StaticResource SecondaryButton}"
+                        Click="CancelButton_Click"
+                        Margin="0,0,8,0"/>
+                <Button Grid.Column="3" Content="Apply" Width="80"
+                        Style="{StaticResource PrimaryButton}"
+                        Click="ApplyButton_Click"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

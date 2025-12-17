@@ -25,6 +25,8 @@ namespace OmenCore.ViewModels
         private readonly SystemInfoService _systemInfoService;
         private readonly FanCleaningService _fanCleaningService;
         private readonly BiosUpdateService _biosUpdateService;
+        private readonly OmenKeyService? _omenKeyService;
+        private readonly OsdService? _osdService;
         
         private bool _startWithWindows;
         private bool _startMinimized;
@@ -80,7 +82,9 @@ namespace OmenCore.ViewModels
 
         public SettingsViewModel(LoggingService logging, ConfigurationService configService, 
             SystemInfoService systemInfoService, FanCleaningService fanCleaningService,
-            BiosUpdateService biosUpdateService)
+            BiosUpdateService biosUpdateService,
+            OmenKeyService? omenKeyService = null,
+            OsdService? osdService = null)
         {
             _logging = logging;
             _configService = configService;
@@ -88,6 +92,8 @@ namespace OmenCore.ViewModels
             _systemInfoService = systemInfoService;
             _fanCleaningService = fanCleaningService;
             _biosUpdateService = biosUpdateService;
+            _omenKeyService = omenKeyService;
+            _osdService = osdService;
 
             // Load saved settings
             LoadSettings();
@@ -553,6 +559,22 @@ namespace OmenCore.ViewModels
             }
         }
 
+        public bool TrayTempDisplayEnabled
+        {
+            get => _config.Features?.TrayTempDisplayEnabled ?? true;
+            set
+            {
+                if (_config.Features == null) _config.Features = new FeaturePreferences();
+                if (_config.Features.TrayTempDisplayEnabled != value)
+                {
+                    _config.Features.TrayTempDisplayEnabled = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                    _logging.Info($"Tray temperature display {(value ? "enabled" : "disabled")}");
+                }
+            }
+        }
+
         public bool OmenKeyInterceptionEnabled
         {
             get => _config.Features?.OmenKeyInterceptionEnabled ?? false;
@@ -564,6 +586,21 @@ namespace OmenCore.ViewModels
                     _config.Features.OmenKeyInterceptionEnabled = value;
                     OnPropertyChanged();
                     SaveSettings();
+                    
+                    // Start or stop the OMEN key service at runtime
+                    if (_omenKeyService != null)
+                    {
+                        if (value)
+                        {
+                            _omenKeyService.StartInterception();
+                            _logging.Info("OMEN key interception started (user enabled)");
+                        }
+                        else
+                        {
+                            _omenKeyService.StopInterception();
+                            _logging.Info("OMEN key interception stopped (user disabled)");
+                        }
+                    }
                 }
             }
         }
@@ -624,6 +661,63 @@ namespace OmenCore.ViewModels
                 }
             }
         }
+        
+        /// <summary>
+        /// Available keyboard backend options for the dropdown.
+        /// </summary>
+        public string[] KeyboardBackendOptions => new[] { "Auto", "WmiBios", "Wmi", "Ec" };
+        
+        /// <summary>
+        /// User's preferred keyboard backend. Forces specific backend if available.
+        /// </summary>
+        public string PreferredKeyboardBackend
+        {
+            get => _config.PreferredKeyboardBackend;
+            set
+            {
+                if (_config.PreferredKeyboardBackend != value)
+                {
+                    // Warn if selecting EC without experimental enabled
+                    if (value == "Ec" && !_config.ExperimentalEcKeyboardEnabled)
+                    {
+                        var result = MessageBox.Show(
+                            "⚠️ EC Backend Selected ⚠️\n\n" +
+                            "Using EC for keyboard control requires 'Enable EC keyboard' to be checked.\n\n" +
+                            "Would you like to enable experimental EC keyboard support?\n" +
+                            "(Warning: This may cause system crashes on some models)",
+                            "Enable EC Keyboard?",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Warning,
+                            MessageBoxResult.No);
+                        
+                        if (result == MessageBoxResult.Yes)
+                        {
+                            // Enable EC first, then set backend
+                            _config.ExperimentalEcKeyboardEnabled = true;
+                            OnPropertyChanged(nameof(ExperimentalEcKeyboardEnabled));
+                        }
+                        else
+                        {
+                            return; // User cancelled, don't change backend
+                        }
+                    }
+                    
+                    _config.PreferredKeyboardBackend = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                    
+                    _logging.Info($"Keyboard backend preference changed to: {value}");
+                    
+                    // Note: Service restart required for change to take effect
+                    MessageBox.Show(
+                        $"Keyboard backend set to: {value}\n\n" +
+                        "This change will take effect after restarting OmenCore.",
+                        "Backend Changed",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+            }
+        }
 
         #endregion
 
@@ -640,6 +734,21 @@ namespace OmenCore.ViewModels
                     _config.Osd.Enabled = value;
                     OnPropertyChanged();
                     SaveSettings();
+                    
+                    // Enable or disable the OSD service at runtime
+                    if (_osdService != null)
+                    {
+                        if (value)
+                        {
+                            _osdService.Initialize();
+                            _logging.Info("OSD overlay initialized (user enabled)");
+                        }
+                        else
+                        {
+                            _osdService.Shutdown();
+                            _logging.Info("OSD overlay shutdown (user disabled)");
+                        }
+                    }
                 }
             }
         }
@@ -655,6 +764,7 @@ namespace OmenCore.ViewModels
                     _config.Osd.Position = value;
                     OnPropertyChanged();
                     SaveSettings();
+                    NotifyOsdSettingsChanged();
                 }
             }
         }
@@ -675,6 +785,14 @@ namespace OmenCore.ViewModels
                 }
             }
         }
+        
+        /// <summary>
+        /// Notify OSD service that settings have changed so it can update the overlay live
+        /// </summary>
+        private void NotifyOsdSettingsChanged()
+        {
+            _osdService?.UpdateSettings();
+        }
 
         public bool OsdShowCpuTemp
         {
@@ -685,6 +803,7 @@ namespace OmenCore.ViewModels
                 _config.Osd.ShowCpuTemp = value;
                 OnPropertyChanged();
                 SaveSettings();
+                NotifyOsdSettingsChanged();
             }
         }
 
@@ -697,6 +816,7 @@ namespace OmenCore.ViewModels
                 _config.Osd.ShowGpuTemp = value;
                 OnPropertyChanged();
                 SaveSettings();
+                NotifyOsdSettingsChanged();
             }
         }
 
@@ -709,6 +829,7 @@ namespace OmenCore.ViewModels
                 _config.Osd.ShowCpuLoad = value;
                 OnPropertyChanged();
                 SaveSettings();
+                NotifyOsdSettingsChanged();
             }
         }
 
@@ -721,6 +842,7 @@ namespace OmenCore.ViewModels
                 _config.Osd.ShowGpuLoad = value;
                 OnPropertyChanged();
                 SaveSettings();
+                NotifyOsdSettingsChanged();
             }
         }
 
@@ -733,6 +855,7 @@ namespace OmenCore.ViewModels
                 _config.Osd.ShowFanSpeed = value;
                 OnPropertyChanged();
                 SaveSettings();
+                NotifyOsdSettingsChanged();
             }
         }
 
@@ -745,6 +868,124 @@ namespace OmenCore.ViewModels
                 _config.Osd.ShowRamUsage = value;
                 OnPropertyChanged();
                 SaveSettings();
+                NotifyOsdSettingsChanged();
+            }
+        }
+
+        public bool OsdShowFps
+        {
+            get => _config.Osd?.ShowFps ?? false;
+            set
+            {
+                if (_config.Osd == null) _config.Osd = new OsdSettings();
+                _config.Osd.ShowFps = value;
+                OnPropertyChanged();
+                SaveSettings();
+                NotifyOsdSettingsChanged();
+            }
+        }
+
+        public bool OsdShowFanMode
+        {
+            get => _config.Osd?.ShowFanMode ?? true;
+            set
+            {
+                if (_config.Osd == null) _config.Osd = new OsdSettings();
+                _config.Osd.ShowFanMode = value;
+                OnPropertyChanged();
+                SaveSettings();
+                NotifyOsdSettingsChanged();
+            }
+        }
+
+        public bool OsdShowPerformanceMode
+        {
+            get => _config.Osd?.ShowPerformanceMode ?? false;
+            set
+            {
+                if (_config.Osd == null) _config.Osd = new OsdSettings();
+                _config.Osd.ShowPerformanceMode = value;
+                OnPropertyChanged();
+                SaveSettings();
+                NotifyOsdSettingsChanged();
+            }
+        }
+
+        public bool OsdShowFrametime
+        {
+            get => _config.Osd?.ShowFrametime ?? false;
+            set
+            {
+                if (_config.Osd == null) _config.Osd = new OsdSettings();
+                _config.Osd.ShowFrametime = value;
+                OnPropertyChanged();
+                SaveSettings();
+                NotifyOsdSettingsChanged();
+            }
+        }
+
+        public bool OsdShowTime
+        {
+            get => _config.Osd?.ShowTime ?? false;
+            set
+            {
+                if (_config.Osd == null) _config.Osd = new OsdSettings();
+                _config.Osd.ShowTime = value;
+                OnPropertyChanged();
+                SaveSettings();
+                NotifyOsdSettingsChanged();
+            }
+        }
+
+        public bool OsdShowGpuPower
+        {
+            get => _config.Osd?.ShowGpuPower ?? false;
+            set
+            {
+                if (_config.Osd == null) _config.Osd = new OsdSettings();
+                _config.Osd.ShowGpuPower = value;
+                OnPropertyChanged();
+                SaveSettings();
+                NotifyOsdSettingsChanged();
+            }
+        }
+
+        public bool OsdShowCpuPower
+        {
+            get => _config.Osd?.ShowCpuPower ?? false;
+            set
+            {
+                if (_config.Osd == null) _config.Osd = new OsdSettings();
+                _config.Osd.ShowCpuPower = value;
+                OnPropertyChanged();
+                SaveSettings();
+                NotifyOsdSettingsChanged();
+            }
+        }
+
+        public bool OsdShowNetworkLatency
+        {
+            get => _config.Osd?.ShowNetworkLatency ?? false;
+            set
+            {
+                if (_config.Osd == null) _config.Osd = new OsdSettings();
+                _config.Osd.ShowNetworkLatency = value;
+                OnPropertyChanged();
+                SaveSettings();
+                NotifyOsdSettingsChanged();
+            }
+        }
+
+        public bool OsdShowVramUsage
+        {
+            get => _config.Osd?.ShowVramUsage ?? false;
+            set
+            {
+                if (_config.Osd == null) _config.Osd = new OsdSettings();
+                _config.Osd.ShowVramUsage = value;
+                OnPropertyChanged();
+                SaveSettings();
+                NotifyOsdSettingsChanged();
             }
         }
 
@@ -979,6 +1220,13 @@ namespace OmenCore.ViewModels
         {
             get => _oghInstalled;
             set { _oghInstalled = value; OnPropertyChanged(); }
+        }
+        
+        private string _oghDetectionDetail = "";
+        public string OghDetectionDetail
+        {
+            get => _oghDetectionDetail;
+            set { _oghDetectionDetail = value; OnPropertyChanged(); }
         }
         
         #endregion
@@ -1498,7 +1746,7 @@ namespace OmenCore.ViewModels
                     catch { }
                 }
                 
-                // Check for XTU service conflict
+                // Check for XTU service conflict (check SERVICES not processes)
                 bool xtuRunning = false;
                 string? xtuServiceName = null;
                 try
@@ -1506,13 +1754,24 @@ namespace OmenCore.ViewModels
                     var xtuServices = new[] { "XTU3SERVICE", "XtuService", "IntelXtuService" };
                     foreach (var svc in xtuServices)
                     {
-                        var processes = Process.GetProcessesByName(svc);
-                        if (processes.Any())
+                        try
                         {
-                            xtuRunning = true;
-                            xtuServiceName = svc;
-                            foreach (var p in processes) p.Dispose();
-                            break;
+                            using var sc = new System.ServiceProcess.ServiceController(svc);
+                            // Check if service exists and is running
+                            if (sc.Status == System.ServiceProcess.ServiceControllerStatus.Running)
+                            {
+                                xtuRunning = true;
+                                xtuServiceName = svc;
+                                break;
+                            }
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            // Service doesn't exist - expected if XTU not installed
+                        }
+                        catch (System.ComponentModel.Win32Exception)
+                        {
+                            // Service doesn't exist or access denied
                         }
                     }
                 }
@@ -1528,15 +1787,15 @@ namespace OmenCore.ViewModels
                 {
                     if (xtuRunning)
                     {
-                        DriverStatusText = "WinRing0 Installed (XTU Conflict)";
-                        DriverStatusDetail = $"Intel XTU service ({xtuServiceName}) may block undervolting. Stop XTU to use OmenCore undervolting.";
+                        DriverStatusText = "WinRing0 Detected (XTU Conflict)";
+                        DriverStatusDetail = $"Intel XTU service ({xtuServiceName}) may block undervolting. Stop XTU to use OmenCore undervolting. Consider migrating to PawnIO.";
                         DriverStatusColor = new SolidColorBrush(Color.FromRgb(255, 183, 77)); // Orange
                     }
                     else
                     {
-                        DriverStatusText = "WinRing0 Installed (Legacy)";
-                        DriverStatusDetail = "Legacy driver backend detected. On Secure Boot/HVCI systems, PawnIO is recommended.";
-                        DriverStatusColor = new SolidColorBrush(Color.FromRgb(102, 187, 106)); // Green
+                        DriverStatusText = "WinRing0 Detected (Legacy)";
+                        DriverStatusDetail = "Legacy driver backend detected. Consider installing PawnIO for better Secure Boot/HVCI compatibility.";
+                        DriverStatusColor = new SolidColorBrush(Color.FromRgb(255, 183, 77)); // Orange-yellow (warn about legacy)
                     }
                 }
                 else
@@ -1550,13 +1809,13 @@ namespace OmenCore.ViewModels
                         if (memoryIntegrityEnabled) reasons.Add("Memory Integrity (HVCI) is enabled");
 
                         DriverStatusDetail =
-                            $"WinRing0 may be blocked ({string.Join(", ", reasons)}). " +
-                            "Install PawnIO (pawnio.eu) for Secure Boot compatible EC access.";
+                            $"Legacy drivers blocked ({string.Join(", ", reasons)}). " +
+                            "Install PawnIO (pawnio.eu) for Secure Boot compatible MSR/EC access.";
                     }
                     else
                     {
                         DriverStatusDetail =
-                            "Install PawnIO (recommended) or LibreHardwareMonitor (WinRing0) to enable driver-dependent features.";
+                            "Install PawnIO (recommended for Secure Boot compatibility) to enable undervolting and advanced features.";
                     }
 
                     DriverStatusColor = new SolidColorBrush(Color.FromRgb(239, 83, 80)); // Red
@@ -1633,50 +1892,36 @@ namespace OmenCore.ViewModels
         {
             // Show info about what will be installed
             var result = MessageBox.Show(
-                "OmenCore requires LibreHardwareMonitor for hardware monitoring.\n\n" +
-                "LibreHardwareMonitor includes the WinRing0 driver needed for:\n" +
-                "• CPU temperature monitoring\n" +
-                "• CPU undervolting (MSR access)\n" +
-                "• TCC offset control\n\n" +
-                "Click OK to download and install LibreHardwareMonitor.",
-                "Install Hardware Monitor", 
+                "OmenCore recommends PawnIO for advanced hardware features.\n\n" +
+                "PawnIO provides Secure Boot compatible MSR/EC access for:\n" +
+                "• CPU undervolting (Intel/AMD)\n" +
+                "• TCC offset control\n" +
+                "• EC-based fan control fallback\n\n" +
+                "Click OK to open the PawnIO website.",
+                "Install PawnIO Driver", 
                 MessageBoxButton.OKCancel, 
                 MessageBoxImage.Information);
                 
             if (result != MessageBoxResult.OK)
                 return;
             
-            // Delegate to App's download method
-            if (Application.Current is App app)
+            // Open PawnIO website (recommended for all systems)
+            try
             {
-                // Call the download method via reflection or make it public/static
-                var method = typeof(App).GetMethod("DownloadAndInstallLibreHardwareMonitor", 
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                method?.Invoke(app, null);
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "https://pawnio.eu/",
+                    UseShellExecute = true
+                });
                 
                 // Refresh status after install attempt
-                Task.Delay(3000).ContinueWith(_ => 
+                Task.Delay(5000).ContinueWith(_ => 
                     Application.Current.Dispatcher.Invoke(CheckDriverStatus));
             }
-            else
+            catch (Exception ex)
             {
-                    // Prefer PawnIO on Secure Boot / Memory Integrity systems.
-                    if (IsSecureBootEnabled() || IsMemoryIntegrityEnabled())
-                    {
-                        Process.Start(new ProcessStartInfo
-                        {
-                            FileName = "https://pawnio.eu/",
-                            UseShellExecute = true
-                        });
-                        return;
-                    }
-
-                    // Legacy / optional: LibreHardwareMonitor (WinRing0-based) backend.
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor",
-                        UseShellExecute = true
-                    });
+                MessageBox.Show($"Failed to open browser: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         
@@ -1702,6 +1947,7 @@ namespace OmenCore.ViewModels
                 try
                 {
                     OghInstalled = false;
+                    var detectedItems = new System.Collections.Generic.List<string>();
                     
                     // Check for OGH services (most reliable)
                     var oghServiceNames = new[] { "HPOmenCap", "HPOmenCommandCenter" };
@@ -1714,7 +1960,7 @@ namespace OmenCore.ViewModels
                             if (sc.Status == System.ServiceProcess.ServiceControllerStatus.Running)
                             {
                                 OghInstalled = true;
-                                break;
+                                detectedItems.Add($"Service: {serviceName} (running)");
                             }
                         }
                         catch (InvalidOperationException)
@@ -1728,24 +1974,29 @@ namespace OmenCore.ViewModels
                     }
                     
                     // Also check for running processes as backup
-                    if (!OghInstalled)
+                    var processes = new[] { "OmenCommandCenterBackground", "OmenCap", "omenmqtt" };
+                    foreach (var proc in processes)
                     {
-                        var processes = new[] { "OmenCommandCenterBackground", "OmenCap", "omenmqtt" };
-                        foreach (var proc in processes)
+                        try
                         {
-                            try
+                            var procs = System.Diagnostics.Process.GetProcessesByName(proc);
+                            if (procs.Length > 0)
                             {
-                                var procs = System.Diagnostics.Process.GetProcessesByName(proc);
-                                if (procs.Length > 0)
-                                {
-                                    OghInstalled = true;
-                                    foreach (var p in procs) p.Dispose();
-                                    break;
-                                }
+                                OghInstalled = true;
+                                // Get the process path for more detail
+                                var path = "";
+                                try { path = procs[0].MainModule?.FileName ?? ""; } catch { }
+                                var detail = string.IsNullOrEmpty(path) ? $"Process: {proc}" : $"Process: {proc} ({path})";
+                                detectedItems.Add(detail);
+                                foreach (var p in procs) p.Dispose();
                             }
-                            catch { }
                         }
+                        catch { }
                     }
+                    
+                    OghDetectionDetail = detectedItems.Count > 0 
+                        ? string.Join("\n", detectedItems) 
+                        : "Not detected";
                 }
                 catch
                 {
@@ -1758,7 +2009,7 @@ namespace OmenCore.ViewModels
                 else if (OghInstalled)
                     FanBackend = "WMI BIOS (OGH)";
                 else if (!SecureBootEnabled)
-                    FanBackend = "WMI BIOS + WinRing0";
+                    FanBackend = "WMI BIOS + Legacy EC";
                 else
                     FanBackend = "WMI BIOS";
             }
@@ -1869,6 +2120,7 @@ namespace OmenCore.ViewModels
         private bool _isScanningBloatware;
         private int _bloatwareCount;
         private string _bloatwareList = "";
+        private string _bloatwareProgress = "";
         
         public bool IsScanningBloatware
         {
@@ -1888,6 +2140,12 @@ namespace OmenCore.ViewModels
             set { _bloatwareList = value; OnPropertyChanged(); }
         }
         
+        public string BloatwareProgress
+        {
+            get => _bloatwareProgress;
+            set { _bloatwareProgress = value; OnPropertyChanged(); }
+        }
+        
         public ICommand ScanBloatwareCommand { get; }
         public ICommand RemoveBloatwareCommand { get; }
         
@@ -1896,6 +2154,7 @@ namespace OmenCore.ViewModels
             if (IsScanningBloatware) return;
             
             IsScanningBloatware = true;
+            BloatwareProgress = "Scanning for HP bloatware packages...";
             BloatwareList = "Scanning for HP bloatware...";
             BloatwareCount = 0;
             
@@ -2003,19 +2262,23 @@ namespace OmenCore.ViewModels
                 return;
                 
             IsScanningBloatware = true;
+            BloatwareProgress = "Starting bloatware removal...";
             BloatwareList = "Removing HP bloatware packages...\n\nThis may take a few minutes...";
             
             try
             {
                 var removed = 0;
                 var failed = 0;
+                var packageNames = new System.Collections.Generic.List<string>();
                 
+                // First get the list of packages to remove
+                BloatwareProgress = "[1/3] Getting package list...";
                 await Task.Run(() =>
                 {
                     var psi = new ProcessStartInfo
                     {
                         FileName = "powershell.exe",
-                        Arguments = "-NoProfile -ExecutionPolicy Bypass -Command \"Get-AppxPackage | Where-Object { $_.Name -like 'AD2F1837.HP*' -and $_.Name -notlike '*HPSupportAssistant*' } | ForEach-Object { try { Remove-AppxPackage -Package $_.PackageFullName -ErrorAction Stop; Write-Output \"OK:$($_.Name)\" } catch { Write-Output \"FAIL:$($_.Name)\" } }\"",
+                        Arguments = "-NoProfile -Command \"Get-AppxPackage | Where-Object { $_.Name -like 'AD2F1837.HP*' -and $_.Name -notlike '*HPSupportAssistant*' } | Select-Object -ExpandProperty Name\"",
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
                         CreateNoWindow = true
@@ -2026,23 +2289,51 @@ namespace OmenCore.ViewModels
                     {
                         var output = process.StandardOutput.ReadToEnd();
                         process.WaitForExit();
-                        
-                        var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                        foreach (var line in lines)
-                        {
-                            if (line.StartsWith("OK:"))
-                            {
-                                removed++;
-                                _logging.Info($"Removed: {line.Substring(3)}");
-                            }
-                            else if (line.StartsWith("FAIL:"))
-                            {
-                                failed++;
-                                _logging.Warn($"Failed to remove: {line.Substring(5)}");
-                            }
-                        }
+                        packageNames.AddRange(output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).Where(s => !string.IsNullOrEmpty(s)));
                     }
                 });
+                
+                BloatwareProgress = $"[2/3] Removing {packageNames.Count} packages...";
+                var total = packageNames.Count;
+                var current = 0;
+                
+                // Remove each package individually with progress
+                foreach (var packageName in packageNames)
+                {
+                    current++;
+                    BloatwareProgress = $"[2/3] Removing {current}/{total}: {packageName.Replace("AD2F1837.", "")}...";
+                    
+                    await Task.Run(() =>
+                    {
+                        var psi = new ProcessStartInfo
+                        {
+                            FileName = "powershell.exe",
+                            Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"Get-AppxPackage -Name '{packageName}' | Remove-AppxPackage -ErrorAction Stop\"",
+                            UseShellExecute = false,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            CreateNoWindow = true
+                        };
+                        
+                        using var process = Process.Start(psi);
+                        if (process != null)
+                        {
+                            process.WaitForExit();
+                            if (process.ExitCode == 0)
+                            {
+                                removed++;
+                                _logging.Info($"Removed: {packageName}");
+                            }
+                            else
+                            {
+                                failed++;
+                                _logging.Warn($"Failed to remove: {packageName}");
+                            }
+                        }
+                    });
+                }
+                
+                BloatwareProgress = "[3/3] Cleanup complete!";
                 
                 BloatwareList = $"✓ Bloatware removal complete!\n\n" +
                               $"• Removed: {removed} package(s)\n" +

@@ -34,6 +34,11 @@ namespace OmenCore.Services
         private bool _curveEnabled = false;
         private readonly object _curveLock = new();
         
+        /// <summary>
+        /// Expose ThermalSensorProvider for OSD and other services that need temperature data.
+        /// </summary>
+        public ThermalSensorProvider ThermalProvider => _thermalProvider;
+        
         // Curve update timing (like OmenMon's 15-second interval)
         private const int CurveUpdateIntervalMs = 15000; // 15 seconds between curve updates
         private const int MonitorMinIntervalMs = 1000;   // 1 second minimum for UI updates
@@ -47,6 +52,10 @@ namespace OmenCore.Services
         private int _stableReadings = 0;
         private const int StableThreshold = 3; // Number of stable readings before slowing down
         private const double TempChangeThreshold = 3.0; // °C change to trigger faster polling
+        
+        // Fan telemetry change detection - reduce UI churn by only updating on meaningful change
+        private List<int> _lastFanSpeeds = new();
+        private const int FanSpeedChangeThreshold = 50; // RPM change to trigger UI update
         
         // Thermal protection - override Auto mode when temps get too high
         // Lowered thresholds based on user feedback - fans were spinning up too late
@@ -301,6 +310,20 @@ namespace OmenCore.Services
                     
                     // Read fan speeds (less frequently to reduce ACPI overhead)
                     var fanSpeeds = _fanController.ReadFanSpeeds().ToList();
+                    
+                    // Check if fan speeds changed meaningfully (reduce UI churn)
+                    bool fanSpeedsChanged = fanSpeeds.Count != _lastFanSpeeds.Count;
+                    if (!fanSpeedsChanged)
+                    {
+                        for (int i = 0; i < fanSpeeds.Count; i++)
+                        {
+                            if (Math.Abs(fanSpeeds[i].Rpm - _lastFanSpeeds[i]) > FanSpeedChangeThreshold)
+                            {
+                                fanSpeedsChanged = true;
+                                break;
+                            }
+                        }
+                    }
 
                     // Use BeginInvoke to avoid potential deadlocks
                     App.Current?.Dispatcher?.BeginInvoke(() =>
@@ -312,11 +335,16 @@ namespace OmenCore.Services
                             _thermalSamples.RemoveAt(0);
                         }
 
-                        // Update fan telemetry
-                        _fanTelemetry.Clear();
-                        foreach (var fan in fanSpeeds)
+                        // Only update fan telemetry if values changed meaningfully
+                        // This reduces GC pressure and UI update churn
+                        if (fanSpeedsChanged)
                         {
-                            _fanTelemetry.Add(fan);
+                            _fanTelemetry.Clear();
+                            foreach (var fan in fanSpeeds)
+                            {
+                                _fanTelemetry.Add(fan);
+                            }
+                            _lastFanSpeeds = fanSpeeds.Select(f => f.Rpm).ToList();
                         }
                     });
                 }
@@ -413,9 +441,11 @@ namespace OmenCore.Services
                 }
                 else
                 {
-                    // No preset - reset fans to let BIOS take over
-                    _logging.Info("Resetting fan control to BIOS default");
-                    _fanController.SetFanSpeed(0); // 0 = let BIOS control
+                    // No preset - use RestoreAutoControl() to properly return control to BIOS
+                    // NOTE: SetFanSpeed(0) is NOT safe on WMI backend - some firmware treats
+                    // it as "minimum speed" rather than "auto". Always use RestoreAutoControl().
+                    _logging.Info("Restoring fan control to BIOS auto mode");
+                    _fanController.RestoreAutoControl();
                 }
             }
         }

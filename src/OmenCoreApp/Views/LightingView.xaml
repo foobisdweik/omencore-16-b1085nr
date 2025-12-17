@@ -14,10 +14,16 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <TextBlock Grid.Row="0" Text="RGB Lighting &amp; Peripherals" 
-                   FontSize="28" FontWeight="Bold" 
-                   Foreground="{StaticResource TextPrimaryBrush}" 
-                   Margin="0,0,0,16"/>
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="RGB Lighting &amp; Peripherals" 
+                       FontSize="28" FontWeight="Bold" 
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="Control keyboard RGB, Corsair peripherals, and Logitech devices" 
+                       FontSize="12" 
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       Opacity="0.9"
+                       Margin="0,4,0,0"/>
+        </StackPanel>
 
         <ScrollViewer Grid.Row="1" Style="{StaticResource SmoothScrollViewer}" utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="1.2">
             <StackPanel>
@@ -390,7 +396,7 @@
                                     <TextBlock Text="Zone 1" FontSize="12" 
                                                Foreground="{StaticResource TextSecondaryBrush}"
                                                HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Left" FontSize="10" 
+                                    <TextBlock Text="WASD" FontSize="10" 
                                                Foreground="{StaticResource TextTertiaryBrush}"
                                                HorizontalAlignment="Center"/>
                                     <Ellipse Width="20" Height="20" Fill="{Binding Zone1Brush}" 
@@ -408,11 +414,14 @@
                                     CornerRadius="8" Padding="12,8" Margin="3,0"
                                     BorderBrush="{Binding Zone2Brush}" BorderThickness="2"
                                     Cursor="Hand">
+                                <Border.InputBindings>
+                                    <MouseBinding MouseAction="LeftClick" Command="{Binding SetZone2ColorCommand}"/>
+                                </Border.InputBindings>
                                 <StackPanel HorizontalAlignment="Center">
                                     <TextBlock Text="Zone 2" FontSize="12" 
                                                Foreground="{StaticResource TextSecondaryBrush}"
                                                HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Middle-L" FontSize="10" 
+                                    <TextBlock Text="Left" FontSize="10" 
                                                Foreground="{StaticResource TextTertiaryBrush}"
                                                HorizontalAlignment="Center"/>
                                     <Ellipse Width="20" Height="20" Fill="{Binding Zone2Brush}" 
@@ -430,11 +439,14 @@
                                     CornerRadius="8" Padding="12,8" Margin="3,0"
                                     BorderBrush="{Binding Zone3Brush}" BorderThickness="2"
                                     Cursor="Hand">
+                                <Border.InputBindings>
+                                    <MouseBinding MouseAction="LeftClick" Command="{Binding SetZone3ColorCommand}"/>
+                                </Border.InputBindings>
                                 <StackPanel HorizontalAlignment="Center">
                                     <TextBlock Text="Zone 3" FontSize="12" 
                                                Foreground="{StaticResource TextSecondaryBrush}"
                                                HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Middle-R" FontSize="10" 
+                                    <TextBlock Text="Right" FontSize="10" 
                                                Foreground="{StaticResource TextTertiaryBrush}"
                                                HorizontalAlignment="Center"/>
                                     <Ellipse Width="20" Height="20" Fill="{Binding Zone3Brush}" 
@@ -452,11 +464,14 @@
                                     CornerRadius="8" Padding="12,8" Margin="6,0,0,0"
                                     BorderBrush="{Binding Zone4Brush}" BorderThickness="2"
                                     Cursor="Hand">
+                                <Border.InputBindings>
+                                    <MouseBinding MouseAction="LeftClick" Command="{Binding SetZone4ColorCommand}"/>
+                                </Border.InputBindings>
                                 <StackPanel HorizontalAlignment="Center">
                                     <TextBlock Text="Zone 4" FontSize="12" 
                                                Foreground="{StaticResource TextSecondaryBrush}"
                                                HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Right" FontSize="10" 
+                                    <TextBlock Text="Far Right" FontSize="10" 
                                                Foreground="{StaticResource TextTertiaryBrush}"
                                                HorizontalAlignment="Center"/>
                                     <Ellipse Width="20" Height="20" Fill="{Binding Zone4Brush}" 

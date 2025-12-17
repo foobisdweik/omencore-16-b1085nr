@@ -13,59 +13,26 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
             <!-- Header -->
             <StackPanel Grid.Row="0" Margin="0,0,0,24">
                 <Border Style="{StaticResource SurfaceCard}" 
-                        Padding="16,12"
+                        Padding="20,14"
                         HorizontalAlignment="Center">
                     <StackPanel Orientation="Horizontal">
-                        <Image Source="pack://application:,,,/Assets/omen.png" Width="48" Height="48" Margin="0,0,16,0" VerticalAlignment="Center" />
+                        <Image Source="{Binding BrandLogoPath}" Width="48" Height="48" Margin="0,0,16,0" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality" />
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Performance &amp; Cooling" FontSize="20" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
-                            <TextBlock Text="Select a profile to optimize performance and cooling together" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" />
+                            <TextBlock Text="Select a profile to optimize performance and cooling together" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" Opacity="0.9" Margin="0,2,0,0" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
             </StackPanel>
 
-            <!-- Current Status Display -->
-            <Border Grid.Row="1" 
-                    Background="{StaticResource SurfaceDarkBrush}"
-                    BorderBrush="{StaticResource AccentBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="20,16"
-                    Margin="0,0,0,24"
-                    HorizontalAlignment="Center">
-                <StackPanel Orientation="Horizontal">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,30,0">
-                        <Path Data="{StaticResource IconPerformance}" Width="20" Height="20" Fill="{StaticResource AccentBrush}" Stretch="Uniform" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                        <StackPanel>
-                            <TextBlock Text="Performance Mode" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}"/>
-                            <TextBlock Text="{Binding CurrentPerformanceMode, FallbackValue=Default}" 
-                                       FontSize="16" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentBrush}"/>
-                        </StackPanel>
-                    </StackPanel>
-                    <Rectangle Width="1" Height="40" Fill="{StaticResource BorderBrush}"/>
-                    <StackPanel Orientation="Horizontal" Margin="30,0,0,0">
-                        <Path Data="{StaticResource IconFan}" Width="20" Height="20" Fill="{StaticResource AccentBlueBrush}" Stretch="Uniform" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                        <StackPanel>
-                            <TextBlock Text="Fan Mode" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}"/>
-                            <TextBlock Text="{Binding CurrentFanMode, FallbackValue=Auto}" 
-                                       FontSize="16" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentBlueBrush}"/>
-                        </StackPanel>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
             <!-- Paired Profile Selection -->
-            <Border Grid.Row="2" Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,24">
+            <Border Grid.Row="1" Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,24">
                 <StackPanel>
                     <TextBlock Text="QUICK PROFILES" Style="{StaticResource Label}" Margin="0,0,0,8"/>
                     <TextBlock Text="Each profile pairs a performance mode with an optimal fan configuration" 
@@ -161,7 +128,7 @@
             </Border>
 
             <!-- Live Status -->
-            <Grid Grid.Row="3">
+            <Grid Grid.Row="2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>

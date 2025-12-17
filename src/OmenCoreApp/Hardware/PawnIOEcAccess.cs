@@ -81,6 +81,25 @@ namespace OmenCore.Hardware
             // These registers vary by model and caused hard crashes on OMEN 17-ck2xxx.
             // Use WMI BIOS SetColorTable() for keyboard lighting instead.
         };
+        
+        /// <summary>
+        /// Experimental keyboard EC addresses - enabled only when user explicitly enables EC keyboard.
+        /// WARNING: These may cause system crashes on some models!
+        /// </summary>
+        private static readonly HashSet<ushort> ExperimentalKeyboardAddresses = new()
+        {
+            0xB2, 0xB3, // Zone 1 G, B
+            0xB4, 0xB5, 0xB6, // Zone 2 R, G, B  
+            0xB7, 0xB8, 0xB9, // Zone 3 R, G, B
+            0xBA, 0xBB, 0xBC, // Zone 4 R, G, B
+            0xBD, // Keyboard brightness
+            0xBE, // Keyboard effect
+        };
+        
+        /// <summary>
+        /// Enable experimental keyboard EC writes. Set this to true when ExperimentalEcKeyboardEnabled is on.
+        /// </summary>
+        public static bool EnableExperimentalKeyboardWrites { get; set; } = false;
 
         // EC mutex to prevent concurrent access
         private static readonly Mutex EcMutex = new(false, @"Global\Access_EC");
@@ -329,7 +348,11 @@ namespace OmenCore.Hardware
             EnsureAvailable();
 
             // CRITICAL SAFETY CHECK: Only allow writes to pre-approved addresses
-            if (!AllowedWriteAddresses.Contains(address))
+            // Also allow experimental keyboard addresses if explicitly enabled
+            bool isAllowed = AllowedWriteAddresses.Contains(address) ||
+                             (EnableExperimentalKeyboardWrites && ExperimentalKeyboardAddresses.Contains(address));
+            
+            if (!isAllowed)
             {
                 var allowedList = string.Join(", ", AllowedWriteAddresses.Select(a => $"0x{a:X2}"));
                 throw new UnauthorizedAccessException(

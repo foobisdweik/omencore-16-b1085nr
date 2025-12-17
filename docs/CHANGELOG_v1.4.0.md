@@ -1,8 +1,8 @@
-# OmenCore v1.4.0 Changelog
+# OmenCore v1.4.0-beta3 Changelog
 
 **Release Date:** December 16, 2025
-**Status:** Stable Release
-**Focus:** System Maintenance, RGB Improvements, and Bloatware Removal
+**Status:** Beta 3
+**Focus:** System Maintenance, RGB Improvements, Corsair Detection, and Bloatware Removal
 
 ---
 
@@ -14,6 +14,7 @@
 - **Smart Protection:** Automatically preserves HP Support Assistant for driver updates
 - **Detailed Results:** Shows count and list of detected packages in scrollable view
 - **Warning System:** Clear warnings about irreversibility and restart recommendations
+- **Progress Indicator:** Step-by-step progress during removal (Scanning → Removing X/Y → Complete)
 - **Location:** Settings tab → HP Bloatware Removal section
 
 ### 🧹 Automatic Log Cleanup
@@ -89,6 +90,34 @@
   - **Logging:** Exceptions are automatically logged for debugging
   - **User Guidance:** Error messages include recovery tips
 
+### Keyboard RGB Fixes (beta3)
+- **ColorTable Format:** Fixed keyboard RGB color table structure to match OmenMon's 128-byte format
+  - **Issue:** Colors were placed at wrong offset (byte 0 instead of byte 25)
+  - **Fix:** Proper structure: ZoneCount at byte 0, 24-byte padding, colors at byte 25+
+  - **Impact:** Should fix keyboards that report WMI success but don't change colors
+- **Keyboard Type Detection:** Added `GetKeyboardType()` method to detect Standard/TenKeyLess/PerKeyRgb keyboards
+- **Backlight Check:** Added `HasBacklight()` method to verify keyboard backlight support
+
+### XTU Detection Fix (beta3)
+- **Issue:** XTU was detected by checking running processes, but XTU runs as a service
+- **Fix:** Now uses `ServiceController` to check for XTU3SERVICE and XTUOCDriverService
+- **Impact:** Correctly detects XTU when installed, allowing proper undervolting warnings
+
+### OGH Cleanup Enhancement (beta3)
+- **Added Services:** HpTouchpointAnalyticsService, HPDiagsCap added to cleanup list
+- **Impact:** More thorough OMEN Gaming Hub removal
+
+### Corsair Device Detection (beta3)
+- **New Device Type:** Added `WirelessDongle` type to properly identify USB receivers
+- **Dark Core RGB PRO:** Fixed detection - 0x1B80 is the mouse, 0x1B81 is the receiver
+- **Fixed PIDs:**
+  - 0x1B80 → Dark Core RGB PRO Wireless (mouse)
+  - 0x1B81 → Dark Core RGB PRO Receiver (dongle)
+  - 0x1BA4 → Dark Core RGB PRO SE Wireless (mouse variant)
+  - 0x0A4E → HS70 PRO Wireless Receiver (headset dongle)
+- **Better Logging:** Shows 📡 for receivers, 🎮 for actual devices
+- **Notes Field:** Added device notes to explain limitations (e.g., "USB receiver for Dark Core RGB PRO mouse")
+
 ### General
 - **Thread Safety:** Fixed potential thread-safety issues in fatal error dialogs (proper `Dispatcher.CheckAccess()` usage)
 - **Error Messages:** Improved error message clarity with actionable recovery guidance throughout the application
@@ -159,7 +188,7 @@
 - ❌ XAML resource name mismatch causing startup crash (Fixed in v1.4.0)
 
 ### Still Being Investigated
-- 🔍 Some users report WMI keyboard lighting doesn't work on specific models (workaround: experimental EC toggle)
+- 🔍 **Keyboard RGB doesn't work** - WMI reports success but colors don't change on most models (complete rework planned for v1.5)
 - 🔍 LibreHardwareMonitor occasionally fails to detect NVMe SSD temperature sensors (LHM limitation)
 - 🔍 Game profile detection may miss games launched through certain launchers (Steam overlay interference)
 
@@ -178,8 +207,8 @@
 
 ## 💾 Installation
 
-**Download:** `OmenCoreSetup-1.4.0.exe`
-**SHA256:** `68B328812FA7798B0CA0C7ACAE656F5EBEA2D535BE5ABCACE5D467A4D4FCFE46`
+**Download:** `OmenCoreSetup-1.4.0-beta3.exe`
+**SHA256:** `C87CDF40051ED8D9BB401937C5FBED1ADB150ED01B9C04F618578CBCF3718CCE`
 
 ### Requirements
 - Windows 10/11 (64-bit)
