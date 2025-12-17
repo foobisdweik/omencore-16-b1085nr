@@ -26,6 +26,8 @@ namespace OmenCore.Services
         private MonitoringSample? _lastSample;
         private readonly double _changeThreshold = 0.5; // Minimum change to trigger UI update (degrees/percent)
         private readonly double _lowOverheadChangeThreshold = 3.0; // Higher threshold in low overhead mode
+        private bool _isPaused; // For S0 Modern Standby support
+        private readonly object _pauseLock = new();
 
         public ReadOnlyObservableCollection<MonitoringSample> Samples { get; }
         public event EventHandler<MonitoringSample>? SampleUpdated;
@@ -62,6 +64,39 @@ namespace OmenCore.Services
             }
         }
 
+        /// <summary>
+        /// Pause monitoring during system suspend (S0 Modern Standby).
+        /// Prevents fan revving from WMI/EC queries while system is in standby.
+        /// </summary>
+        public void Pause()
+        {
+            lock (_pauseLock)
+            {
+                if (!_isPaused)
+                {
+                    _isPaused = true;
+                    _logging.Info("Hardware monitoring paused (system entering standby)");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Resume monitoring after system wakes from suspend.
+        /// </summary>
+        public void Resume()
+        {
+            lock (_pauseLock)
+            {
+                if (_isPaused)
+                {
+                    _isPaused = false;
+                    _logging.Info("Hardware monitoring resumed (system waking from standby)");
+                }
+            }
+        }
+
+        public bool IsPaused => _isPaused;
+
         public void Start()
         {
             Stop();
@@ -88,6 +123,21 @@ namespace OmenCore.Services
 
             while (!token.IsCancellationRequested)
             {
+                // Check if paused (S0 Modern Standby support)
+                if (_isPaused)
+                {
+                    try
+                    {
+                        // Wait while paused, checking every 500ms
+                        await Task.Delay(500, token);
+                        continue;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                }
+
                 try
                 {
                     var sample = await _bridge.ReadSampleAsync(token);

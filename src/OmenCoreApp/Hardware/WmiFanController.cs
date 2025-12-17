@@ -138,9 +138,12 @@ namespace OmenCore.Hardware
                     return false;
                 }
                 
-                // For non-Max presets, we need a robust reset sequence
-                // Some HP BIOS versions require multiple steps to exit max mode
-                ResetFromMaxMode();
+                // For non-Max presets, only run reset sequence if we were in max mode
+                // This avoids unnecessary delays when switching between non-max presets
+                if (IsManualControlActive)
+                {
+                    ResetFromMaxMode();
+                }
                 
                 // Map preset to fan mode
                 var mode = MapPresetToFanMode(preset);
@@ -375,8 +378,8 @@ namespace OmenCore.Hardware
                     _logging?.Warn("  Step 1: SetFanMax(false) failed");
                 }
                 
-                // Small delay between commands
-                System.Threading.Thread.Sleep(50);
+                // Small delay between commands (reduced from 50ms to 25ms)
+                System.Threading.Thread.Sleep(25);
                 
                 // Step 2: Reset thermal policy to Default
                 // This forces BIOS to reconsider fan control
@@ -385,7 +388,7 @@ namespace OmenCore.Hardware
                     _logging?.Info("  Step 2: SetFanMode(Default) succeeded");
                 }
                 
-                System.Threading.Thread.Sleep(50);
+                System.Threading.Thread.Sleep(25);
                 
                 // Step 3: Set fan levels to minimum (20 krpm = ~2000 RPM)
                 // This gives BIOS a "hint" to reduce speed
@@ -394,7 +397,7 @@ namespace OmenCore.Hardware
                     _logging?.Info("  Step 3: SetFanLevel(20, 20) succeeded");
                 }
                 
-                System.Threading.Thread.Sleep(100);
+                System.Threading.Thread.Sleep(50);
                 
                 // Step 4: Set fan levels to 0 to let BIOS take over
                 if (_wmiBios.SetFanLevel(0, 0))
@@ -402,8 +405,8 @@ namespace OmenCore.Hardware
                     _logging?.Info("  Step 4: SetFanLevel(0, 0) succeeded");
                 }
                 
-                // Final delay to let BIOS process all commands
-                System.Threading.Thread.Sleep(100);
+                // Final delay to let BIOS process (reduced from 100ms to 50ms)
+                System.Threading.Thread.Sleep(50);
                 
                 _logging?.Info("MAX mode reset sequence completed");
             }

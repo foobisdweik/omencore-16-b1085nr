@@ -27,6 +27,7 @@ namespace OmenCore.ViewModels
         private readonly BiosUpdateService _biosUpdateService;
         private readonly OmenKeyService? _omenKeyService;
         private readonly OsdService? _osdService;
+        private readonly HardwareMonitoringService? _hardwareMonitoringService;
         
         private bool _startWithWindows;
         private bool _startMinimized;
@@ -84,7 +85,8 @@ namespace OmenCore.ViewModels
             SystemInfoService systemInfoService, FanCleaningService fanCleaningService,
             BiosUpdateService biosUpdateService,
             OmenKeyService? omenKeyService = null,
-            OsdService? osdService = null)
+            OsdService? osdService = null,
+            HardwareMonitoringService? hardwareMonitoringService = null)
         {
             _logging = logging;
             _configService = configService;
@@ -94,9 +96,13 @@ namespace OmenCore.ViewModels
             _biosUpdateService = biosUpdateService;
             _omenKeyService = omenKeyService;
             _osdService = osdService;
+            _hardwareMonitoringService = hardwareMonitoringService;
 
             // Load saved settings
             LoadSettings();
+            
+            // Initialize power status
+            RefreshPowerStatus();
 
             // Initialize commands
             OpenConfigFolderCommand = new RelayCommand(_ => OpenConfigFolder());
@@ -211,10 +217,23 @@ namespace OmenCore.ViewModels
                 {
                     _lowOverheadMode = value;
                     OnPropertyChanged();
+                    
+                    // Apply immediately to monitoring service
+                    _hardwareMonitoringService?.SetLowOverheadMode(value);
+                    _logging.Info($"Low overhead mode {(value ? "enabled" : "disabled")}");
+                    
+                    // Raise event for MainViewModel to update MonitoringGraphsVisible
+                    LowOverheadModeChanged?.Invoke(this, value);
+                    
                     SaveSettings();
                 }
             }
         }
+        
+        /// <summary>
+        /// Event raised when low overhead mode changes, so MainViewModel can update UI
+        /// </summary>
+        public event EventHandler<bool>? LowOverheadModeChanged;
 
         #endregion
 
@@ -293,21 +312,35 @@ namespace OmenCore.ViewModels
         public string[] FanPresetOptions => new[] { "Auto", "Quiet", "Performance", "Max" };
         public string[] PerformanceModeOptions => new[] { "Silent", "Balanced", "Performance", "Turbo" };
 
+        private string _currentPowerStatus = "Unknown";
         public string CurrentPowerStatus
         {
-            get
+            get => _currentPowerStatus;
+            private set
             {
-                try
+                if (_currentPowerStatus != value)
                 {
-                    var powerStatus = System.Windows.Forms.SystemInformation.PowerStatus;
-                    return powerStatus.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Online
-                        ? "⚡ AC Power Connected"
-                        : "🔋 On Battery";
+                    _currentPowerStatus = value;
+                    OnPropertyChanged();
                 }
-                catch
-                {
-                    return "Unknown";
-                }
+            }
+        }
+        
+        /// <summary>
+        /// Refresh the current power status display
+        /// </summary>
+        public void RefreshPowerStatus()
+        {
+            try
+            {
+                var powerStatus = System.Windows.Forms.SystemInformation.PowerStatus;
+                CurrentPowerStatus = powerStatus.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Online
+                    ? "⚡ AC Power Connected"
+                    : "🔋 On Battery";
+            }
+            catch
+            {
+                CurrentPowerStatus = "Unknown";
             }
         }
 

@@ -26,6 +26,8 @@ namespace OmenCore.Services
         private bool _disposed;
 
         public event EventHandler<PowerStateChangedEventArgs>? PowerStateChanged;
+        public event EventHandler? SystemSuspending;
+        public event EventHandler? SystemResuming;
 
         public bool IsEnabled 
         { 
@@ -186,6 +188,61 @@ namespace OmenCore.Services
             {
                 _logging.Info($"PowerModeChanged event received: Mode={e.Mode}");
                 
+                // Handle suspend (S0 Modern Standby) - pause hardware monitoring to prevent fan revving
+                if (e.Mode == PowerModes.Suspend)
+                {
+                    _logging.Info("System entering suspend/standby mode");
+                    try
+                    {
+                        SystemSuspending?.Invoke(this, EventArgs.Empty);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Warn($"Error in SystemSuspending handler: {ex.Message}");
+                    }
+                    return;
+                }
+
+                // Handle resume from suspend - resume hardware monitoring
+                if (e.Mode == PowerModes.Resume)
+                {
+                    _logging.Info("System resuming from suspend/standby");
+                    try
+                    {
+                        SystemResuming?.Invoke(this, EventArgs.Empty);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Warn($"Error in SystemResuming handler: {ex.Message}");
+                    }
+                    
+                    // After resume, check if AC state changed while asleep
+                    var postResumeAcState = GetCurrentAcState();
+                    if (postResumeAcState != _lastKnownAcState)
+                    {
+                        _lastKnownAcState = postResumeAcState;
+                        _logging.Info($"AC state changed during sleep: now {(postResumeAcState ? "AC Connected" : "On Battery")}");
+                        
+                        try
+                        {
+                            if (System.Windows.Application.Current?.Dispatcher != null)
+                            {
+                                System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+                                {
+                                    PowerStateChanged?.Invoke(this, new PowerStateChangedEventArgs(postResumeAcState));
+                                });
+                            }
+                        }
+                        catch { }
+                        
+                        if (_isEnabled)
+                        {
+                            ApplyPowerProfile(postResumeAcState);
+                        }
+                    }
+                    return;
+                }
+
                 // Only respond to actual power line changes
                 if (e.Mode != PowerModes.StatusChange)
                 {

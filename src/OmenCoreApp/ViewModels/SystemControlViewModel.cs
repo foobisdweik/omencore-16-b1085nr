@@ -21,6 +21,7 @@ namespace OmenCore.ViewModels
         private readonly ConfigurationService _configService;
         private readonly HpWmiBios? _wmiBios;
         private readonly OghServiceProxy? _oghProxy;
+        private readonly SystemInfoService? _systemInfoService;
         private IMsrAccess? _msrAccess;  // Changed from WinRing0MsrAccess to IMsrAccess
 
         private PerformanceMode? _selectedPerformanceMode;
@@ -226,9 +227,21 @@ namespace OmenCore.ViewModels
         /// <summary>
         /// Short status message for performance mode capabilities shown in UI.
         /// </summary>
-        public string PerformanceModeCapabilityStatus => PerformanceModeEcControlAvailable
-            ? "✓ Full control (Power Plan + Fan + CPU/GPU Limits)"
-            : "ℹ️ Partial control (Power Plan + Fan only - EC unavailable)";
+        public string PerformanceModeCapabilityStatus
+        {
+            get
+            {
+                if (PerformanceModeEcControlAvailable)
+                    return "✓ Full control (Power Plan + Fan + CPU/GPU Limits)";
+                
+                // Check if this is a Spectre laptop - provide more specific guidance
+                var sysInfo = _systemInfoService?.GetSystemInfo();
+                if (sysInfo?.IsHpSpectre == true)
+                    return "ℹ️ HP Spectre: Power Plan + Fan only (use Intel XTU or ThrottleStop for CPU power limits)";
+                
+                return "ℹ️ Partial control (Power Plan + Fan only - EC unavailable)";
+            }
+        }
 
         private string _currentGpuMode = "Detecting...";
         public string CurrentGpuMode
@@ -410,7 +423,8 @@ namespace OmenCore.ViewModels
             LoggingService logging,
             ConfigurationService configService,
             HpWmiBios? wmiBios = null,
-            OghServiceProxy? oghProxy = null)
+            OghServiceProxy? oghProxy = null,
+            SystemInfoService? systemInfoService = null)
         {
             _undervoltService = undervoltService;
             _performanceModeService = performanceModeService;
@@ -421,6 +435,7 @@ namespace OmenCore.ViewModels
             _configService = configService;
             _wmiBios = wmiBios;
             _oghProxy = oghProxy;
+            _systemInfoService = systemInfoService;
 
             _undervoltService.StatusChanged += (s, status) => 
             {

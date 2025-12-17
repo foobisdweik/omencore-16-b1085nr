@@ -11,7 +11,7 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 - ✅ **No Ads** - Clean, focused interface
 - ✅ **No Sign-In Required** - Full offline operation
 
-[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v1.4.0)
+[![Version](https://img.shields.io/badge/version-1.5.0--beta2-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v1.5.0-beta2)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Website](https://img.shields.io/badge/website-omencore.info-brightgreen.svg)](https://omencore.info)
@@ -22,36 +22,28 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 
 ---
 
-## 🆕 What's New in v1.4.0
+## 🆕 What's New in v1.5.0-beta2
 
-### 🗑️ HP Bloatware Removal Tool
-- **One-Click Scanner** - Detects HP pre-installed bloatware apps
-- **Safe Removal** - Uninstalls bloatware with confirmation dialog
-- **Smart Protection** - Automatically preserves HP Support Assistant
-- **Detailed Results** - Shows count and list of detected packages
-- **Location** - Settings tab → HP Bloatware Removal section
+### 🔧 Bug Fixes (from tester feedback)
+- **Auto-update file locking** - Fixed "file in use" errors with retry logic
+- **AC/Battery crash** - Fixed crash when unplugging power adapter
+- **AC status indicator** - Now updates live when plugging/unplugging
+- **CPU overhead option** - Low overhead mode now properly hides charts
+- **S0 Modern Standby** - Fans no longer rev during standby/sleep
+- **Preset swap delay** - 50-100% faster transitions between presets
+- **Installer text** - Fixed truncated welcome screen
+- **Window focus** - Reliable focus when restoring from tray
 
-### 🎨 Keyboard RGB Improvements
-- **Success Rate Tracking** - Telemetry counters track WMI vs EC keyboard success rates
-- **Desktop Support** - Keyboard lighting now works on OMEN desktops (25L/30L/40L/45L)
-- **Experimental EC Mode** - Opt-in toggle for models where WMI doesn't work
-- **User Hints** - Suggests enabling EC mode if WMI has 0% success rate
-- **Better Logging** - Service logs telemetry summary for debugging
+### 💻 HP Spectre Support
+- **Spectre-specific messaging** - Clear guidance about power limit limitations
+- **Helpful suggestions** - Recommends Intel XTU or ThrottleStop for CPU power control
+- **What works on Spectre**: Fan control, monitoring, power plans, presets
+- **What doesn't**: Direct CPU/GPU power limits (EC registers differ from OMEN)
 
-### 🚀 Performance & Stability
-- **WMI Caching** - 60-75% reduction in WMI queries, 200-300ms faster startup
-- **Adaptive Polling** - 80% reduction in CPU wake-ups when idle
-- **Auto Log Cleanup** - Deletes log files older than 7 days automatically
-- **Fan Curve Validation** - 6 safety checks prevent invalid curves
-- **Exception Handling** - AsyncRelayCommand now catches all exceptions
+### ✨ Tester Feedback
+> "Fan hysteresis seems to be improved, it is much more smoother than 1.4"
 
-### 🐛 Critical Bug Fixes
-- **Fan curve application** - Auto mode now properly applies software curves
-- **Thread safety** - Fixed cross-thread UI access in fatal dialogs
-- **XAML resources** - Fixed BooleanToVisibilityConverter startup crash
-- **Error messages** - Improved clarity with actionable recovery guidance
-
-See [CHANGELOG_v1.4.0.md](docs/CHANGELOG_v1.4.0.md) for full details.
+See [CHANGELOG_v1.5.0-beta2.md](docs/CHANGELOG_v1.5.0-beta2.md) for full details.
 
 ---
 
@@ -215,6 +207,7 @@ OmenCore is designed to **completely replace** OMEN Gaming Hub. You can safely u
 **⚠️ Windows Defender False Positive**: WinRing0 is flagged as `HackTool:Win64/WinRing0` by antivirus. This is a **known false positive** for kernel hardware drivers. Add exclusion for `C:\Windows\System32\drivers\WinRing0x64.sys` and verify signature. See [WINRING0_SETUP.md](docs/WINRING0_SETUP.md).
 
 **Compatibility Notes**:
+- **HP Spectre laptops**: Partial support - fan control and monitoring work, but CPU/GPU power limits unavailable (different EC layout). Use Intel XTU or ThrottleStop for power control.
 - **Non-OMEN HP laptops**: Partial (monitoring yes, fan/RGB no due to different EC layout)
 - **Other brands**: Not supported (EC registers are vendor-specific)
 - **Virtual machines**: Monitoring-only mode (no hardware access)
@@ -224,7 +217,7 @@ OmenCore is designed to **completely replace** OMEN Gaming Hub. You can safely u
 ## 🚀 Installation
 
 ### Option 1: Installer (Recommended)
-1. Download `OmenCoreSetup-1.4.0.exe` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
+1. Download `OmenCoreSetup-1.5.0-beta2.exe` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
 2. Run installer as Administrator
 3. (Optional) Select "Install PawnIO driver" for advanced EC features
 4. Launch OmenCore from Start Menu or Desktop
@@ -232,7 +225,7 @@ OmenCore is designed to **completely replace** OMEN Gaming Hub. You can safely u
 6. (Optional) Use HP Bloatware Removal to clean pre-installed apps
 
 ### Option 2: Portable ZIP
-1. Download `OmenCore-1.4.0-win-x64.zip` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
+1. Download `OmenCore-1.5.0-beta2-win-x64.zip` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
 2. Extract to `C:\OmenCore` (or preferred location)
 3. Right-click `OmenCore.exe` → Run as Administrator
 

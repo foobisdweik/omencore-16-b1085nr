@@ -12,15 +12,38 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 
 namespace OmenCore.ViewModels
 {
     public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
+        // P/Invoke for reliable window focus
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+        
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+        
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+        
+        [DllImport("user32.dll")]
+        private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+        
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentThreadId();
+        
+        private const int SW_RESTORE = 9;
+        
         private readonly LoggingService _logging = App.Logging;
         private readonly ConfigurationService _configService = App.Configuration;
         private readonly AppConfig _config;
@@ -96,7 +119,8 @@ namespace OmenCore.ViewModels
                         _logging,
                         _configService,
                         _wmiBios,
-                        _oghProxy
+                        _oghProxy,
+                        _systemInfoService
                     );
                     _systemControl.PropertyChanged += (s, e) =>
                     {
@@ -142,7 +166,36 @@ namespace OmenCore.ViewModels
             {
                 if (_settings == null)
                 {
-                    _settings = new SettingsViewModel(_logging, _configService, _systemInfoService, _fanCleaningService, _biosUpdateService, _omenKeyService, _osdService);
+                    _settings = new SettingsViewModel(_logging, _configService, _systemInfoService, _fanCleaningService, _biosUpdateService, _omenKeyService, _osdService, _hardwareMonitoringService);
+                    
+                    // Subscribe to low overhead mode changes from Settings
+                    _settings.LowOverheadModeChanged += (s, enabled) =>
+                    {
+                        _monitoringLowOverhead = enabled;
+                        OnPropertyChanged(nameof(MonitoringLowOverheadMode));
+                        OnPropertyChanged(nameof(MonitoringGraphsVisible));
+                    };
+                    
+                    // Subscribe to power state changes to update Settings status
+                    _powerAutomationService.PowerStateChanged += (s, e) =>
+                    {
+                        Application.Current?.Dispatcher?.BeginInvoke(() =>
+                        {
+                            _settings?.RefreshPowerStatus();
+                        });
+                    };
+                    
+                    // Subscribe to suspend/resume events for S0 Modern Standby support
+                    _powerAutomationService.SystemSuspending += (s, e) =>
+                    {
+                        _hardwareMonitoringService?.Pause();
+                    };
+                    
+                    _powerAutomationService.SystemResuming += (s, e) =>
+                    {
+                        _hardwareMonitoringService?.Resume();
+                    };
+                    
                     OnPropertyChanged(nameof(Settings));
                 }
                 return _settings;
@@ -2432,11 +2485,36 @@ namespace OmenCore.ViewModels
                     mainWindow.ShowInTaskbar = true;
                     mainWindow.WindowState = WindowState.Normal;
                     
-                    // Bring to foreground
-                    mainWindow.Topmost = true;  // Force to front
+                    // Use Windows API for reliable foreground focus
+                    // This bypasses Windows' focus-stealing prevention for background apps
+                    var handle = new WindowInteropHelper(mainWindow).Handle;
+                    if (handle != IntPtr.Zero)
+                    {
+                        // Get the current foreground window's thread
+                        var foregroundWindow = GetForegroundWindow();
+                        GetWindowThreadProcessId(foregroundWindow, out _);
+                        var foregroundThread = GetWindowThreadProcessId(foregroundWindow, out _);
+                        var currentThread = GetCurrentThreadId();
+                        
+                        // Attach threads to share input queue (allows SetForegroundWindow to work)
+                        if (foregroundThread != currentThread)
+                        {
+                            AttachThreadInput(foregroundThread, currentThread, true);
+                        }
+                        
+                        ShowWindow(handle, SW_RESTORE);
+                        SetForegroundWindow(handle);
+                        
+                        // Detach threads
+                        if (foregroundThread != currentThread)
+                        {
+                            AttachThreadInput(foregroundThread, currentThread, false);
+                        }
+                    }
+                    
+                    // WPF activation as fallback
                     mainWindow.Activate();
                     mainWindow.Focus();
-                    mainWindow.Topmost = false; // Allow other windows to go on top
                     
                     _logging.Info("Window shown and activated");
                 }
