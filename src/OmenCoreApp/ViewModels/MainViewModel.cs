@@ -218,6 +218,20 @@ namespace OmenCore.ViewModels
                 return _general;
             }
         }
+
+        private SystemOptimizerViewModel? _systemOptimizer;
+        public SystemOptimizerViewModel? SystemOptimizer
+        {
+            get
+            {
+                if (_systemOptimizer == null)
+                {
+                    _systemOptimizer = new SystemOptimizerViewModel(_logging);
+                    OnPropertyChanged(nameof(SystemOptimizer));
+                }
+                return _systemOptimizer;
+            }
+        }
         
         private readonly AsyncRelayCommand _applyUndervoltCommand;
         private readonly AsyncRelayCommand _resetUndervoltCommand;

@@ -390,6 +390,11 @@
                     <views:DashboardView DataContext="{Binding Dashboard}" />
                 </TabItem>
                 
+                <!-- System Optimizer Tab - Windows Gaming Tweaks -->
+                <TabItem Header="Optimizer">
+                    <views:SystemOptimizerView DataContext="{Binding SystemOptimizer}" />
+                </TabItem>
+                
                 <!-- Peripherals Tab with Lighting View -->
                 <TabItem Header="RGB &amp; Peripherals" Visibility="{Binding Lighting, Converter={StaticResource NullToVisibilityConverter}}">
                     <views:LightingView DataContext="{Binding Lighting}" />
