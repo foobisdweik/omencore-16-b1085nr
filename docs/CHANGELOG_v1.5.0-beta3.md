@@ -67,6 +67,89 @@ Added "← Higher Temps" and "Lower Temps →" labels below the TCC offset slide
 
 ## 🔧 Bug Fixes
 
+### Critical: NVML Crash During GPU Benchmarks
+**Files Changed:**
+- `Hardware/LibreHardwareMonitorImpl.cs`
+- `App.xaml.cs`
+
+**Problem:** OmenCore crashes when running GPU benchmarks (e.g., Heaven Benchmark). Windows Event Log shows:
+```
+Exception: System.AccessViolationException
+at LibreHardwareMonitor.Interop.NvidiaML.NvmlDeviceGetPowerUsage(NvmlDevice)
+```
+
+**Root Cause:** NVIDIA's NVML library (`nvml.dll`) can crash with an access violation when querying GPU power/sensors during high GPU load. This is a driver bug in NVML, not OmenCore.
+
+**Fix:**
+- Added `TryUpdateGpuHardware()` method that wraps GPU sensor updates in try-catch
+- Tracks consecutive GPU monitoring failures (`_nvmlFailures`)
+- After 3 consecutive failures, automatically disables GPU monitoring to prevent crash loops
+- Enhanced crash dialog specifically detects NVML crashes and recommends driver updates
+
+**Note:** The primary fix is now the Out-of-Process Hardware Worker (see Architecture section below).
+
+---
+
+## 🏗️ Architecture Changes
+
+### Out-of-Process Hardware Worker
+**Files Changed:**
+- NEW: `OmenCore.HardwareWorker/` - Separate worker process
+- `Hardware/HardwareWorkerClient.cs` - IPC client and process manager
+- `Hardware/LibreHardwareMonitorImpl.cs` - Worker mode integration
+- `ViewModels/MainViewModel.cs` - Enable worker by default
+- `build-installer.ps1` - Build and publish worker
+- `installer/OmenCoreInstaller.iss` - Stop worker on uninstall
+
+**Problem:** NVML's `AccessViolationException` is a Corrupted State Exception (CSE) that cannot be caught in .NET 8. When NVML crashes, the entire OmenCore process terminates regardless of try-catch blocks.
+
+**Solution:** Hardware monitoring now runs in a separate process (`OmenCore.HardwareWorker.exe`). If NVML crashes, only the worker process dies - the main app continues running and automatically restarts the worker.
+
+**Architecture:**
+```
+OmenCore.exe (Main App - WPF UI)
+    │
+    │ Named Pipes IPC ("OmenCore_HardwareWorker")
+    │ Protocol: JSON over pipes
+    │   - PING → PONG (heartbeat)
+    │   - GET → HardwareSample JSON
+    │   - SHUTDOWN → OK (graceful exit)
+    ▼
+OmenCore.HardwareWorker.exe (Worker Process - Hidden)
+    │
+    │ LibreHardwareMonitor API calls
+    ▼
+Hardware/Drivers (NVML, etc.)
+```
+
+**Features:**
+- Worker process starts automatically when OmenCore launches
+- Worker runs hidden (no console window visible)
+- If worker crashes, main app auto-restarts it (max 5 attempts, 5s cooldown)
+- Main app continues with cached sensor values during worker restart
+- Worker logs errors to `OmenCore_worker.log` for diagnostics
+- Worker is killed on app exit and uninstall
+
+**Impact:** Users can now run GPU benchmarks without OmenCore crashing. If NVML fails, only temperature/power readings pause briefly during worker restart.
+
+---
+
+### Intel Arc GPU Temperature Not Detected
+**Files Changed:**
+- `Hardware/LibreHardwareMonitorImpl.cs`
+
+**Problem:** OMEN 45L desktops with Intel Arc GPUs show 0°C for GPU temperature.
+
+**Root Cause:** Intel Arc is a dedicated GPU but was being treated as integrated (fallback-only). The code only read Intel GPU temps when no other GPU was detected, but Arc should be the primary GPU.
+
+**Fix:**
+- Intel Arc GPUs (detected by name containing "Arc") are now treated as dedicated GPUs
+- Arc GPUs get full sensor support: temperature, load, power, clock speed
+- Uses `TryUpdateGpuHardware()` for safe updates (same protection as NVIDIA/AMD)
+- Debug logging when Arc temp readings fail to help diagnose issues
+
+---
+
 ### Critical: Version Display Fixed
 **Files Changed:**
 - `OmenCoreApp.csproj`
@@ -324,6 +407,47 @@ OmenCore uses only publicly documented WMI interfaces that HP exposes for fan/pe
 
 ---
 
+### Desktop RGB Lighting Control Not Available
+**User Feedback:** "OMEN desktop lighting - RGB fan control, interior strip light control, omen logo lights - is that planned?"
+
+**Status:** Not yet implemented. Planned for v1.6+.
+
+**Explanation:** OMEN desktops (45L, 25L, etc.) have a dedicated RGB controller that manages:
+- RGB case fans
+- Interior LED strip
+- OMEN logo lighting
+- Front panel accents
+
+This uses a different protocol than laptop keyboard backlighting. Initial research shows:
+- OpenRGB has partial support for OMEN desktop RGB
+- May use USB HID or WMI commands
+- Need hardware access for reverse engineering
+
+**Planned:** Desktop RGB support is on the v1.6 roadmap. Community contributions welcome!
+
+---
+
+### Desktop Multi-Fan Control (AIO, Chassis Fans)
+**User Feedback:** "I have multiple fans and my CPU fan is actually an AIO - theres no settings for that yet."
+
+**Status:** Not yet implemented. Investigating for v1.6.
+
+**Explanation:** OMEN desktops with upgraded cooling (aftermarket AIO, extra chassis fans) expose these as separate controllable zones. Currently OmenCore:
+- Detects fan speeds via LibreHardwareMonitor (CPU fan, chassis fans)
+- Only controls fans through HP's 2-zone WMI interface (CPU/GPU zones)
+
+**What's Needed:**
+- Identify EC registers or WMI methods for individual fan zones
+- Add UI for per-fan curve control (like Acer Nitro Sense)
+- Support for AIO pump speed control (often should be max/static)
+
+**Workaround:** For AIO pumps, consider:
+- Setting pump PWM header to "full speed" in BIOS
+- Using the motherboard's fan control for chassis fans
+- OmenCore's fan profiles still work for the HP-controlled zones
+
+---
+
 ### Feature Toggles Don't Hide UI Tabs
 **User Feedback:** "Hide unused modules doesn't work - unchecked modules are still visible."
 
@@ -429,9 +553,9 @@ This prevents boot failures caused by conflicting startup entries.
 | `Services/PerformanceModeService.cs` | ModeApplied event |
 | `ViewModels/SettingsViewModel.cs` | Startup cleanup, EC keyboard warning |
 | `ViewModels/SystemControlViewModel.cs` | SelectModeByNameNoApply method |
-| `Hardware/LibreHardwareMonitorImpl.cs` | CPU Core #1 temp priority, GPU Core temp |
+| `Hardware/LibreHardwareMonitorImpl.cs` | CPU Core #1 temp, GPU Core temp, **Intel Arc support**, **NVML crash protection** |
 | `installer/OmenCoreInstaller.iss` | Task scheduler startup, cleanup on uninstall |
-| `App.xaml.cs` | Dispose MainViewModel on exit |
+| `App.xaml.cs` | Dispose MainViewModel on exit, **NVML-specific crash dialog** |
 
 ---
 

@@ -520,15 +520,29 @@ namespace OmenCore
         {
             Logging.Error("Unhandled UI thread exception", e.Exception);
             e.Handled = true;
-            ShowFatalDialog(e.Exception);
+            ShowFatalDialog(e.Exception, false);
         }
 
         private void OnDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
             if (e.ExceptionObject is Exception ex)
             {
-                Logging.Error("Unhandled AppDomain exception", ex);
-                ShowFatalDialog(ex);
+                // Special handling for NVML/GPU driver crashes
+                bool isNvmlCrash = ex is AccessViolationException || 
+                                   ex.StackTrace?.Contains("NvidiaML") == true ||
+                                   ex.StackTrace?.Contains("nvml.dll") == true ||
+                                   ex.StackTrace?.Contains("NvidiaGpu") == true;
+                
+                if (isNvmlCrash)
+                {
+                    Logging.Error("NVIDIA NVML driver crash detected! This is a known driver issue during high GPU load. Try updating your NVIDIA drivers.", ex);
+                }
+                else
+                {
+                    Logging.Error("Unhandled AppDomain exception", ex);
+                }
+                
+                ShowFatalDialog(ex, isNvmlCrash);
             }
         }
 
@@ -536,19 +550,33 @@ namespace OmenCore
         {
             Logging.Error("Unobserved task exception", e.Exception);
             e.SetObserved();
-            ShowFatalDialog(e.Exception);
+            ShowFatalDialog(e.Exception, false);
         }
 
-        private static void ShowFatalDialog(Exception ex)
+        private static void ShowFatalDialog(Exception ex, bool isNvmlCrash = false)
         {
             // Ensure we're on the UI thread
             if (Current?.Dispatcher.CheckAccess() == false)
             {
-                Current.Dispatcher.Invoke(() => ShowFatalDialog(ex));
+                Current.Dispatcher.Invoke(() => ShowFatalDialog(ex, isNvmlCrash));
                 return;
             }
             
-            MessageBox.Show($"OmenCore hit an unexpected error:\n{ex.Message}\n\nSee %LOCALAPPDATA%\\OmenCore for full logs.", "OmenCore Crash", MessageBoxButton.OK, MessageBoxImage.Error);
+            string message;
+            if (isNvmlCrash)
+            {
+                message = $"OmenCore crashed due to an NVIDIA driver issue.\n\n" +
+                          $"This is a known issue with NVML (NVIDIA Management Library) during high GPU load " +
+                          $"such as gaming or benchmarks.\n\n" +
+                          $"Recommendation: Update your NVIDIA drivers to the latest version.\n\n" +
+                          $"Error: {ex.Message}";
+            }
+            else
+            {
+                message = $"OmenCore hit an unexpected error:\n{ex.Message}\n\nSee %LOCALAPPDATA%\\OmenCore for full logs.";
+            }
+            
+            MessageBox.Show(message, "OmenCore Crash", MessageBoxButton.OK, MessageBoxImage.Error);
             Current?.Shutdown();
         }
     }

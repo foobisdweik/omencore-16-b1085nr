@@ -71,8 +71,9 @@ Filename: "schtasks"; Parameters: "/create /tn ""OmenCore"" /tr ""\""{app}\\{#My
 Filename: "{app}\\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent shellexec runascurrentuser; Verb: runas
 
 [UninstallRun]
-; Stop OmenCore if running
+; Stop OmenCore and HardwareWorker if running
 Filename: "taskkill"; Parameters: "/F /IM OmenCore.exe"; Flags: runhidden; RunOnceId: "StopOmenCore"
+Filename: "taskkill"; Parameters: "/F /IM OmenCore.HardwareWorker.exe"; Flags: runhidden; RunOnceId: "StopHardwareWorker"
 ; Remove scheduled task for autostart
 Filename: "schtasks"; Parameters: "/delete /tn ""OmenCore"" /f"; Flags: runhidden; RunOnceId: "RemoveOmenCoreTask"
 

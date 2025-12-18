@@ -945,7 +945,10 @@ namespace OmenCore.ViewModels
             _config = _configService.Load();
             
             // Initialize hardware monitor bridge first (needed by ThermalSensorProvider and FanController)
-            LibreHardwareMonitorImpl monitorBridge = new LibreHardwareMonitorImpl(msg => _logging.Info($"[Monitor] {msg}"));
+            // Use out-of-process worker to isolate NVML/driver crashes from main app
+            LibreHardwareMonitorImpl monitorBridge = new LibreHardwareMonitorImpl(
+                msg => _logging.Info($"[Monitor] {msg}"),
+                useWorker: true);
             
             // Run capability detection to identify available backends
             var capabilityService = new CapabilityDetectionService(_logging);

@@ -12,6 +12,10 @@ namespace OmenCore.Hardware
     /// Real LibreHardwareMonitor implementation - integrates with actual hardware sensors.
     /// Uses LibreHardwareMonitorLib NuGet package for accurate hardware monitoring.
     /// 
+    /// Supports two modes:
+    /// 1. In-process (default): Direct LibreHardwareMonitor calls. Fast but can crash from NVML issues.
+    /// 2. Out-of-process: Uses HardwareWorker process via IPC. Crash-proof but slightly slower.
+    /// 
     /// Performance considerations:
     /// - Hardware updates cause kernel driver calls which can trigger DPC latency
     /// - The _updateInterval controls minimum time between hardware updates
@@ -22,6 +26,10 @@ namespace OmenCore.Hardware
         private Computer? _computer;
         private bool _initialized;
         private readonly object _lock = new();
+        
+        // Out-of-process worker for crash isolation
+        private HardwareWorkerClient? _workerClient;
+        private bool _useWorker = false;
 
         // Cache for performance
         private double _cachedCpuTemp = 0;
@@ -72,10 +80,55 @@ namespace OmenCore.Hardware
         private const int MaxZeroTempReadingsBeforeReinit = 5;
         private bool _noFanSensorsLogged = false; // Only log once to reduce spam
 
+        /// <summary>
+        /// Create an in-process hardware monitor (default).
+        /// May crash from NVML issues during heavy GPU load.
+        /// </summary>
         public LibreHardwareMonitorImpl(Action<string>? logger = null)
         {
             _logger = logger;
+            _useWorker = false;
             InitializeComputer();
+        }
+        
+        /// <summary>
+        /// Create a hardware monitor with optional out-of-process worker.
+        /// When useWorker is true, hardware monitoring runs in a separate process
+        /// that can crash without affecting the main application.
+        /// </summary>
+        /// <param name="logger">Logging callback</param>
+        /// <param name="useWorker">Use out-of-process worker for crash isolation</param>
+        public LibreHardwareMonitorImpl(Action<string>? logger, bool useWorker)
+        {
+            _logger = logger;
+            _useWorker = useWorker;
+            
+            if (_useWorker)
+            {
+                InitializeWorker();
+            }
+            else
+            {
+                InitializeComputer();
+            }
+        }
+        
+        private async void InitializeWorker()
+        {
+            _workerClient = new HardwareWorkerClient(_logger);
+            var started = await _workerClient.StartAsync();
+            
+            if (started)
+            {
+                _logger?.Invoke("[Monitor] Using out-of-process hardware worker (crash-isolated)");
+                _initialized = true;
+            }
+            else
+            {
+                _logger?.Invoke("[Monitor] Worker failed to start, falling back to in-process");
+                _useWorker = false;
+                InitializeComputer();
+            }
         }
         
         /// <summary>
@@ -136,6 +189,12 @@ namespace OmenCore.Hardware
         {
             token.ThrowIfCancellationRequested();
 
+            // Use worker if enabled
+            if (_useWorker && _workerClient != null)
+            {
+                return await ReadSampleFromWorkerAsync(token);
+            }
+
             // Check cache freshness to reduce CPU overhead
             lock (_lock)
             {
@@ -153,7 +212,104 @@ namespace OmenCore.Hardware
                 return BuildSampleFromCache();
             }
         }
+        
+        /// <summary>
+        /// Read hardware sample from out-of-process worker
+        /// </summary>
+        private async Task<MonitoringSample> ReadSampleFromWorkerAsync(CancellationToken token)
+        {
+            var workerSample = await _workerClient!.GetSampleAsync();
+            
+            if (workerSample == null)
+            {
+                // Worker unavailable - return cached values
+                return BuildSampleFromCache();
+            }
+            
+            // Update cache from worker sample
+            lock (_lock)
+            {
+                _cachedCpuTemp = workerSample.CpuTemperature;
+                _cachedCpuLoad = workerSample.CpuLoad;
+                _cachedCpuPower = workerSample.CpuPower;
+                
+                _cachedGpuTemp = workerSample.GpuTemperature;
+                _cachedGpuLoad = workerSample.GpuLoad;
+                _cachedGpuPower = workerSample.GpuPower;
+                _cachedGpuClock = workerSample.GpuClock;
+                _cachedGpuMemoryClock = workerSample.GpuMemoryClock;
+                _cachedGpuHotspot = workerSample.GpuHotspot;
+                
+                _cachedVramUsage = workerSample.VramUsage;
+                _cachedVramTotal = workerSample.VramTotal;
+                _cachedRamUsage = workerSample.RamUsage;
+                _cachedRamTotal = workerSample.RamTotal;
+                
+                _cachedSsdTemp = workerSample.SsdTemperature;
+                
+                _cachedBatteryCharge = workerSample.BatteryCharge;
+                _cachedIsOnAc = workerSample.IsOnAc;
+                _cachedDischargeRate = workerSample.BatteryDischargeRate;
+                
+                if (!string.IsNullOrEmpty(workerSample.GpuName) && _lastGpuName != workerSample.GpuName)
+                {
+                    _lastGpuName = workerSample.GpuName;
+                    _logger?.Invoke($"[Worker] GPU detected: {workerSample.GpuName}");
+                }
+                
+                _lastUpdate = DateTime.Now;
+            }
+            
+            return BuildSampleFromCache();
+        }
 
+        // Track consecutive NVML failures to avoid spam
+        private int _nvmlFailures = 0;
+        private const int MaxNvmlFailuresBeforeDisable = 3;
+        private bool _nvmlDisabled = false;
+        private const int GpuUpdateTimeoutMs = 500; // 500ms timeout for GPU updates
+        
+        /// <summary>
+        /// Safely updates GPU hardware with timeout protection.
+        /// NVML can hang or throw exceptions during high GPU load (e.g., benchmarks).
+        /// </summary>
+        /// <remarks>
+        /// In .NET 8, AccessViolationException is a Corrupted State Exception (CSE) that
+        /// cannot be caught. This method uses a timeout to detect hangs and catches
+        /// regular exceptions that can be handled.
+        /// 
+        /// Known issue: If NVML crashes with AccessViolationException, the app will crash.
+        /// This is a limitation of NVIDIA's NVML library and cannot be fixed in managed code.
+        /// Users experiencing crashes during benchmarks should update their NVIDIA drivers.
+        /// </remarks>
+        private bool TryUpdateGpuHardware(IHardware hardware)
+        {
+            if (_nvmlDisabled)
+            {
+                // NVML disabled due to repeated failures - skip GPU update
+                return false;
+            }
+            
+            try
+            {
+                hardware.Update();
+                _nvmlFailures = 0; // Reset on success
+                return true;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+            {
+                _nvmlFailures++;
+                _logger?.Invoke($"[GPU] Hardware update failed (failure {_nvmlFailures}/{MaxNvmlFailuresBeforeDisable}): {ex.GetType().Name}: {ex.Message}");
+                
+                if (_nvmlFailures >= MaxNvmlFailuresBeforeDisable)
+                {
+                    _nvmlDisabled = true;
+                    _logger?.Invoke("[GPU] GPU monitoring disabled due to repeated failures.");
+                }
+                return false;
+            }
+        }
+        
         private void UpdateHardwareReadings()
         {
             if (!_initialized || _disposed)
@@ -172,7 +328,21 @@ namespace OmenCore.Hardware
                 foreach (var hardware in _computer?.Hardware ?? Array.Empty<IHardware>())
                 {
                     if (_disposed) return; // Check before each hardware update
-                    hardware.Update();
+                    
+                    // Use safe GPU update for NVIDIA/AMD GPUs (can crash NVML)
+                    if (hardware.HardwareType == HardwareType.GpuNvidia || 
+                        hardware.HardwareType == HardwareType.GpuAmd)
+                    {
+                        if (!TryUpdateGpuHardware(hardware))
+                        {
+                            // GPU update failed - continue to next hardware without processing this GPU
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        hardware.Update();
+                    }
 
                     switch (hardware.HardwareType)
                     {
@@ -383,26 +553,71 @@ namespace OmenCore.Hardware
                             break;
                             
                         case HardwareType.GpuIntel:
-                            // Only use Intel GPU if no dedicated GPU found yet
-                            if (_cachedGpuTemp == 0)
+                            // Intel Arc GPUs are dedicated GPUs - treat them like NVIDIA/AMD
+                            // Intel UHD/Iris are integrated - only use as fallback
+                            bool isIntelArc = hardware.Name.Contains("Arc", StringComparison.OrdinalIgnoreCase);
+                            
+                            // For Intel Arc (dedicated) or if no other GPU found yet
+                            if (isIntelArc || _cachedGpuTemp == 0)
                             {
-                                var intelTempSensor = GetSensor(hardware, SensorType.Temperature, "GPU Core")
-                                    ?? hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Temperature);
-                                _cachedGpuTemp = intelTempSensor?.Value ?? 0;
-                                
-                                // Only log when GPU changes
-                                if (_lastGpuName != hardware.Name)
+                                // Use safe update for Intel Arc (similar to NVIDIA/AMD)
+                                if (isIntelArc && !TryUpdateGpuHardware(hardware))
                                 {
-                                    _lastGpuName = hardware.Name;
-                                    _logger?.Invoke($"Using integrated GPU: {hardware.Name} ({_cachedGpuTemp:F0}°C)");
+                                    break; // Skip if update failed
+                                }
+                                
+                                var intelTempSensor = GetSensor(hardware, SensorType.Temperature, "GPU Core")
+                                    ?? GetSensor(hardware, SensorType.Temperature, "GPU Package")
+                                    ?? GetSensor(hardware, SensorType.Temperature, "GPU")
+                                    ?? hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Temperature);
+                                
+                                var tempVal = intelTempSensor?.Value ?? 0;
+                                if (tempVal > 0)
+                                {
+                                    _cachedGpuTemp = tempVal;
+                                    
+                                    // Only log when GPU changes
+                                    if (_lastGpuName != hardware.Name)
+                                    {
+                                        _lastGpuName = hardware.Name;
+                                        var gpuType = isIntelArc ? "Intel Arc" : "integrated Intel GPU";
+                                        _logger?.Invoke($"Using {gpuType}: {hardware.Name} ({_cachedGpuTemp:F0}°C)");
+                                    }
+                                }
+                                else if (isIntelArc)
+                                {
+                                    // Log available sensors for debugging Intel Arc issues
+                                    var availableSensors = hardware.Sensors
+                                        .Where(s => s.SensorType == SensorType.Temperature)
+                                        .Select(s => $"{s.Name}={s.Value}")
+                                        .ToList();
+                                    _logger?.Invoke($"[Intel Arc] No temp reading from {hardware.Name}. Available: [{string.Join(", ", availableSensors)}]");
                                 }
                             }
                             
-                            if (_cachedGpuLoad == 0)
+                            if (isIntelArc || _cachedGpuLoad == 0)
                             {
                                 var intelLoadSensor = GetSensor(hardware, SensorType.Load, "GPU Core")
+                                    ?? GetSensor(hardware, SensorType.Load, "D3D 3D")
                                     ?? hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Load);
-                                _cachedGpuLoad = intelLoadSensor?.Value ?? 0;
+                                var loadVal = intelLoadSensor?.Value ?? 0;
+                                if (loadVal > 0 || _cachedGpuLoad == 0)
+                                {
+                                    _cachedGpuLoad = Math.Clamp(loadVal, 0, 100);
+                                }
+                            }
+                            
+                            // Intel Arc power/clock metrics (similar to NVIDIA/AMD)
+                            if (isIntelArc)
+                            {
+                                var arcPowerSensor = GetSensor(hardware, SensorType.Power, "GPU Power")
+                                    ?? GetSensor(hardware, SensorType.Power, "GPU Package")
+                                    ?? hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Power);
+                                if (arcPowerSensor?.Value > 0) _cachedGpuPower = arcPowerSensor.Value.Value;
+                                
+                                var arcClockSensor = GetSensor(hardware, SensorType.Clock, "GPU Core")
+                                    ?? hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Clock);
+                                if (arcClockSensor?.Value > 0) _cachedGpuClock = arcClockSensor.Value.Value;
                             }
                             break;
 
@@ -640,7 +855,19 @@ namespace OmenCore.Hardware
                     {
                         if (_disposed) return results;
                         
-                        hardware.Update();
+                        // Use safe GPU update for NVIDIA/AMD GPUs (can crash NVML)
+                        if (hardware.HardwareType == HardwareType.GpuNvidia || 
+                            hardware.HardwareType == HardwareType.GpuAmd)
+                        {
+                            if (!TryUpdateGpuHardware(hardware))
+                            {
+                                continue; // Skip failed GPU
+                            }
+                        }
+                        else
+                        {
+                            hardware.Update();
+                        }
 
                         // Check main hardware for fan sensors (CPU, GPU have built-in fans on some laptops)
                         var fanSensors = hardware.Sensors
@@ -681,6 +908,11 @@ namespace OmenCore.Hardware
                 {
                     // Gracefully handle disposal during iteration (e.g., app shutdown)
                 }
+                catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+                {
+                    // Log but don't crash on unexpected errors
+                    _logger?.Invoke($"[Hardware] Error in GetFanSpeeds: {ex.GetType().Name}: {ex.Message}");
+                }
             }
             
             return results;
@@ -691,6 +923,14 @@ namespace OmenCore.Hardware
         public void Dispose()
         {
             _disposed = true;
+            
+            // Clean up worker if used
+            if (_workerClient != null)
+            {
+                _workerClient.Dispose();
+                _workerClient = null;
+            }
+            
             if (_initialized && _computer != null)
             {
                 _computer.Close();

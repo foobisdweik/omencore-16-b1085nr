@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Configuration = "Release",
     [string]$Runtime = "win-x64",
     [switch]$SingleFile
@@ -28,7 +28,7 @@ $librehwScript = Join-Path $root "installer\download-librehw.ps1"
 if (Test-Path $librehwScript) {
     & $librehwScript
 } else {
-    Write-Host "⚠ LibreHardwareMonitor download script not found - installer will not include driver" -ForegroundColor Yellow
+    Write-Host "LibreHardwareMonitor download script not found - installer will not include driver" -ForegroundColor Yellow
 }
 
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
@@ -52,6 +52,20 @@ $publishArgs = @(
 Write-Host "Building self-contained single-file executable with embedded .NET runtime..." -ForegroundColor Yellow
 
 & dotnet publish @publishArgs
+
+# Build and publish the hardware worker (out-of-process monitoring for crash isolation)
+Write-Host "Building hardware worker process..." -ForegroundColor Yellow
+$workerPublishArgs = @(
+    "src/OmenCore.HardwareWorker/OmenCore.HardwareWorker.csproj",
+    "--configuration", $Configuration,
+    "-r", $Runtime,
+    "--self-contained", "true",
+    "-p:PublishTrimmed=false",
+    "-p:PublishSingleFile=true",
+    "-o", $publishDir
+)
+& dotnet publish @workerPublishArgs
+Write-Host "Hardware worker built successfully" -ForegroundColor Green
 
 $zipPath = Join-Path $artifactsDir "OmenCore-$version-$Runtime.zip"
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
