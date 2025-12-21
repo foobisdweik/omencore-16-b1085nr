@@ -106,11 +106,13 @@
 
 ### Phase 3: RGB Overhaul (Beta 1 - Mar 2026)
 
-#### 3.1 Asset Preparation ⬜
-- [ ] Create `Assets/Corsair/` folder with device images
-- [ ] Create `Assets/Razer/` folder with device images
-- [ ] Create `Assets/Logitech/` folder with device images
+#### 3.1 Asset Preparation 🔧 (in progress)
+- [x] Create `Assets/Corsair/` folder with placeholder image (`corsair-placeholder.svg`)
+- [x] Create `Assets/Razer/` folder with placeholder image (`razer-placeholder.svg`)
+- [x] Create `Assets/Logitech/` folder with placeholder image (`logitech-placeholder.svg`)
 - [ ] Brand logo assets (SVG preferred)
+
+Notes: Initial asset folders and placeholder images created. Next: gather real device images, obtain licensing/permission for vendor logos.
 
 #### 3.2 Enhanced Corsair SDK ⬜
 - [ ] Upgrade to iCUE SDK 4.0
