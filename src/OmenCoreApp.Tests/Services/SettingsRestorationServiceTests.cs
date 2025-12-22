@@ -124,6 +124,52 @@ namespace OmenCoreApp.Tests.Services
 
             logging.Dispose();
         }
+
+        [Fact]
+        public async Task ForceReapplyFanPreset_ShouldApplyMax_WhenSavedAsMax()
+        {
+            var logging = new LoggingService();
+            logging.Initialize();
+
+            var configService = new ConfigurationService();
+            configService.Config.LastFanPresetName = "Max";
+
+            var hwMonitor = new LibreHardwareMonitorImpl();
+            var thermalProvider = new ThermalSensorProvider(hwMonitor);
+            var controller = new TestFanController();
+            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+
+            var svc = new SettingsRestorationService(logging, configService, null, fanService);
+            var result = await svc.ForceReapplyFanPresetAsync();
+
+            result.Should().BeTrue();
+            controller.LastAppliedPreset.Should().Be("Max");
+
+            logging.Dispose();
+        }
+
+        [Fact]
+        public void ReapplySavedPresetCommand_ShouldApplySavedMax()
+        {
+            var logging = new LoggingService();
+            logging.Initialize();
+
+            var configService = new ConfigurationService();
+            configService.Config.LastFanPresetName = "Max";
+
+            var hwMonitor = new LibreHardwareMonitorImpl();
+            var thermalProvider = new ThermalSensorProvider(hwMonitor);
+            var controller = new TestFanController();
+            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+
+            var vm = new OmenCore.ViewModels.FanControlViewModel(fanService, configService, logging);
+
+            vm.ReapplySavedPresetCommand.Execute(null);
+
+            controller.LastAppliedPreset.Should().Be("Max");
+
+            logging.Dispose();
+        }
     }
 }
 

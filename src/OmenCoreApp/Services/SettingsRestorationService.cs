@@ -23,6 +23,7 @@ namespace OmenCore.Services
         private readonly ConfigurationService _configService;
         private readonly HpWmiBios? _wmiBios;
         private readonly FanService? _fanService;
+        private readonly FanVerificationService? _fanVerifier;
         
         public event EventHandler<SettingsRestoredEventArgs>? SettingsRestored;
         
@@ -35,12 +36,14 @@ namespace OmenCore.Services
             LoggingService logging,
             ConfigurationService configService,
             HpWmiBios? wmiBios = null,
-            FanService? fanService = null)
+            FanService? fanService = null,
+            FanVerificationService? fanVerifier = null)
         {
             _logging = logging;
             _configService = configService;
             _wmiBios = wmiBios;
             _fanService = fanService;
+            _fanVerifier = fanVerifier;
         }
         
         /// <summary>
@@ -312,6 +315,14 @@ namespace OmenCore.Services
             }
         }
         
+        /// <summary>
+        /// Force reapply of the saved fan preset (exposed for UI / diagnostics).
+        /// </summary>
+        public Task<bool> ForceReapplyFanPresetAsync(CancellationToken ct = default)
+        {
+            return RestoreFanPresetAsync(ct);
+        }
+
         private void RaiseSettingsRestored(string settingName, string value, bool success, string? error = null)
         {
             SettingsRestored?.Invoke(this, new SettingsRestoredEventArgs

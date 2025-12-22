@@ -4,6 +4,7 @@ using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using Microsoft.Win32;
 using OmenCore.Models;
@@ -176,6 +177,7 @@ namespace OmenCore.ViewModels
         public ICommand ApplyAutoModeCommand { get; }
         public ICommand ApplyQuietModeCommand { get; }
         public ICommand ApplyGamingModeCommand { get; }
+        public ICommand ReapplySavedPresetCommand { get; }
 
         public FanControlViewModel(FanService fanService, ConfigurationService configService, LoggingService logging)
         {
@@ -202,6 +204,7 @@ namespace OmenCore.ViewModels
             ApplyAutoModeCommand = new RelayCommand(_ => ApplyFanMode("Auto"));
             ApplyQuietModeCommand = new RelayCommand(_ => ApplyQuietMode());
             ApplyGamingModeCommand = new RelayCommand(_ => ApplyGamingMode());
+            ReapplySavedPresetCommand = new RelayCommand(async _ => await ReapplySavedPresetAsync());
             
             // Subscribe to thermal samples to update current temperature
             ((INotifyCollectionChanged)_fanService.ThermalSamples).CollectionChanged += ThermalSamples_CollectionChanged;
@@ -691,6 +694,59 @@ namespace OmenCore.ViewModels
             
             ActiveFanMode = "Gaming";
             _logging.Info("Applied Gaming fan mode (Performance thermal policy with aggressive curve)");
+        }
+
+        /// <summary>
+        /// Re-apply the last saved fan preset from config. Useful as a manual "force reapply" button.
+        /// </summary>
+        private async Task ReapplySavedPresetAsync()
+        {
+            var saved = _configService.Config.LastFanPresetName;
+            if (string.IsNullOrEmpty(saved))
+            {
+                System.Windows.MessageBox.Show("No saved fan preset found in configuration.", "Reapply Saved Preset",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                return;
+            }
+
+            // First, see if it's a custom preset
+            var preset = _configService.Config.FanPresets.FirstOrDefault(p => p.Name.Equals(saved, StringComparison.OrdinalIgnoreCase));
+            if (preset != null)
+            {
+                _fanService.ApplyPreset(preset);
+                SelectedPreset = FanPresets.FirstOrDefault(p => p.Name == preset.Name) ?? SelectedPreset;
+                SaveLastPresetToConfig(preset.Name);
+                _logging.Info($"Manually reapplied saved preset: {preset.Name}");
+                return;
+            }
+
+            // Handle built-in names
+            var nameLower = saved.ToLowerInvariant();
+            if (nameLower.Contains("max"))
+            {
+                _fanService.ApplyMaxCooling();
+                _logging.Info($"Manually reapplied saved preset: {saved} (Max)");
+                return;
+            }
+
+            if (nameLower == "auto" || nameLower == "default")
+            {
+                _fanService.ApplyAutoMode();
+                _logging.Info($"Manually reapplied saved preset: {saved} (Auto)");
+                return;
+            }
+
+            if (nameLower == "quiet" || nameLower == "silent")
+            {
+                _fanService.ApplyQuietMode();
+                _logging.Info($"Manually reapplied saved preset: {saved} (Quiet)");
+                return;
+            }
+
+            // Fallback - attempt to apply by name
+            var fallback = new FanPreset { Name = saved, Mode = FanMode.Performance };
+            _fanService.ApplyPreset(fallback);
+            _logging.Info($"Manually reapplied saved preset via fallback: {saved}");
         }
         
         private void ApplyQuietMode()
