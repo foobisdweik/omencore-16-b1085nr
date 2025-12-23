@@ -68,8 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Technical
 - **🏗️ MVVM Architecture** - Maintained clean separation of concerns
 - **🔧 Service Layer** - RegistryBackupService, OptimizationVerifier, multiple optimizer classes
-- **🎨 XAML Styling** - Modern UI with consistent theming
-- **🧪 Unit Tests** - All tests passing, including new Corsair device service test
+- **🎨 XAML Styling** - Modern UI with consistent theming (added `AccentGreenBrush` to prevent startup resource errors)
+- **🧪 Unit Tests** - All tests passing locally (24/24); added tests for SettingsRestorationService and fan subsystems, plus a resource-coverage test to ensure required `x:Key` values (e.g. `AccentGreenBrush`) exist in resource dictionaries
+- **🛠️ Logging Improvements** - Hardened `LoggingService` to tolerate locked log files, added fallback files and `OMENCORE_DISABLE_FILE_LOG` env toggle for tests
 - **🔬 Fan Tests & APIs** - Added unit tests for fan restore, force-reapply, and smoothing behavior; added `ForceReapplyFanPresetAsync` API and `FanTransitionSettings` configuration
 - **📦 Build System** - Clean compilation with no warnings
 
@@ -120,4 +121,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-*Last Updated: December 19, 2025*
+*Last Updated: December 23, 2025*

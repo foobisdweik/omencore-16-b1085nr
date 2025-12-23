@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using FluentAssertions;
 using OmenCore.Models;
 using OmenCore.Services;
@@ -8,6 +10,12 @@ namespace OmenCoreApp.Tests.ViewModels
 {
     public class FanControlViewModelTests
     {
+        public FanControlViewModelTests()
+        {
+            var tmp = Path.Combine(Path.GetTempPath(), "OmenCoreTests", Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tmp);
+            Environment.SetEnvironmentVariable("OMENCORE_CONFIG_DIR", tmp);
+        }
         private class TestFanController : OmenCore.Hardware.IFanController
         {
             public bool IsAvailable => true;

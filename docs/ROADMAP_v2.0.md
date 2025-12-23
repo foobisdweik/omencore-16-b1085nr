@@ -2,7 +2,7 @@
 
 **Target Release:** Q2 2026  
 **Status:** Planning  
-**Last Updated:** December 21, 2025
+**Last Updated:** December 23, 2025
 
 ---
 
@@ -15,7 +15,7 @@ A short list of key developments since the last update:
 - ✅ **Keyboard lighting improvements**: added an "Apply on startup" toggle and fixed automatic keyboard color resets on startup.
 - ✅ **TCC offset handling**: reapply saved TCC offsets on startup with exponential backoff retry to handle BIOS/WMI timing issues.
 - ✅ **CPU temperature monitoring**: improved sensor selection and smoothing; auto-reinit if temp sensors report zero repeatedly.
-- ✅ **Build & tests**: repaired a large code corruption in `SystemControlViewModel.cs`, normalized per-core types, and restored a clean build; all unit tests pass locally.
+- ✅ **Build & tests**: repaired a large code corruption in `SystemControlViewModel.cs`, normalized per-core types, and restored a clean build; all unit tests pass locally (24/24). Added logging hardening to tolerate locked log files and an opt-out env var (`OMENCORE_DISABLE_FILE_LOG`) for test/CI runs. Fixed a missing XAML resource (`AccentGreenBrush`) to prevent startup parse exceptions.
 
 These items are reflected in the v2.0 changelog and the development tracker (see `V2_DEVELOPMENT.md`).
 

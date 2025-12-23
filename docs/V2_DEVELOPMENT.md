@@ -258,7 +258,7 @@ Notes: Initial asset folders and placeholder images created. Next: gather real d
 #### Fixed
 - ✅ White margins in system tray context menu eliminated
 - ✅ Fixed large code corruption in `SystemControlViewModel.cs` that caused build failures; normalized per-core offset types (`int?[]`) and restored clean compilation
-- ✅ All unit tests passing locally (16/16)
+- ✅ All unit tests passing locally (24/24) (Logging hardening added; tests resilient to locked log files via `OMENCORE_DISABLE_FILE_LOG`)
 
 ---
 
@@ -322,4 +322,4 @@ Notes: Initial asset folders and placeholder images created. Next: gather real d
 
 ---
 
-*Last Updated: December 18, 2025*
+*Last Updated: December 23, 2025*

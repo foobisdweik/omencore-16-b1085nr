@@ -24,6 +24,7 @@ namespace OmenCore.Services
         private readonly string _fileName;
         private Thread? _writerThread;
         private bool _disposed;
+        private readonly bool _fileLoggingEnabled; // allow disabling file logging via env var (useful for tests)
         
         /// <summary>
         /// Current log verbosity level. Can be changed at runtime.
@@ -36,10 +37,20 @@ namespace OmenCore.Services
         {
             Directory.CreateDirectory(_logDirectory);
             _fileName = Path.Combine(_logDirectory, $"OmenCore_{DateTime.Now:yyyyMMdd_HHmmss}.log");
+
+            // Allow tests or environments to disable file logging
+            var env = Environment.GetEnvironmentVariable("OMENCORE_DISABLE_FILE_LOG");
+            _fileLoggingEnabled = !string.Equals(env, "1", StringComparison.OrdinalIgnoreCase);
         }
 
         public void Initialize()
         {
+            if (!_fileLoggingEnabled)
+            {
+                // File logging disabled for this session (tests or user preference)
+                return;
+            }
+
             _writerThread = new Thread(FlushLoop)
             {
                 IsBackground = true,
@@ -111,12 +122,65 @@ namespace OmenCore.Services
 
         private void FlushLoop()
         {
-            using var stream = new FileStream(_fileName, FileMode.Append, FileAccess.Write, FileShare.Read);
-            using var writer = new StreamWriter(stream, Encoding.UTF8);
-            foreach (var entry in _queue.GetConsumingEnumerable())
+            try
             {
-                writer.WriteLine(entry);
-                writer.Flush();
+                // Try to open the configured log file; if it's locked, fall back to a per-process temp log file
+                string pathToUse = _fileName;
+
+                FileStream? stream = null;
+                for (int attempt = 0; attempt < 2; attempt++)
+                {
+                    try
+                    {
+                        // Allow other readers/writers where possible (ReadWrite sharing)
+                        stream = new FileStream(pathToUse, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                        break;
+                    }
+                    catch (IOException)
+                    {
+                        // If the primary file is locked, fall back to a temporary file in local appdata
+                        if (attempt == 0)
+                        {
+                            var fallbackName = Path.Combine(_logDirectory, $"OmenCore_{Environment.ProcessId}_fallback.log");
+                            pathToUse = fallbackName;
+                        }
+                        else
+                        {
+                            // Last resort: system temp file
+                            pathToUse = Path.GetTempFileName();
+                        }
+                    }
+                }
+
+                if (stream == null)
+                {
+                    // If all attempts failed, emit to Debug and discard incoming entries
+                    System.Diagnostics.Debug.WriteLine("LoggingService: Failed to open any log file; logging disabled for this session.");
+                    foreach (var entry in _queue.GetConsumingEnumerable())
+                    {
+                        // No-op: discard
+                    }
+                    return;
+                }
+
+                using var writer = new StreamWriter(stream, Encoding.UTF8);
+                foreach (var entry in _queue.GetConsumingEnumerable())
+                {
+                    try
+                    {
+                        writer.WriteLine(entry);
+                        writer.Flush();
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"LoggingService: Failed to write log entry: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Swallow any fatal exception in logging thread to avoid crashing the host process
+                System.Diagnostics.Debug.WriteLine($"LoggingService: Fatal error in FlushLoop: {ex.Message}");
             }
         }
 

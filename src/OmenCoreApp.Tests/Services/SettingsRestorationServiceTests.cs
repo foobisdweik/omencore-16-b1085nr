@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -10,6 +12,13 @@ namespace OmenCoreApp.Tests.Services
 {
     public class SettingsRestorationServiceTests
     {
+        public SettingsRestorationServiceTests()
+        {
+            // Use isolated temporary config directory for tests to avoid cross-test interference
+            var tmp = Path.Combine(Path.GetTempPath(), "OmenCoreTests", Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tmp);
+            Environment.SetEnvironmentVariable("OMENCORE_CONFIG_DIR", tmp);
+        }
         private class TestFanController : IFanController
         {
             public bool IsAvailable => true;

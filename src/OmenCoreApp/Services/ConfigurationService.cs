@@ -7,7 +7,7 @@ namespace OmenCore.Services
 {
     public class ConfigurationService
     {
-        private readonly string _configDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OmenCore");
+        private readonly string _configDirectory;
         private readonly string _configPath;
         private readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -19,6 +19,16 @@ namespace OmenCore.Services
 
         public ConfigurationService()
         {
+            var overrideDir = Environment.GetEnvironmentVariable("OMENCORE_CONFIG_DIR");
+            if (!string.IsNullOrWhiteSpace(overrideDir))
+            {
+                _configDirectory = overrideDir;
+            }
+            else
+            {
+                _configDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OmenCore");
+            }
+
             Directory.CreateDirectory(_configDirectory);
             _configPath = Path.Combine(_configDirectory, "config.json");
             Config = Load();
