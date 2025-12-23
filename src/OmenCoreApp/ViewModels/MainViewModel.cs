@@ -1031,6 +1031,8 @@ namespace OmenCore.ViewModels
             _fanService = new FanService(fanController, new ThermalSensorProvider(monitorBridge), _logging, _config.MonitoringIntervalMs);
             _fanService.SetHysteresis(_config.FanHysteresis);
             _fanService.ThermalProtectionEnabled = _config.FanHysteresis?.ThermalProtectionEnabled ?? true;
+            // Configure smoothing/transition settings for fan ramping
+            _fanService.SetSmoothingSettings(_config.FanTransition);
             ThermalSamples = _fanService.ThermalSamples;
             FanTelemetry = _fanService.FanTelemetry;
             var powerPlanService = new PowerPlanService(_logging);

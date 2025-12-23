@@ -179,14 +179,22 @@ namespace OmenCore.ViewModels
         public ICommand ApplyGamingModeCommand { get; }
         public ICommand ReapplySavedPresetCommand { get; }
 
+        private bool _immediateApplyOnApply;
+        public bool ImmediateApplyOnApply
+        {
+            get => _immediateApplyOnApply;
+            set { if (_immediateApplyOnApply != value) { _immediateApplyOnApply = value; OnPropertyChanged(); } }
+        }
+
         public FanControlViewModel(FanService fanService, ConfigurationService configService, LoggingService logging)
         {
             _fanService = fanService;
             _configService = configService;
             _logging = logging;
             
-            // Load hysteresis settings from config
+            // Load hysteresis and transition settings from config
             _fanService.SetHysteresis(_configService.Config.FanHysteresis);
+            ImmediateApplyOnApply = _configService.Config.FanTransition.ApplyImmediatelyOnUserAction;
             
             ApplyCustomCurveCommand = new RelayCommand(_ => ApplyCustomCurve());
             SaveCustomPresetCommand = new RelayCommand(_ => SaveCustomPreset());
@@ -449,7 +457,7 @@ namespace OmenCore.ViewModels
                 Curve = CustomFanCurve.ToList()
             };
 
-            _fanService.ApplyPreset(customPreset);
+            _fanService.ApplyPreset(customPreset, ImmediateApplyOnApply);
             ActiveFanMode = "Custom";
             OnPropertyChanged(nameof(CurrentFanModeName));
             // FanService logs success/failure, no need to duplicate

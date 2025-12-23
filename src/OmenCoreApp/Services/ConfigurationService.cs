@@ -83,6 +83,15 @@ namespace OmenCore.Services
                 config.EcDevicePath = @"\\.\WinRing0_1_2";
             }
 
+            // Validate fan transition settings
+            if (config.FanTransition == null)
+                config.FanTransition = new Models.FanTransitionSettings();
+
+            if (config.FanTransition.SmoothingDurationMs < 0)
+                config.FanTransition.SmoothingDurationMs = 1000;
+            if (config.FanTransition.SmoothingStepMs <= 0)
+                config.FanTransition.SmoothingStepMs = 200;
+
             return config;
         }
 

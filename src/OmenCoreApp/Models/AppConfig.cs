@@ -21,6 +21,10 @@ namespace OmenCore.Models
         public UpdatePreferences Updates { get; set; } = new();
         public FeaturePreferences Features { get; set; } = new();
         public FanHysteresisSettings FanHysteresis { get; set; } = new();
+        /// <summary>
+        /// Fan transition / smoothing settings for ramping and immediate apply behavior.
+        /// </summary>
+        public FanTransitionSettings FanTransition { get; set; } = new();
         public OsdSettings Osd { get; set; } = new();
         public BatterySettings Battery { get; set; } = new();
         public bool FirstRunCompleted { get; set; } = false;
@@ -162,6 +166,27 @@ namespace OmenCore.Models
         
         /// <summary>Enable thermal protection override - forces max fans when temps exceed 90°C, even in Auto mode.</summary>
         public bool ThermalProtectionEnabled { get; set; } = true;
+    }
+
+    /// <summary>
+    /// Settings for fan transition smoothing and immediate-apply behavior.
+    /// </summary>
+    public class FanTransitionSettings
+    {
+        /// <summary>Enable smoothing (ramp fans gradually) when applying a new target.</summary>
+        public bool EnableSmoothing { get; set; } = true;
+
+        /// <summary>Total smoothing duration in milliseconds when ramping between fan percentages.</summary>
+        public int SmoothingDurationMs { get; set; } = 1000;
+
+        /// <summary>Step interval in milliseconds for incremental ramp steps.</summary>
+        public int SmoothingStepMs { get; set; } = 200;
+
+        /// <summary>
+        /// When true, user-initiated apply actions (Save/Apply preset) will force immediate application
+        /// rather than waiting for smoothing / hysteresis.
+        /// </summary>
+        public bool ApplyImmediatelyOnUserAction { get; set; } = false;
     }
     
     /// <summary>

@@ -113,6 +113,14 @@ namespace OmenCore.Services
                 LowOverheadMode = false
             };
 
+            config.FanTransition = new FanTransitionSettings
+            {
+                EnableSmoothing = true,
+                SmoothingDurationMs = 1000,
+                SmoothingStepMs = 200,
+                ApplyImmediatelyOnUserAction = false
+            };
+
             return config;
         }
     }

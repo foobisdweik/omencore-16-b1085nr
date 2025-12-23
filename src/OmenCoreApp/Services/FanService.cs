@@ -47,6 +47,11 @@ namespace OmenCore.Services
         private DateTime _lastCurveUpdate = DateTime.MinValue;
         private DateTime _lastCurveForceRefresh = DateTime.MinValue;
         private int _lastAppliedFanPercent = -1;
+
+        // Smoothing / transition settings (configurable)
+        private bool _smoothingEnabled = true;
+        private int _smoothingDurationMs = 1000;
+        private int _smoothingStepMs = 200;
         
         // Adaptive polling - reduce DPC latency by polling less when stable
         private double _lastCpuTemp = 0;
@@ -168,7 +173,7 @@ namespace OmenCore.Services
         /// <summary>
         /// Apply a preset and start continuous curve monitoring if it has a curve.
         /// </summary>
-        public void ApplyPreset(FanPreset preset)
+        public void ApplyPreset(FanPreset preset, bool immediate = false)
         {
             if (!FanWritesAvailable)
             {
@@ -191,12 +196,28 @@ namespace OmenCore.Services
                     DisableCurve();
                     _activePreset = preset;
                     _logging.Info($"Preset '{preset.Name}' using maximum fan speed (curve disabled)");
+                    if (immediate)
+                    {
+                        // Apply immediate 100%
+                        _fanController.SetFanSpeed(100);
+                        _lastAppliedFanPercent = 100;
+                    }
                 }
                 else if (preset.Curve != null && preset.Curve.Any())
                 {
                     // Enable continuous curve application for ALL presets with curves (including Auto)
                     EnableCurve(preset.Curve.ToList(), preset);
                     _logging.Info($"✓ Preset '{preset.Name}' curve enabled with {preset.Curve.Count} points");
+
+                    if (immediate)
+                    {
+                        // Perform an immediate curve application based on current temps
+                        var temps = _thermalProvider.ReadTemperatures().ToList();
+                        var cpuTemp = temps.FirstOrDefault(t => t.Sensor.Contains("CPU"))?.Celsius ?? temps.FirstOrDefault()?.Celsius ?? 0;
+                        var gpuTemp = temps.FirstOrDefault(t => t.Sensor.Contains("GPU"))?.Celsius ?? temps.Skip(1).FirstOrDefault()?.Celsius ?? 0;
+                        // Fire-and-forget: force apply now without blocking caller
+                        _ = ForceApplyCurveNowAsync(cpuTemp, gpuTemp, immediate: true);
+                    }
                 }
                 else
                 {
@@ -218,7 +239,7 @@ namespace OmenCore.Services
         /// <summary>
         /// Apply a custom curve and start continuous monitoring.
         /// </summary>
-        public void ApplyCustomCurve(IEnumerable<FanCurvePoint> curve)
+        public void ApplyCustomCurve(IEnumerable<FanCurvePoint> curve, bool immediate = false)
         {
             if (!FanWritesAvailable)
             {
@@ -238,6 +259,15 @@ namespace OmenCore.Services
             {
                 EnableCurve(curveList, null);
                 _logging.Info($"Custom fan curve applied and enabled with {curveList.Count} points");
+
+                if (immediate)
+                {
+                    // Apply curve immediately based on current temps
+                    var temps = _thermalProvider.ReadTemperatures().ToList();
+                    var cpuTemp = temps.FirstOrDefault(t => t.Sensor.Contains("CPU"))?.Celsius ?? temps.FirstOrDefault()?.Celsius ?? 0;
+                    var gpuTemp = temps.FirstOrDefault(t => t.Sensor.Contains("GPU"))?.Celsius ?? temps.Skip(1).FirstOrDefault()?.Celsius ?? 0;
+                    _ = ForceApplyCurveNowAsync(cpuTemp, gpuTemp, immediate: true);
+                }
             }
             else
             {
@@ -272,7 +302,29 @@ namespace OmenCore.Services
                 _lastAppliedFanPercent = -1;
             }
         }
+        /// <summary>
+        /// Configure smoothing settings programmatically.
+        /// </summary>
+        public void SetSmoothingSettings(FanTransitionSettings settings)
+        {
+            if (settings == null) return;
+            _smoothingEnabled = settings.EnableSmoothing;
+            _smoothingDurationMs = Math.Max(0, settings.SmoothingDurationMs);
+            _smoothingStepMs = Math.Max(50, settings.SmoothingStepMs);
+            _logging.Info($"Fan smoothing: {(_smoothingEnabled ? "Enabled" : "Disabled")}, duration={_smoothingDurationMs}ms, step={_smoothingStepMs}ms");
+        }
 
+        /// <summary>
+        /// Force apply the active curve immediately (or once) for the given temps.
+        /// Useful for tests and immediate apply operations.
+        /// </summary>
+        public async Task ForceApplyCurveNowAsync(double cpuTemp, double gpuTemp, bool immediate = false, CancellationToken ct = default)
+        {
+            await Task.Run(async () =>
+            {
+                await ApplyCurveIfNeededAsync(cpuTemp, gpuTemp, immediate, ct);
+            }, ct);
+        }
         public bool FanWritesAvailable => _fanController.IsAvailable;
 
         private async Task MonitorLoop(CancellationToken token)
@@ -316,7 +368,7 @@ namespace OmenCore.Services
                     CheckThermalProtection(cpuTemp, gpuTemp);
                     
                     // Apply fan curve if enabled and enough time has passed
-                    ApplyCurveIfNeeded(cpuTemp, gpuTemp);
+                    await ApplyCurveIfNeededAsync(cpuTemp, gpuTemp, immediate: false);
                     
                     // Read fan speeds (less frequently to reduce ACPI overhead)
                     var fanSpeeds = _fanController.ReadFanSpeeds().ToList();
@@ -464,7 +516,7 @@ namespace OmenCore.Services
         /// Apply fan curve based on current temperature if curve is enabled.
         /// This is the core OmenMon-style continuous fan control with hysteresis support.
         /// </summary>
-        private void ApplyCurveIfNeeded(double cpuTemp, double gpuTemp)
+        private async Task ApplyCurveIfNeededAsync(double cpuTemp, double gpuTemp, bool immediate = false, CancellationToken ct = default)
         {
             // Skip curve application if thermal protection is active
             if (_thermalProtectionActive)
@@ -482,7 +534,7 @@ namespace OmenCore.Services
             // This combats BIOS countdown timer that may reset fan control
             bool forceRefresh = timeSinceForceRefresh >= CurveForceRefreshMs;
             
-            if (timeSinceLastUpdate < CurveUpdateIntervalMs && !forceRefresh)
+            if (timeSinceLastUpdate < CurveUpdateIntervalMs && !forceRefresh && !immediate)
                 return;
                 
             lock (_curveLock)
@@ -501,6 +553,20 @@ namespace OmenCore.Services
                     if (targetPoint == null) return;
                     
                     var targetFanPercent = targetPoint.FanPercent;
+                    
+                    // If immediate flag passed, bypass hysteresis and smoothing and apply now
+                    if (immediate)
+                    {
+                        if (_fanController.SetFanSpeed(targetFanPercent))
+                        {
+                            _lastAppliedFanPercent = targetFanPercent;
+                            _lastHysteresisTemp = maxTemp;
+                            _pendingFanPercent = -1;
+                            _lastCurveUpdate = now;
+                            _logging.Info($"Immediate curve applied: {targetFanPercent}% @ {maxTemp:F1}°C");
+                        }
+                        return;
+                    }
                     
                     // Apply hysteresis if enabled
                     if (_hysteresis.Enabled && _lastAppliedFanPercent >= 0)
@@ -536,8 +602,7 @@ namespace OmenCore.Services
                             _lastCurveUpdate = now;
                             return;
                         }
-                    }
-                    
+                    }                    
                     // Apply if fan percent changed OR if we're forcing a refresh
                     // Force refresh combats BIOS countdown timer that may have reset fan control
                     if (targetFanPercent != _lastAppliedFanPercent || forceRefresh)
@@ -545,22 +610,32 @@ namespace OmenCore.Services
                         // Convert percentage to krpm (0-100% maps to 0-55 krpm)
                         byte fanLevel = (byte)(targetFanPercent * 55 / 100);
                         
-                        // Use SetFanSpeed which internally calls SetFanLevel
-                        if (_fanController.SetFanSpeed(targetFanPercent))
+                        // If smoothing disabled or this is a force refresh or we have no previous applied value, just set directly
+                        if (!_smoothingEnabled || _lastAppliedFanPercent < 0 || forceRefresh)
                         {
-                            _lastAppliedFanPercent = targetFanPercent;
+                            if (_fanController.SetFanSpeed(targetFanPercent))
+                            {
+                                _lastAppliedFanPercent = targetFanPercent;
+                                _lastHysteresisTemp = maxTemp;
+                                _pendingFanPercent = -1;
+                                
+                                if (forceRefresh)
+                                {
+                                    _lastCurveForceRefresh = now;
+                                    _logging.Info($"Curve force-refreshed: {targetFanPercent}% @ {maxTemp:F1}°C (level: {fanLevel})");
+                                }
+                                else
+                                {
+                                    _logging.Info($"Curve applied: {targetFanPercent}% @ {maxTemp:F1}°C (level: {fanLevel})");
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Ramp to the new target asynchronously so we don't block the monitor loop
+                            var cancellationToken = CancellationToken.None;
+                            _ = RampFanToPercentAsync(targetFanPercent, cancellationToken);
                             _lastHysteresisTemp = maxTemp;
-                            _pendingFanPercent = -1;
-                            
-                            if (forceRefresh)
-                            {
-                                _lastCurveForceRefresh = now;
-                                _logging.Info($"Curve force-refreshed: {targetFanPercent}% @ {maxTemp:F1}°C (level: {fanLevel})");
-                            }
-                            else
-                            {
-                                _logging.Info($"Curve applied: {targetFanPercent}% @ {maxTemp:F1}°C (level: {fanLevel})");
-                            }
                         }
                     }
                     
@@ -570,6 +645,45 @@ namespace OmenCore.Services
                 {
                     _logging.Warn($"Failed to apply fan curve: {ex.Message}");
                 }
+            }
+        }
+
+        private async Task RampFanToPercentAsync(int targetPercent, CancellationToken cancellationToken)
+        {
+            // Determine start point for ramp. If no previous value, start from 0% to provide a ramp-up
+            int from = _lastAppliedFanPercent < 0 ? 0 : _lastAppliedFanPercent;
+
+            if (targetPercent == from)
+                return;
+
+            int to = targetPercent;
+            int diff = to - from;
+            int steps = Math.Max(1, _smoothingDurationMs / Math.Max(1, _smoothingStepMs));
+            double stepSize = diff / (double)steps;
+
+            for (int i = 1; i <= steps; i++)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+                int interim = (int)Math.Round(from + stepSize * i);
+                interim = Math.Clamp(interim, 0, 100);
+                try
+                {
+                    _fanController.SetFanSpeed(interim);
+                    _lastAppliedFanPercent = interim;
+                }
+                catch (Exception ex)
+                {
+                    _logging.Warn($"Error during fan ramp step: {ex.Message}");
+                }
+
+                try { await Task.Delay(_smoothingStepMs, cancellationToken); } catch { break; }
+            }
+
+            // Ensure final target applied
+            if (_lastAppliedFanPercent != targetPercent)
+            {
+                _fanController.SetFanSpeed(targetPercent);
+                _lastAppliedFanPercent = targetPercent;
             }
         }
 

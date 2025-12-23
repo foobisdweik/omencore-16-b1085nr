@@ -16,6 +16,8 @@ namespace OmenCoreApp.Tests.Services
             public string Status => "Test";
             public string Backend => "Test";
             public string? LastAppliedPreset { get; private set; }
+            public int LastSetPercent { get; private set; } = -1;
+            public int SetCallCount { get; private set; } = 0;
 
             public bool ApplyPreset(FanPreset preset)
             {
@@ -24,12 +26,12 @@ namespace OmenCoreApp.Tests.Services
             }
 
             public bool ApplyCustomCurve(System.Collections.Generic.IEnumerable<FanCurvePoint> curve) => true;
-            public bool SetFanSpeed(int percent) => true;
+            public bool SetFanSpeed(int percent) { LastSetPercent = percent; SetCallCount++; return true; }
             public bool SetMaxFanSpeed(bool enabled) => true;
             public bool SetPerformanceMode(string modeName) => true;
             public bool RestoreAutoControl() => true;
             public System.Collections.Generic.IEnumerable<FanTelemetry> ReadFanSpeeds() => new System.Collections.Generic.List<FanTelemetry>();
-            public void ApplyMaxCooling() { LastAppliedPreset = "Max"; }
+            public void ApplyMaxCooling() { LastAppliedPreset = "Max"; LastSetPercent = 100; SetCallCount++; }
             public void ApplyAutoMode() { LastAppliedPreset = "Auto"; }
             public void ApplyQuietMode() { LastAppliedPreset = "Quiet"; }
             public void Dispose() { }
@@ -144,6 +146,7 @@ namespace OmenCoreApp.Tests.Services
 
             result.Should().BeTrue();
             controller.LastAppliedPreset.Should().Be("Max");
+            controller.LastSetPercent.Should().Be(100);
 
             logging.Dispose();
         }
@@ -167,6 +170,67 @@ namespace OmenCoreApp.Tests.Services
             vm.ReapplySavedPresetCommand.Execute(null);
 
             controller.LastAppliedPreset.Should().Be("Max");
+            controller.LastSetPercent.Should().Be(100);
+
+            logging.Dispose();
+        }
+
+        [Fact]
+        public async Task Smoothing_Ramps_WhenEnabled()
+        {
+            var logging = new LoggingService();
+            logging.Initialize();
+
+            var configService = new ConfigurationService();
+            var hwMonitor = new LibreHardwareMonitorImpl();
+            var thermalProvider = new ThermalSensorProvider(hwMonitor);
+            var controller = new TestFanController();
+            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+
+            // Enable smoothing: duration 500ms, step 100ms
+            fanService.SetSmoothingSettings(new FanTransitionSettings { EnableSmoothing = true, SmoothingDurationMs = 500, SmoothingStepMs = 100 });
+
+            // Apply a custom curve and force an immediate curve computation
+            var curve = new List<FanCurvePoint> { new FanCurvePoint { TemperatureC = 40, FanPercent = 40 }, new FanCurvePoint { TemperatureC = 80, FanPercent = 80 } };
+            fanService.ApplyCustomCurve(curve, immediate: false);
+
+            // Force apply for CPU temp 80C
+            await fanService.ForceApplyCurveNowAsync(80, 0, immediate: false);
+
+            // Allow some time for ramp to run
+            await Task.Delay(700);
+
+            // Smoothing should have resulted in at least one SetFanSpeed call and final percent 80
+            controller.SetCallCount.Should().BeGreaterThan(0);
+            controller.LastSetPercent.Should().Be(80);
+
+            logging.Dispose();
+        }
+
+        [Fact]
+        public async Task ImmediateApply_BypassesSmoothing()
+        {
+            var logging = new LoggingService();
+            logging.Initialize();
+
+            var configService = new ConfigurationService();
+            var hwMonitor = new LibreHardwareMonitorImpl();
+            var thermalProvider = new ThermalSensorProvider(hwMonitor);
+            var controller = new TestFanController();
+            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+
+            fanService.SetSmoothingSettings(new FanTransitionSettings { EnableSmoothing = true, SmoothingDurationMs = 500, SmoothingStepMs = 100 });
+
+            var curve = new List<FanCurvePoint> { new FanCurvePoint { TemperatureC = 40, FanPercent = 40 }, new FanCurvePoint { TemperatureC = 80, FanPercent = 80 } };
+            // Apply curve but don't rely on ApplyCustomCurve's internal immediate (it uses internal temps)
+            fanService.ApplyCustomCurve(curve, immediate: false);
+
+            // Force immediate apply with supplied temps
+            await fanService.ForceApplyCurveNowAsync(80, 0, immediate: true);
+
+            // Immediate apply should result in single SetFanSpeed call and final percent 80
+            controller.SetCallCount.Should().BeGreaterThan(0);
+            controller.LastSetPercent.Should().Be(80);
 
             logging.Dispose();
         }
