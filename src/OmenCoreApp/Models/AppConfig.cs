@@ -28,6 +28,13 @@ namespace OmenCore.Models
         public OsdSettings Osd { get; set; } = new();
         public BatterySettings Battery { get; set; } = new();
         public bool FirstRunCompleted { get; set; } = false;
+
+        /// <summary>
+        /// If true, the Corsair service will NOT fall back to the iCUE SDK when direct HID access fails.
+        /// This allows OmenCore to operate without iCUE but may result in reduced device support on some systems.
+        /// Default: false (iCUE fallback allowed).
+        /// </summary>
+        public bool CorsairDisableIcueFallback { get; set; } = false;
         
         /// <summary>
         /// Enable detailed diagnostics logging at startup (OGH commands, WMI status, etc.)

@@ -36,7 +36,7 @@ namespace OmenCore.Services
         /// Factory method to create service with auto-detection of SDK availability.
         /// Prioritizes direct HID access (no iCUE required), falls back to iCUE SDK, then stub.
         /// </summary>
-        public static async Task<CorsairDeviceService> CreateAsync(LoggingService logging)
+        public static async Task<CorsairDeviceService> CreateAsync(LoggingService logging, ConfigurationService? configService = null)
         {
             ICorsairSdkProvider sdk;
 
@@ -53,16 +53,26 @@ namespace OmenCore.Services
                 }
                 else
                 {
-                    // Priority 2: Try iCUE SDK (requires iCUE running)
-                    logging.Info("No devices via direct HID, trying iCUE SDK...");
-                    sdk = new CorsairICueSdk(logging);
-                    initialized = await sdk.InitializeAsync();
-
-                    if (!initialized)
+                    // Check config - if iCUE fallback is disabled, skip trying iCUE
+                    if (configService?.Config?.CorsairDisableIcueFallback == true)
                     {
-                        logging.Info("No Corsair devices found via any method");
+                        logging.Info("Corsair direct HID failed and iCUE fallback disabled via config; using stub provider");
                         sdk = new CorsairSdkStub(logging);
                         await sdk.InitializeAsync();
+                    }
+                    else
+                    {
+                        // Priority 2: Try iCUE SDK (requires iCUE running)
+                        logging.Info("No devices via direct HID, trying iCUE SDK...");
+                        sdk = new CorsairICueSdk(logging);
+                        initialized = await sdk.InitializeAsync();
+
+                        if (!initialized)
+                        {
+                            logging.Info("No Corsair devices found via any method");
+                            sdk = new CorsairSdkStub(logging);
+                            await sdk.InitializeAsync();
+                        }
                     }
                 }
             }

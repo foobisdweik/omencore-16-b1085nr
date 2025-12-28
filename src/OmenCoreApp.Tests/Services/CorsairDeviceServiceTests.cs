@@ -55,5 +55,38 @@ namespace OmenCoreApp.Tests.Services
             // Assert - Should handle gracefully
             await act.Should().NotThrowAsync("service should handle null inputs gracefully");
         }
+
+        [Fact]
+        public async Task CreateAsync_WithIcueFallbackDisabled_RespectsConfig()
+        {
+            // Arrange
+            var logging = new LoggingService();
+            logging.Level = LogLevel.Info;
+
+            var logEvents = new System.Collections.Generic.List<string>();
+            logging.LogEmitted += s => logEvents.Add(s);
+
+            var config = new ConfigurationService();
+            var cfg = config.Config;
+            cfg.CorsairDisableIcueFallback = true; // do not allow iCUE fallback
+            config.Replace(cfg);
+
+            // Act
+            var svc = await CorsairDeviceService.CreateAsync(logging, config);
+            await svc.DiscoverAsync();
+
+            // If direct HID failed and iCUE fallback was disabled, we expect the specific log message
+            var disabledMsg = "Corsair direct HID failed and iCUE fallback disabled via config";
+            if (logEvents.Exists(l => l.Contains(disabledMsg)))
+            {
+                // In this case the stub provider should be in use and no devices discovered
+                svc.Devices.Should().BeEmpty("stub provider used when HID failed and fallback disabled");
+            }
+            else
+            {
+                // Otherwise direct HID likely worked and devices (at least one) should be present
+                svc.Devices.Should().NotBeEmpty("direct HID available or fallback to iCUE allowed");
+            }
+        }
     }
 }
