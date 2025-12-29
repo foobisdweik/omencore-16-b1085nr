@@ -316,7 +316,8 @@
                             </StackPanel>
                             <ToggleButton Grid.Column="1" 
                                           Style="{StaticResource ModernToggleButton}"
-                                          IsChecked="{Binding TelemetryEnabled, Mode=TwoWay}"/>
+                                          IsChecked="{Binding TelemetryEnabled, Mode=TwoWay}" 
+                                          ToolTipService.ToolTip="Share anonymous PID success/failure counts to help improve device support. Opt-in only; stored at %LOCALAPPDATA%\OmenCore\telemetry.json"/>
                         </Grid>
                     </StackPanel>
                 </Border>
