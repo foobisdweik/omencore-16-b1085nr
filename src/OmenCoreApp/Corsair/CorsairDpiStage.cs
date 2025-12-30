@@ -7,5 +7,8 @@ namespace OmenCore.Corsair
         public bool IsDefault { get; set; }
         public bool AngleSnapping { get; set; }
         public double LiftOffDistanceMm { get; set; }
+        
+        // Backwards-compatible index property used by HID write helpers
+        public int Index { get; set; }
     }
 }

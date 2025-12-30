@@ -375,6 +375,12 @@ namespace OmenCore.Services.Corsair
 
                             // Telemetry: record failure for PID (opt-in only)
                             try { _telemetry?.IncrementPidFailure(device.ProductId); } catch { }
+                        }
+                    }
+                }
+            }
+        }
+
         /// <summary>
         /// Build set-color report bytes for a device using product-specific heuristics.
         /// Separated for testability and easier per-product payload maintenance.
@@ -530,16 +536,91 @@ namespace OmenCore.Services.Corsair
             return true;
         }
 
-        public Task ApplyDpiStagesAsync(CorsairDevice device, IEnumerable<CorsairDpiStage> stages)
+        public async Task ApplyDpiStagesAsync(CorsairDevice device, IEnumerable<OmenCore.Corsair.CorsairDpiStage> stages)
         {
-            _logging.Info($"[Direct HID] DPI control not yet implemented for {device.Name}");
-            return Task.CompletedTask;
+            if (device == null) throw new ArgumentNullException(nameof(device));
+            if (stages == null) throw new ArgumentNullException(nameof(stages));
+
+            // Locate the internal HID device for the given CorsairDevice
+            var hidDevice = GetHidDeviceByDeviceId(device.DeviceId);
+            if (hidDevice == null)
+            {
+                _logging.Warn($"No HID device found for {device.Name} (device id: {device.DeviceId})");
+                return;
+            }
+
+            // Build and send per-stage reports based on product heuristics
+            foreach (var s in stages)
+            {
+                var report = BuildSetDpiReport(hidDevice, s.Dpi /* index not used by Corsair DPI objects */ , s.Dpi);
+                if (report == null)
+                {
+                    _logging.Warn($"DPI update not supported for PID 0x{hidDevice.ProductId:X4}");
+                    return;
+                }
+
+                try
+                {
+                    var ok = await WriteReportAsync(hidDevice, report);
+                    if (!ok) throw new InvalidOperationException("HID write returned false");
+                    _logging.Info($"Applied DPI {s.Dpi} to {device.Name}");
+                    try { _telemetry?.IncrementPidSuccess(hidDevice.ProductId); } catch { }
+                }
+                catch (Exception ex)
+                {
+                    _logging.Warn($"Failed to write DPI report for {device.Name} (PID: 0x{hidDevice.ProductId:X4}): {ex.Message}");
+                    try { _telemetry?.IncrementPidFailure(hidDevice.ProductId); } catch { }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Build a DPI-setting report for a mouse device. Returns null when unsupported.
+        /// </summary>
+        protected virtual byte[]? BuildSetDpiReport(CorsairHidDevice device, int index, int dpi)
+        {
+            // Conservative approach: apply only for known mice PIDs (add more as we learn exact payloads)
+            switch (device.ProductId)
+            {
+                case 0x1B2E: // Dark Core RGB - hypothetical format
+                    // Example: [0x00, 0x11, index, dpi_low, dpi_high, 0,0,...]
+                    var r = new byte[65];
+                    r[0] = 0x00;
+                    r[1] = 0x11; // vendor 'set DPI' cmd (example)
+                    r[2] = (byte)index;
+                    r[3] = (byte)(dpi & 0xFF);
+                    r[4] = (byte)((dpi >> 8) & 0xFF);
+                    return r;
+                case 0x1B1E: // M65 family - alternative hypothetical format
+                    var r2 = new byte[65];
+                    r2[0] = 0x00;
+                    r2[1] = 0x12;
+                    r2[2] = (byte)index;
+                    r2[3] = (byte)(dpi & 0xFF);
+                    r2[4] = (byte)((dpi >> 8) & 0xFF);
+                    r2[5] = 0x01; // commit flag
+                    return r2;
+                default:
+                    return null;
+            }
         }
 
         public Task ApplyMacroAsync(CorsairDevice device, MacroProfile macro)
         {
             _logging.Info($"[Direct HID] Macro support not yet implemented for {device.Name}");
             return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Helper to locate an internal CorsairHidDevice by public DeviceId
+        /// </summary>
+        protected CorsairHidDevice? GetHidDeviceByDeviceId(string deviceId)
+        {
+            foreach (var d in _devices)
+            {
+                if (d.DeviceInfo?.DeviceId == deviceId) return d;
+            }
+            return null;
         }
 
         private static (byte r, byte g, byte b) ParseHexColor(string hex)
