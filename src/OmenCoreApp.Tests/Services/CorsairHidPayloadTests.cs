@@ -61,6 +61,8 @@ namespace OmenCoreApp.Tests.Services
         [InlineData(0x1B2D, 0x09)] // K95
         [InlineData(0x1B60, 0x09)] // K100
         [InlineData(0x1B2E, 0x05)] // Dark Core Mouse
+        [InlineData(0x1B4B, 0x05)] // Dark Core PRO
+        [InlineData(0x1B34, 0x05)] // Ironclaw
         [InlineData(0xFFFF, 0x07)] // Unknown product -> default
         public void BuildSetColorReport_SelectsExpectedCommand(int pid, int expectedCmd)
         {

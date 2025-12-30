@@ -406,7 +406,18 @@ namespace OmenCore.Services.Corsair
                     case 0x1B2E: // Dark Core RGB
                     case 0x1B4B: // Dark Core RGB PRO
                     case 0x1B34: // Ironclaw
-                        return BuildSetColorReport(device, r, g, b); // mouse-specific simple path
+                    {
+                        // Mouse-specific simple path: use 0x05 command with single index/count
+                        var mReport = new byte[65];
+                        mReport[0] = 0x00;
+                        mReport[1] = 0x05; // mouse set color cmd
+                        mReport[2] = 0x00; // start index
+                        mReport[3] = 0x01; // count
+                        mReport[4] = r;
+                        mReport[5] = g;
+                        mReport[6] = b;
+                        return mReport;
+                    }
                     default:
                         // Keep defaults
                         break;
