@@ -51,7 +51,7 @@ namespace OmenCoreApp.Tests.Services
             var testProvider = new TestProvider();
             var corsairService = new CorsairDeviceService(testProvider, logging);
             // Mark internal initialized flag so DiscoverAsync runs
-            var f = typeof(CorsairDeviceService).GetField("_initialized", BindingFlags.NonPublic | BindingFlags.Instance);
+            var f = typeof(CorsairDeviceService).GetField("_initialized", BindingFlags.NonPublic | BindingFlags.Instance) ?? throw new Exception("_initialized field not found");
             f.SetValue(corsairService, true);
 
             // Discover devices (populate Devices)
@@ -59,12 +59,12 @@ namespace OmenCoreApp.Tests.Services
 
             // Create the provider and inject the test service
             var provider = new CorsairRgbProvider(logging, cfg);
-            var serviceField = typeof(CorsairRgbProvider).GetField("_service", BindingFlags.NonPublic | BindingFlags.Instance);
+            var serviceField = typeof(CorsairRgbProvider).GetField("_service", BindingFlags.NonPublic | BindingFlags.Instance) ?? throw new Exception("_service field not found");
             serviceField.SetValue(provider, corsairService);
             // Mark available
-            var availableField = typeof(CorsairRgbProvider).GetProperty("IsAvailable", BindingFlags.Public | BindingFlags.Instance);
-            var setMethod = availableField?.GetSetMethod(true);
-            setMethod?.Invoke(provider, new object[] { true });
+            var availableField = typeof(CorsairRgbProvider).GetProperty("IsAvailable", BindingFlags.Public | BindingFlags.Instance) ?? throw new Exception("IsAvailable property not found");
+            var setMethod = availableField.GetSetMethod(true) ?? throw new Exception("setter for IsAvailable not found");
+            setMethod.Invoke(provider, new object[] { true });
 
             // Apply preset
             await provider.ApplyEffectAsync("preset:TestPreset");

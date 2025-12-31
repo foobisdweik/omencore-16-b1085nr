@@ -147,8 +147,10 @@ namespace OmenCore.ViewModels
 
                 if (UndervoltStatus.HasPerCoreOffsets && UndervoltStatus.CurrentPerCoreOffsetsMv != null)
                 {
-                    var activeCores = UndervoltStatus.CurrentPerCoreOffsetsMv.Count(x => x.HasValue);
-                    var avgOffset = UndervoltStatus.CurrentPerCoreOffsetsMv.Where(x => x.HasValue).Average(x => x.Value);
+                    // Safely extract non-null per-core offsets and avoid nullability warnings / empty sequences
+                    var values = UndervoltStatus.CurrentPerCoreOffsetsMv.Where(x => x.HasValue).Select(x => x!.Value).ToArray();
+                    var activeCores = values.Length;
+                    var avgOffset = activeCores > 0 ? values.Average() : 0.0;
                     return $"Per-Core: {activeCores} cores active | Avg {avgOffset:+0;-0;0} mV | Cache {UndervoltStatus.CurrentCacheOffsetMv:+0;-0;0} mV";
                 }
                 else

@@ -31,9 +31,8 @@ namespace OmenCoreApp.Tests.Services
             var service = new CorsairDeviceService(new CorsairSdkStub(logging), logging);
 
             // Mark service as initialized (CreateAsync normally sets the internal flag)
-            typeof(CorsairDeviceService)
-                .GetField("_initialized", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-                .SetValue(service, true);
+            var initField = typeof(CorsairDeviceService).GetField("_initialized", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic) ?? throw new System.Exception("_initialized field not found");
+            initField.SetValue(service, true);
 
             // Act
             await service.DiscoverAsync();

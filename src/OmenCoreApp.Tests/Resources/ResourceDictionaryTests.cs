@@ -11,16 +11,23 @@ namespace OmenCoreApp.Tests.Resources
         public void ResourceDictionariesContainRequiredKeys()
         {
             // Find repository root by walking up until a 'src' directory is found
-            var dir = AppContext.BaseDirectory;
+            var dir = AppContext.BaseDirectory ?? throw new Exception("AppContext.BaseDirectory is null");
             DirectoryInfo di = new DirectoryInfo(dir);
-            while (di != null && !Directory.Exists(Path.Combine(di.FullName, "src")))
+            DirectoryInfo? repoRoot = null;
+            while (di != null)
             {
+                if (Directory.Exists(Path.Combine(di.FullName, "src")))
+                {
+                    repoRoot = di;
+                    break;
+                }
                 di = di.Parent;
             }
 
-            Assert.True(di != null, "Could not locate repository root (missing 'src' folder)");
+            if (repoRoot == null) throw new Exception("Could not locate repository root (missing 'src' folder)");
 
-            var path = Path.Combine(di.FullName, "src", "OmenCoreApp", "Styles", "ModernStyles.xaml");
+            var rootPath = repoRoot.FullName;
+            var path = Path.Combine(rootPath, "src", "OmenCoreApp", "Styles", "ModernStyles.xaml");
             Assert.True(File.Exists(path), $"Expected resource file not found: {path}");
 
             var content = File.ReadAllText(path);

@@ -53,18 +53,18 @@ namespace OmenCoreApp.Tests.Services
 
             var testSdk = new TestLogitechSdkProvider();
             var service = new LogitechDeviceService(testSdk, logging);
-            var f = typeof(LogitechDeviceService).GetField("_initialized", BindingFlags.NonPublic | BindingFlags.Instance);
+            var f = typeof(LogitechDeviceService).GetField("_initialized", BindingFlags.NonPublic | BindingFlags.Instance) ?? throw new Exception("_initialized field not found");
             f.SetValue(service, true);
             await service.DiscoverAsync();
 
             // inject service instance into provider
-            var serviceField = typeof(LogitechRgbProvider).GetField("_service", BindingFlags.NonPublic | BindingFlags.Instance);
+            var serviceField = typeof(LogitechRgbProvider).GetField("_service", BindingFlags.NonPublic | BindingFlags.Instance) ?? throw new Exception("_service field not found");
             serviceField.SetValue(provider, service);
 
             // set IsAvailable via reflection
-            var isAvailableProp = typeof(LogitechRgbProvider).GetProperty("IsAvailable", BindingFlags.Public | BindingFlags.Instance);
-            var setMethod = isAvailableProp?.GetSetMethod(true);
-            setMethod?.Invoke(provider, new object[] { true });
+            var isAvailableProp = typeof(LogitechRgbProvider).GetProperty("IsAvailable", BindingFlags.Public | BindingFlags.Instance) ?? throw new Exception("IsAvailable property not found");
+            var setMethod = isAvailableProp.GetSetMethod(true) ?? throw new Exception("setter for IsAvailable not found");
+            setMethod.Invoke(provider, new object[] { true });
 
             await provider.ApplyEffectAsync("color:#00FF00@75");
 
@@ -80,15 +80,15 @@ namespace OmenCoreApp.Tests.Services
 
             var testSdk = new TestLogitechSdkProvider();
             var service = new LogitechDeviceService(testSdk, logging);
-            var f = typeof(LogitechDeviceService).GetField("_initialized", BindingFlags.NonPublic | BindingFlags.Instance);
+            var f = typeof(LogitechDeviceService).GetField("_initialized", BindingFlags.NonPublic | BindingFlags.Instance) ?? throw new Exception("_initialized field not found");
             f.SetValue(service, true);
             await service.DiscoverAsync();
 
-            var serviceField = typeof(LogitechRgbProvider).GetField("_service", BindingFlags.NonPublic | BindingFlags.Instance);
+            var serviceField = typeof(LogitechRgbProvider).GetField("_service", BindingFlags.NonPublic | BindingFlags.Instance) ?? throw new Exception("_service field not found");
             serviceField.SetValue(provider, service);
-            var isAvailableProp = typeof(LogitechRgbProvider).GetProperty("IsAvailable", BindingFlags.Public | BindingFlags.Instance);
-            var setMethod = isAvailableProp?.GetSetMethod(true);
-            setMethod?.Invoke(provider, new object[] { true });
+            var isAvailableProp = typeof(LogitechRgbProvider).GetProperty("IsAvailable", BindingFlags.Public | BindingFlags.Instance) ?? throw new Exception("IsAvailable property not found");
+            var setMethod = isAvailableProp.GetSetMethod(true) ?? throw new Exception("setter for IsAvailable not found");
+            setMethod.Invoke(provider, new object[] { true });
 
             await provider.ApplyEffectAsync("breathing:#FF00FF@5");
 

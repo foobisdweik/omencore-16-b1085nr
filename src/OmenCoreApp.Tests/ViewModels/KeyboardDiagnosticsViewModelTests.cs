@@ -60,12 +60,12 @@ namespace OmenCoreApp.Tests.ViewModels
             var logging = new LoggingService(); logging.Initialize();
             var corsairProvider = new TestCorsairSdkProvider();
             var corsair = new CorsairDeviceService(corsairProvider, logging);
-            var cField = typeof(CorsairDeviceService).GetField("_initialized", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var cField = typeof(CorsairDeviceService).GetField("_initialized", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) ?? throw new System.Exception("_initialized field not found");
             cField.SetValue(corsair, true);
 
             var logitechProvider = new TestLogitechSdkProvider();
             var logitech = new LogitechDeviceService(logitechProvider, logging);
-            var lField = typeof(LogitechDeviceService).GetField("_initialized", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var lField = typeof(LogitechDeviceService).GetField("_initialized", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) ?? throw new System.Exception("_initialized field not found");
             lField.SetValue(logitech, true);
 
             var keyboard = new TestKeyboardLightingService(logging);
@@ -93,12 +93,12 @@ namespace OmenCoreApp.Tests.ViewModels
             var logging = new LoggingService(); logging.Initialize();
             var corsairProvider = new TestCorsairSdkProvider();
             var corsair = new CorsairDeviceService(corsairProvider, logging);
-            var cField = typeof(CorsairDeviceService).GetField("_initialized", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var cField = typeof(CorsairDeviceService).GetField("_initialized", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) ?? throw new System.Exception("_initialized field not found");
             cField.SetValue(corsair, true);
 
             var logitechProvider = new TestLogitechSdkProvider();
             var logitech = new LogitechDeviceService(logitechProvider, logging);
-            var lField = typeof(LogitechDeviceService).GetField("_initialized", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var lField = typeof(LogitechDeviceService).GetField("_initialized", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) ?? throw new System.Exception("_initialized field not found");
             lField.SetValue(logitech, true);
 
             var keyboard = new TestKeyboardLightingService(logging);
@@ -122,12 +122,12 @@ namespace OmenCoreApp.Tests.ViewModels
             var logging = new LoggingService(); logging.Initialize();
             var corsairProvider = new TestCorsairSdkProvider();
             var corsair = new CorsairDeviceService(corsairProvider, logging);
-            var cField = typeof(CorsairDeviceService).GetField("_initialized", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var cField = typeof(CorsairDeviceService).GetField("_initialized", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) ?? throw new System.Exception("_initialized field not found");
             cField.SetValue(corsair, true);
 
             var logitechProvider = new TestLogitechSdkProvider();
             var logitech = new LogitechDeviceService(logitechProvider, logging);
-            var lField = typeof(LogitechDeviceService).GetField("_initialized", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var lField = typeof(LogitechDeviceService).GetField("_initialized", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) ?? throw new System.Exception("_initialized field not found");
             lField.SetValue(logitech, true);
 
             var keyboard = new TestKeyboardLightingService(logging);
