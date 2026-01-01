@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.0-alpha3] - 2026-01-01
+
+### Added
+- **🔧 Corsair Mouse DPI Control** - Full DPI stage management via HID
+  - 5-stage DPI profiles with per-stage configuration
+  - DPI profile save/load/delete with overwrite confirmation
+  - Stage names, angle snapping, lift-off distance settings
+  - Tooltips explaining each DPI feature
+- **🖱️ Corsair Mouse HID Research** - Extensive protocol documentation
+  - Documented HID endpoints, report IDs, and packet structures
+  - Mapped DPI read/write commands for Dark Core RGB PRO
+  - Created [HID_DPI_RESEARCH.md](HID_DPI_RESEARCH.md) for future development
+
+### Fixed
+- **🔄 Corsair HID Stack Overflow** - Fixed recursion bug in `BuildSetColorReport`
+  - Method was calling itself instead of using product-specific switch
+  - Added mouse PID payload tests to prevent regression
+- **🧪 Test Parallelization Conflicts** - Fixed 6 flaky tests
+  - Added `[Collection("Config Isolation")]` to tests that modify `OMENCORE_CONFIG_DIR`
+  - Tests now use unique temp directories to avoid cross-test pollution
+- **📊 Code Quality** - Fixed 26+ analyzer warnings (IDE0052, IDE0059, IDE0060)
+  - Removed unused private fields and unnecessary assignments
+  - Fixed unused parameter warnings with proper discards
+  - Modernized C# syntax (target-typed new, pattern matching, switch expressions)
+
+### Technical
+- **🧪 Test Suite Expanded** - 66 tests passing (up from 24)
+  - Added DPI profile tests with save/load/overwrite scenarios
+  - Added Corsair mouse PID payload tests
+  - Added test collection isolation for config-sensitive tests
+- **📦 Build System** - Clean compilation (0 warnings, 0 errors)
+- **🔧 Code Cleanup** - Removed obsolete methods and dead code
+  - Removed `CreateCpuTempIcon`, `TryAlternativeWmiWatcher`, `ApplyViaEc`
+  - Simplified using statements throughout codebase
+
+---
+
+## [2.0.0-alpha2] - 2025-12-28
+
 ## [2.0.0-alpha1] - 2025-12-19
 
 ### Added
@@ -22,8 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **🏷️ Risk indicators** for each optimization (Low/Medium/High)
 - **⚡ Extreme fan preset** (100% at 75°C for high-power systems)
 - **🎨 DarkContextMenu control** - Custom context menu with no white margins
-- **�️ Keyboard Lighting Diagnostics** - Added a diagnostics panel with device detection, test patterns, and log collection to assist in troubleshooting keyboard lighting issues
-- **�🔄 Modern toggle switches** - Replaced checkboxes with iOS-style toggles in Settings
+- **🛠️ Keyboard Lighting Diagnostics** - Diagnostics panel with device detection, test patterns, and log collection
+- **🔄 Modern toggle switches** - Replaced checkboxes with iOS-style toggles in Settings
 - **⚡ GPU Voltage/Current Graph** - Added GPU V/C monitoring chart to dashboard
 - **🔧 Per-Core Undervolt** - Individual undervolt controls for each CPU core
 
@@ -35,7 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reduced render throttling from 100ms to 50ms intervals
   - Implemented polyline reuse to avoid object recreation overhead
   - Added BitmapCache for better visual performance
-- **🔢 Version updated** to v1.5.0-beta throughout app
 
 ### Fixed
 - **💥 System Tray Crash** - Fixed crash when right-clicking tray icon
@@ -44,35 +82,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **🔄 Tray Icon Update Crash** - Fixed "Specified element is already the logical child" error
   - Issue in UpdateFanMode/UpdatePerformanceMode when updating menu headers
   - Now creates fresh UI elements instead of reusing existing ones
-  - Fixed SetFanMode, SetPerformanceMode, and UpdateRefreshRateMenuItem methods
 - **❌ Right-click Context Menu** - Fixed tray icon right-click menu not appearing
-  - Temporarily reverted to standard ContextMenu while DarkContextMenu is debugged
   - Applied dark theme styling to regular ContextMenu (dark background, white text, OMEN red accents)
   - Temperature display and color changes restored to tray icon
-- **🔢 Version Updated** - Changed from v1.5.0-beta4 to v2.0.0-alpha1 for v2.0 development
 - **✅ Platform compatibility warnings** - Added [SupportedOSPlatform("windows")] attributes
   - Fixed 57 compilation warnings for Windows-only APIs in System Optimizer
- - **🐞 Adopted v1.5.0-beta4 bug fixes** - Incorporated community-reported regressions into v2.0 fixes
-   - Fixed unexpected keyboard color reset on startup (auto-set to red)
-   - Fixed incorrect quick profile state (panel vs active profile mismatch)
-   - Fixed slow fan-profile transition/latency when switching profiles
-   - Investigated high CPU temperature readings at low usage; added improved smoothing and sensor selection fallbacks
- - **🔴 Keyboard Color Auto-Change** - Fixed program automatically changing keyboard to red on startup
- - **🌡️ High CPU Temps at Low Usage** - Improved CPU temperature monitoring accuracy
- - **🐌 Fan Profile Transition Latency** - Optimized fan profile switching speed
-   - Improved transition responsiveness and reduced perceived latency when switching profiles
- - **⚙️ Fan persistence & restore** - Fixed startup restoration for saved fan presets (built-in names like "Max", "Auto", "Quiet" are now recognized and reapplied on boot); added a manual "Force reapply" command and non-blocking verification to handle firmware that resets fan control
- - **⚙️ Fan smoothing & immediate apply** - Added configurable fan transition smoothing (ramped increments) to reduce abrupt speed changes and an "Immediate Apply" option for low-latency user-triggered changes
-  - **UI:** Added Immediate Apply checkbox and smoothing duration/step inputs to the Fan control panel (Settings → Fan).
- - **🔄 Quick Profile State Mismatch** - Fixed discrepancy between active profile display and actual state
+- **🐞 Adopted v1.5.0-beta4 bug fixes**
+  - Fixed unexpected keyboard color reset on startup (auto-set to red)
+  - Fixed incorrect quick profile state (panel vs active profile mismatch)
+  - Fixed slow fan-profile transition/latency when switching profiles
+  - Improved CPU temperature monitoring accuracy with better smoothing and sensor selection
+- **⚙️ Fan persistence & restore** - Fixed startup restoration for saved fan presets
+  - Built-in names like "Max", "Auto", "Quiet" now recognized and reapplied on boot
+  - Added manual "Force reapply" command and non-blocking verification
+- **⚙️ Fan smoothing & immediate apply** - Added configurable fan transition smoothing
+  - Ramped increments reduce abrupt speed changes
+  - "Immediate Apply" option for low-latency user-triggered changes
+  - UI: Added Immediate Apply checkbox and smoothing duration/step inputs
 
 ### Technical
 - **🏗️ MVVM Architecture** - Maintained clean separation of concerns
 - **🔧 Service Layer** - RegistryBackupService, OptimizationVerifier, multiple optimizer classes
-- **🎨 XAML Styling** - Modern UI with consistent theming (added `AccentGreenBrush` to prevent startup resource errors)
-- **🧪 Unit Tests** - All tests passing locally (24/24); added tests for SettingsRestorationService and fan subsystems, plus a resource-coverage test to ensure required `x:Key` values (e.g. `AccentGreenBrush`) exist in resource dictionaries
-- **🛠️ Logging Improvements** - Hardened `LoggingService` to tolerate locked log files, added fallback files and `OMENCORE_DISABLE_FILE_LOG` env toggle for tests
-- **🔬 Fan Tests & APIs** - Added unit tests for fan restore, force-reapply, and smoothing behavior; added `ForceReapplyFanPresetAsync` API and `FanTransitionSettings` configuration
+- **🎨 XAML Styling** - Modern UI with consistent theming (added `AccentGreenBrush`)
+- **🧪 Unit Tests** - Test suite passing (base: 24 tests)
+- **🛠️ Logging Improvements** - Hardened `LoggingService` to tolerate locked log files
+  - Added fallback files and `OMENCORE_DISABLE_FILE_LOG` env toggle for tests
 - **📦 Build System** - Clean compilation with no warnings
 
 ---
@@ -157,6 +191,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Phase 3: RGB Overhaul (In Progress)
 - [ ] Asset Preparation (device images, brand logos)
 - [x] Enhanced Corsair SDK (iCUE 4.0, full device enumeration) — basic preset application implemented
+- [x] Corsair HID direct control (K70/K95/K100 keyboards, Dark Core RGB PRO mouse)
+- [x] Corsair Mouse DPI Control — 5-stage DPI profiles with full HID implementation
 - [ ] Full Razer Chroma SDK (per-key RGB, effects library)
 - [x] Enhanced Logitech SDK (G HUB integration, direct HID) — breathing/brightness effect support implemented
 - [ ] Unified RGB Engine (sync all, cross-brand effects)
@@ -178,8 +214,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [ ] Bloatware Manager (enumeration, safe removal)
 - [ ] Final Testing (regression, performance, documentation)
 
-**Overall Progress: 46/114 tasks (40%)**
+**Overall Progress: 54/114 tasks (47%)**
 
 ---
 
-*Last Updated: December 28, 2025*
+## Current Status
+
+- **Branch:** `v2.0-dev`
+- **Build:** ✅ Succeeded (0 warnings, 0 errors)
+- **Tests:** ✅ 66/66 passing
+- **Next Release:** v2.0.0-beta (when RGB overhaul is complete)
+
+---
+
+*Last Updated: January 1, 2026*

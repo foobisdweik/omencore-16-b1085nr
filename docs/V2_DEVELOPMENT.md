@@ -2,7 +2,7 @@
 
 **Branch:** `v2.0-dev`  
 **Started:** December 18, 2025  
-**Current Version:** v2.0.0-alpha1  
+**Current Version:** v2.0.0-alpha3  
 **Target:** Q2 2026
 
 ---
@@ -117,9 +117,10 @@ Notes: Initial asset folders and placeholder images created. Next: gather real d
 #### 3.2 Enhanced Corsair SDK ⬜
 - [ ] Upgrade to iCUE SDK 4.0
 - [x] Preset application support (`preset:<name>`) and basic device enumeration implemented
+- [x] Full-device HID writes for K70/K95/K100 keyboards (no iCUE required)
+- [x] Mouse DPI control via HID (Dark Core RGB PRO — 5-stage DPI profiles)
 - [ ] Full device enumeration with images
 - [ ] Battery status for wireless devices
-- [ ] DPI control for mice
 - [ ] Hardware lighting mode support
 
 #### 3.3 Full Razer Chroma SDK ⬜
@@ -247,7 +248,38 @@ Notes: Initial asset folders and placeholder images created. Next: gather real d
 
 ## 📝 Changelog
 
-### v2.0.0-alpha1 (In Progress)
+### v2.0.0-alpha3 (January 1, 2026) ✅ Current
+
+#### Added
+- 🔧 Corsair Mouse DPI Control (5-stage profiles, save/load/delete)
+- 🖱️ Corsair HID DPI research documentation
+
+#### Fixed
+- 🔄 Corsair HID stack overflow in `BuildSetColorReport`
+- 🧪 Test parallelization conflicts (6 flaky tests fixed)
+- 📊 26+ code analyzer warnings (IDE0052, IDE0059, IDE0060)
+
+#### Technical
+- 🧪 66 tests passing (up from 24)
+- 📦 Clean build (0 warnings, 0 errors)
+- 🔧 Removed dead code and obsolete methods
+
+---
+
+### v2.0.0-alpha2 (December 28, 2025) ✅
+
+#### Added
+- 🧩 RGB provider framework runtime wiring
+- 🎛 Corsair provider: Preset application
+- 🌈 Logitech provider: Brightness & Breathing effects
+- 🔬 System RGB provider (experimental, RGB.NET)
+- 📌 "Apply to System" action in Lighting UI
+- 🔧 Corsair HID reliability improvements (retries, backoff, failed-device tracking)
+- ⚙️ Settings: Corsair HID-only toggle
+
+---
+
+### v2.0.0-alpha1 (December 19, 2025) ✅
 
 #### Added
 - ❄️ Extreme fan preset (100% at 75°C for high-power systems)
@@ -316,14 +348,14 @@ Notes: Initial asset folders and placeholder images created. Next: gather real d
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| 1. Foundation & Quick Wins | ✅ System Tray Done | 6/20 |
+| 1. Foundation & Quick Wins | ✅ System Tray Done | 8/20 |
 | 2. System Optimizer | ✅ Complete | 35/35 |
-| 3. RGB Overhaul | ⚪ In Progress | 10/24 |
+| 3. RGB Overhaul | 🔧 In Progress | 14/24 |
 | 4. Linux Support | ⚪ Planned | 0/12 |
-| 5. Advanced Features | ⚪ Planned | 0/15 |
+| 5. Advanced Features | ⚪ Planned | 2/15 |
 | 6. Polish & Release | ⚪ Planned | 0/8 |
 
-**Overall: 54/114 tasks (47%)**
+**Overall: 59/114 tasks (52%)**
 
 ---
 
@@ -335,4 +367,4 @@ Notes: Initial asset folders and placeholder images created. Next: gather real d
 
 ---
 
-*Last Updated: December 28, 2025*
+*Last Updated: January 1, 2026*
