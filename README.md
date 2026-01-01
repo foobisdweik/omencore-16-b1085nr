@@ -11,7 +11,7 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 - ✅ **No Ads** - Clean, focused interface
 - ✅ **No Sign-In Required** - Full offline operation
 
-[![Version](https://img.shields.io/badge/version-1.5.0--beta4-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v1.5.0-beta4)
+[![Version](https://img.shields.io/badge/version-2.0.0--beta-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v2.0.0-beta)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Website](https://img.shields.io/badge/website-omencore.info-brightgreen.svg)](https://omencore.info)
@@ -19,6 +19,50 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 [![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C.svg?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=XH8CKYF8T7EBU&no_recurring=0&item_name=Thank+you+for+your+generous+donation%2C+this+will+allow+me+to+continue+developing+my+programs.&currency_code=AUD)
 
 ![OmenCore Screenshot](docs/screenshots/main-window.png)
+
+---
+
+## 🆕 What's New in v2.0.0 (Beta)
+
+### 🎛️ System Optimizer
+Complete Windows gaming optimization suite:
+- **Power**: Ultimate Performance plan, GPU scheduling, Game Mode, foreground priority
+- **Services**: Telemetry, SysMain/Superfetch, Search Indexing, DiagTrack toggles
+- **Network**: TCP NoDelay, ACK frequency, Nagle algorithm, P2P updates
+- **Input**: Mouse acceleration, Game DVR, Game Bar, fullscreen optimizations
+- **Visual**: Transparency, animations, shadows, performance presets
+- **Storage**: TRIM, last access timestamps, 8.3 names, SSD detection
+- **Safety**: Registry backup and system restore point creation before changes
+- **Risk indicators** (Low/Medium/High) for each optimization
+
+### 🌈 RGB Provider Framework
+Multi-brand peripheral control without vendor software:
+- **Corsair Direct HID** - K70/K95/K100 keyboards, Dark Core RGB PRO mouse (0x1BF0), HS70 headset
+- **20+ Corsair mice supported** - Full color and DPI control via direct HID
+- **Logitech G HUB** - Brightness and breathing effects (`color:#RRGGBB@<brightness>`)
+- **Razer Chroma SDK** - Static, Breathing, Spectrum, Wave, Reactive, Custom effects
+- **"Apply to System"** - Sync colors across all connected RGB devices
+
+### 🐧 Linux CLI (Experimental)
+Cross-platform support via command-line:
+- `omencore-cli fan --mode auto|max|custom`
+- `omencore-cli keyboard --color #RRGGBB --brightness 0-100`
+- `omencore-cli status` - Display all hardware info
+- EC register access via `/sys/kernel/debug/ec/ec0/io`
+
+### 🔧 Architecture Improvements
+- **Out-of-process hardware worker** - NVML crashes no longer crash the main app
+- **Self-contained deployment** - .NET runtime embedded in both executables
+- **Log rotation** - Auto-cleanup of old log files (>1MB or >7 days)
+
+### 🐞 Bug Fixes (Latest)
+- **Corsair Dark Core RGB PRO** - Fixed color control for PID 0x1BF0
+- **Duplicate UI elements** - Removed 9x repeated "Apply Colors on Startup" toggle
+- **Fan preset restoration** - Fixed settings not applying after reboot
+- **System tray crashes** - Fixed context menu and icon update issues
+- **Auto-start --minimized** - Command line args now properly processed
+
+See [CHANGELOG_v2.0.0.md](docs/CHANGELOG_v2.0.0.md) for full details.
 
 ---
 

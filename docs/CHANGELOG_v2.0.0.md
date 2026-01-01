@@ -139,6 +139,9 @@ New OmenCore.Linux project for cross-platform support:
 - **CPU temperature monitoring** - Better smoothing and sensor selection
 - **Test Parallelization Conflicts** - Fixed 6 flaky tests with collection isolation
 - **Code Quality** - Fixed 26+ analyzer warnings (IDE0052, IDE0059, IDE0060)
+- **Duplicate UI Elements** - Fixed 9x repeated "Apply Colors on Startup" toggle in Lighting view
+- **Corsair Mouse HID Support** - Added 20+ additional mouse PIDs for color/DPI control
+  - Dark Core RGB PRO (0x1BF0), M65 family, Ironclaw, Nightsword, Harpoon, Sabre, Katar, Scimitar
 
 ### Technical
 

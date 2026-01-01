@@ -405,7 +405,27 @@ namespace OmenCore.Services.Corsair
                 {
                     case 0x1B2E: // Dark Core RGB
                     case 0x1B4B: // Dark Core RGB PRO
-                    case 0x1B34: // Ironclaw
+                    case 0x1B4C: // Dark Core RGB PRO SE
+                    case 0x1B80: // Dark Core RGB PRO Wireless
+                    case 0x1BF0: // Dark Core RGB PRO (alternate PID on some systems)
+                    case 0x1BA4: // Dark Core RGB PRO SE Wireless
+                    case 0x1B34: // Ironclaw RGB
+                    case 0x1B5D: // Ironclaw RGB Wireless (via receiver)
+                    case 0x1B3C: // Nightsword RGB
+                    case 0x1B1E: // M65 RGB Elite
+                    case 0x1B12: // M65 PRO RGB
+                    case 0x1B96: // M65 RGB Ultra
+                    case 0x1B99: // M65 RGB Ultra Wireless
+                    case 0x1B5B: // M55 RGB PRO
+                    case 0x1B3F: // Harpoon RGB PRO
+                    case 0x1B3E: // Harpoon RGB Wireless (via receiver)
+                    case 0x1B75: // Sabre RGB PRO
+                    case 0x1B7A: // Sabre RGB PRO Champion
+                    case 0x1B66: // Katar PRO
+                    case 0x1B6F: // Katar PRO XT
+                    case 0x1B65: // Katar PRO Wireless (via receiver)
+                    case 0x1B3B: // Scimitar PRO RGB
+                    case 0x1B8B: // Scimitar Elite Wireless
                     {
                         // Mouse-specific simple path: use 0x05 command with single index/count
                         var mReport = new byte[65];
@@ -597,40 +617,52 @@ namespace OmenCore.Services.Corsair
             // Conservative approach: apply only for known mice PIDs (add more as we learn exact payloads)
             switch (device.ProductId)
             {
-                case 0x1B2E: // Dark Core RGB - hypothetical format
-                    // Example: [0x00, 0x11, index, dpi_low, dpi_high, 0,0,...]
-                    var r = new byte[65];
-                    r[0] = 0x00;
-                    r[1] = 0x11; // vendor 'set DPI' cmd (example)
-                    r[2] = (byte)index;
-                    r[3] = (byte)(dpi & 0xFF);
-                    r[4] = (byte)((dpi >> 8) & 0xFF);
-                    return r;
-                case 0x1B1E: // M65 family - alternative hypothetical format
-                    var r2 = new byte[65];
-                    r2[0] = 0x00;
-                    r2[1] = 0x12;
-                    r2[2] = (byte)index;
-                    r2[3] = (byte)(dpi & 0xFF);
-                    r2[4] = (byte)((dpi >> 8) & 0xFF);
-                    r2[5] = 0x01; // commit flag
-                    return r2;
-                case 0x1B96: // M65 Ultra - similar to M65 but different cmd
-                    var r3 = new byte[65];
-                    r3[0] = 0x00;
-                    r3[1] = 0x13;
-                    r3[2] = (byte)index;
-                    r3[3] = (byte)(dpi & 0xFF);
-                    r3[4] = (byte)((dpi >> 8) & 0xFF);
-                    return r3;
-                case 0x1B34: // Ironclaw - another variant
-                    var r4 = new byte[65];
-                    r4[0] = 0x00;
-                    r4[1] = 0x14;
-                    r4[2] = (byte)index;
-                    r4[3] = (byte)(dpi & 0xFF);
-                    r4[4] = (byte)((dpi >> 8) & 0xFF);
-                    return r4;
+                case 0x1B2E: // Dark Core RGB
+                case 0x1B4B: // Dark Core RGB PRO
+                case 0x1B4C: // Dark Core RGB PRO SE
+                case 0x1B80: // Dark Core RGB PRO Wireless
+                case 0x1BF0: // Dark Core RGB PRO (alternate PID)
+                case 0x1BA4: // Dark Core RGB PRO SE Wireless
+                    // Dark Core family: [0x00, 0x11, index, dpi_low, dpi_high]
+                    var dcReport = new byte[65];
+                    dcReport[0] = 0x00;
+                    dcReport[1] = 0x11; // vendor 'set DPI' cmd
+                    dcReport[2] = (byte)index;
+                    dcReport[3] = (byte)(dpi & 0xFF);
+                    dcReport[4] = (byte)((dpi >> 8) & 0xFF);
+                    return dcReport;
+                    
+                case 0x1B1E: // M65 RGB Elite
+                case 0x1B12: // M65 PRO RGB
+                    var m65Report = new byte[65];
+                    m65Report[0] = 0x00;
+                    m65Report[1] = 0x12;
+                    m65Report[2] = (byte)index;
+                    m65Report[3] = (byte)(dpi & 0xFF);
+                    m65Report[4] = (byte)((dpi >> 8) & 0xFF);
+                    m65Report[5] = 0x01; // commit flag
+                    return m65Report;
+                    
+                case 0x1B96: // M65 RGB Ultra
+                case 0x1B99: // M65 RGB Ultra Wireless
+                    var m65uReport = new byte[65];
+                    m65uReport[0] = 0x00;
+                    m65uReport[1] = 0x13;
+                    m65uReport[2] = (byte)index;
+                    m65uReport[3] = (byte)(dpi & 0xFF);
+                    m65uReport[4] = (byte)((dpi >> 8) & 0xFF);
+                    return m65uReport;
+                    
+                case 0x1B34: // Ironclaw RGB
+                case 0x1B5D: // Ironclaw RGB Wireless
+                    var icReport = new byte[65];
+                    icReport[0] = 0x00;
+                    icReport[1] = 0x14;
+                    icReport[2] = (byte)index;
+                    icReport[3] = (byte)(dpi & 0xFF);
+                    icReport[4] = (byte)((dpi >> 8) & 0xFF);
+                    return icReport;
+                    
                 default:
                     return null;
             }
