@@ -1,14 +1,22 @@
 # OmenCore v2.0 Roadmap
 
 **Target Release:** Q2 2026  
-**Status:** Alpha (v2.0.0-alpha3)  
-**Last Updated:** January 1, 2026
+**Status:** Beta (v2.0.0-beta)  
+**Last Updated:** January 2, 2026
 
 ---
 
-## Recent Progress (Dec 19–Jan 1, 2026)
+## Recent Progress (Jan 2, 2026)
 
-A short list of key developments since the last update:
+Major developments in this session:
+
+- ✅ **Razer Chroma SDK**: Full REST API integration with session management, heartbeat, and effects (static, breathing, spectrum, wave, reactive, custom keyboard)
+- ✅ **Unified RGB Engine**: Enhanced IRgbProvider interface with sync methods, all providers updated (Corsair, Logitech, Razer, System)
+- ✅ **Lighting View Redesign**: Brand headers with logos, DeviceCard styles, connection badges for Logitech/Razer/HP OMEN sections
+- ✅ **Linux CLI Research**: Created OmenCore.Linux project with fan/performance/keyboard/status/monitor commands and EC/hwmon controllers
+- ✅ **Dashboard Polish**: Status badges, monospace temps, icons, refresh button
+
+Previous progress (Dec 19–Jan 1, 2026):
 
 - ✅ **GPU Voltage/Current Graph** implemented and integrated into the Dashboard (real-time V/C monitoring complete).
 - ✅ **Per-core undervolt UI** implemented (individual core sliders and config persistence). Hardware application integration and verification are in progress.

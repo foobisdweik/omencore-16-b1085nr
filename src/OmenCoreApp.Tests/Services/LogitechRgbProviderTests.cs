@@ -39,6 +39,8 @@ namespace OmenCoreApp.Tests.Services
                 return Task.CompletedTask;
             }
 
+            public Task ApplySpectrumEffectAsync(LogitechDevice device, int speed) => Task.CompletedTask;
+            public Task ApplyFlashEffectAsync(LogitechDevice device, string hexColor, int durationMs, int intervalMs) => Task.CompletedTask;
             public Task<int> GetDpiAsync(LogitechDevice device) => Task.FromResult(device.Status.Dpi);
             public Task SetDpiAsync(LogitechDevice device, int dpi) { device.Status.Dpi = dpi; return Task.CompletedTask; }
             public Task<LogitechDeviceStatus> GetDeviceStatusAsync(LogitechDevice device) => Task.FromResult(device.Status);

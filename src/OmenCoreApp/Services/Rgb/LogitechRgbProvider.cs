@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using OmenCore.Services;
@@ -11,7 +13,18 @@ namespace OmenCore.Services.Rgb
         private LogitechDeviceService? _service;
 
         public string ProviderName => "Logitech";
+        public string ProviderId => "logitech";
         public bool IsAvailable { get; private set; } = false;
+        public bool IsConnected => IsAvailable && (_service?.Devices.Count ?? 0) > 0;
+        public int DeviceCount => _service?.Devices.Count ?? 0;
+        
+        public IReadOnlyList<RgbEffectType> SupportedEffects { get; } = new[]
+        {
+            RgbEffectType.Static,
+            RgbEffectType.Breathing,
+            RgbEffectType.Spectrum,
+            RgbEffectType.Off
+        };
 
         public LogitechRgbProvider(LoggingService logging)
         {
@@ -25,7 +38,7 @@ namespace OmenCore.Services.Rgb
                 _service = await LogitechDeviceService.CreateAsync(_logging);
                 await _service.DiscoverAsync();
                 IsAvailable = _service.Devices.Any();
-                _logging.Info($"LogitechRgbProvider initialized, available={IsAvailable}");
+                _logging.Info($"LogitechRgbProvider initialized, available={IsAvailable}, devices={DeviceCount}");
             }
             catch (Exception ex)
             {
@@ -87,6 +100,52 @@ namespace OmenCore.Services.Rgb
             }
 
             _logging.Info($"Logitech effect requested: {effectId}");
+        }
+        
+        public async Task SetStaticColorAsync(Color color)
+        {
+            if (!IsAvailable || _service == null)
+                return;
+                
+            var hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+            foreach (var dev in _service.Devices)
+            {
+                await _service.ApplyStaticColorAsync(dev, hex, 100);
+            }
+        }
+        
+        public async Task SetBreathingEffectAsync(Color color)
+        {
+            if (!IsAvailable || _service == null)
+                return;
+                
+            var hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+            foreach (var dev in _service.Devices)
+            {
+                await _service.ApplyBreathingEffectAsync(dev, hex, 2);
+            }
+        }
+        
+        public async Task SetSpectrumEffectAsync()
+        {
+            if (!IsAvailable || _service == null)
+                return;
+                
+            foreach (var dev in _service.Devices)
+            {
+                await _service.ApplySpectrumEffectAsync(dev, 5); // Medium speed
+            }
+        }
+        
+        public async Task TurnOffAsync()
+        {
+            if (!IsAvailable || _service == null)
+                return;
+                
+            foreach (var dev in _service.Devices)
+            {
+                await _service.ApplyStaticColorAsync(dev, "#000000", 0);
+            }
         }
     }
 }

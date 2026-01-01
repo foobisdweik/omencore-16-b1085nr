@@ -36,6 +36,8 @@ namespace OmenCoreApp.Tests.ViewModels
             }
             public Task ApplyStaticColorAsync(OmenCore.Logitech.LogitechDevice device, string hexColor, int brightness) { device.CurrentColorHex = hexColor; return Task.CompletedTask; }
             public Task ApplyBreathingEffectAsync(OmenCore.Logitech.LogitechDevice device, string hexColor, int speed) => Task.CompletedTask;
+            public Task ApplySpectrumEffectAsync(OmenCore.Logitech.LogitechDevice device, int speed) => Task.CompletedTask;
+            public Task ApplyFlashEffectAsync(OmenCore.Logitech.LogitechDevice device, string hexColor, int durationMs, int intervalMs) => Task.CompletedTask;
             public Task<int> GetDpiAsync(OmenCore.Logitech.LogitechDevice device) => Task.FromResult(device.Status.Dpi);
             public Task SetDpiAsync(OmenCore.Logitech.LogitechDevice device, int dpi) { device.Status.Dpi = dpi; return Task.CompletedTask; }
             public Task<OmenCore.Logitech.LogitechDeviceStatus> GetDeviceStatusAsync(OmenCore.Logitech.LogitechDevice device) => Task.FromResult(device.Status);

@@ -51,6 +51,12 @@ namespace OmenCore.ViewModels
         public ObservableCollection<CorsairLightingPreset> CorsairLightingPresets { get; } = new();
         public ObservableCollection<KeyboardPreset> KeyboardPresets { get; } = new();
         public ICommand ApplyCorsairPresetToSystemCommand { get; }
+        public ICommand SyncAllRgbCommand { get; }
+        
+        // Connection status properties for UI badges
+        public bool IsCorsairConnected => CorsairDevices.Count > 0;
+        public bool IsLogitechConnected => LogitechDevices.Count > 0;
+        public bool IsRazerConnected => _razerService?.IsAvailable ?? false;
         
         // Razer properties
         private readonly ObservableCollection<RazerDevice> _razerDevices = new();
@@ -143,6 +149,30 @@ namespace OmenCore.ViewModels
         /// Backend type for keyboard lighting (WMI BIOS, WMI, EC, or None).
         /// </summary>
         public string KeyboardLightingBackend => _keyboardLightingService?.BackendType ?? "None";
+        
+        /// <summary>
+        /// Helpful status/hint message for keyboard lighting.
+        /// Shows tips if WMI-based control may not work on certain models.
+        /// </summary>
+        public string KeyboardLightingHint
+        {
+            get
+            {
+                if (!IsKeyboardLightingAvailable)
+                    return "Keyboard RGB not detected on this system.";
+                
+                var backend = KeyboardLightingBackend;
+                if (backend.Contains("WMI"))
+                {
+                    return "💡 If colors don't change, try enabling 'Experimental EC Keyboard' in Settings → Hardware.";
+                }
+                else if (backend.Contains("EC"))
+                {
+                    return "Using EC direct access (experimental). Changes may take a moment to apply.";
+                }
+                return string.Empty;
+            }
+        }
         
         /// <summary>
         /// Whether to automatically apply saved keyboard colors on startup.
@@ -492,6 +522,9 @@ namespace OmenCore.ViewModels
             ApplyCorsairDpiProfileCommand = new AsyncRelayCommand(async _ => await ApplyCorsairDpiProfileAsync(), _ => SelectedCorsairDpiProfile != null);
             DeleteCorsairDpiProfileCommand = new AsyncRelayCommand(async _ => await DeleteCorsairDpiProfileAsync(), _ => SelectedCorsairDpiProfile != null);
             
+            // Sync All RGB Command
+            SyncAllRgbCommand = new AsyncRelayCommand(async _ => await SyncAllRgbAsync());
+            
             DiscoverLogitechCommand = new AsyncRelayCommand(async _ => await _logitechService.DiscoverAsync());
             DiscoverLogitechDevicesCommand = new AsyncRelayCommand(async _ => await _logitechService.DiscoverAsync());
             ApplyLogitechColorCommand = new AsyncRelayCommand(async _ => await ApplyLogitechColorAsync(), _ => SelectedLogitechDevice != null);
@@ -706,6 +739,108 @@ namespace OmenCore.ViewModels
                 await _rgbManager.ApplyEffectToAllAsync($"preset:{SelectedCorsairPreset.Name}");
                 _logging.Info($"Applied Corsair preset '{SelectedCorsairPreset.Name}' to system");
             }, "Applying lighting preset to system...");
+        }
+        
+        /// <summary>
+        /// Sync a color across all connected RGB devices (Corsair, Logitech, Razer, HP keyboard).
+        /// Uses the current Corsair custom color as the sync color.
+        /// </summary>
+        private async Task SyncAllRgbAsync()
+        {
+            var syncColor = CorsairColorHex; // Use Corsair color picker as the sync source
+            
+            await ExecuteWithLoadingAsync(async () =>
+            {
+                int successCount = 0;
+                
+                // Apply to Corsair devices
+                if (IsCorsairConnected && CorsairDevices.Count > 0)
+                {
+                    try
+                    {
+                        await _corsairService.ApplyLightingToAllAsync(syncColor);
+                        successCount++;
+                        _logging.Info($"Synced color {syncColor} to Corsair devices");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Warn($"Failed to sync to Corsair: {ex.Message}");
+                    }
+                }
+                
+                // Apply to Logitech devices (apply to each device individually)
+                if (IsLogitechConnected)
+                {
+                    try
+                    {
+                        foreach (var device in LogitechDevices)
+                        {
+                            await _logitechService.ApplyStaticColorAsync(device, syncColor, LogitechBrightness);
+                        }
+                        successCount++;
+                        _logging.Info($"Synced color {syncColor} to Logitech devices");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Warn($"Failed to sync to Logitech: {ex.Message}");
+                    }
+                }
+                
+                // Apply to Razer devices (synchronous method, wrap in Task.Run)
+                if (IsRazerConnected && _razerService != null)
+                {
+                    try
+                    {
+                        await Task.Run(() =>
+                        {
+                            var color = System.Drawing.ColorTranslator.FromHtml(syncColor);
+                            _razerService.SetStaticColor(color.R, color.G, color.B);
+                        });
+                        successCount++;
+                        _logging.Info($"Synced color {syncColor} to Razer devices");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Warn($"Failed to sync to Razer: {ex.Message}");
+                    }
+                }
+                
+                // Apply to HP OMEN keyboard (synchronous method, wrap in Task.Run)
+                if (IsKeyboardLightingAvailable && _keyboardLightingService != null)
+                {
+                    try
+                    {
+                        await Task.Run(() =>
+                        {
+                            var color = System.Drawing.ColorTranslator.FromHtml(syncColor);
+                            var colors = new[] { color, color, color, color };
+                            _keyboardLightingService.SetAllZoneColors(colors);
+                        });
+                        successCount++;
+                        _logging.Info($"Synced color {syncColor} to OMEN keyboard");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Warn($"Failed to sync to OMEN keyboard: {ex.Message}");
+                    }
+                }
+                
+                // Use RgbManager for any other registered providers
+                if (_rgbManager != null)
+                {
+                    try
+                    {
+                        await _rgbManager.ApplyEffectToAllAsync($"color:{syncColor}");
+                        _logging.Info($"Synced color {syncColor} via RgbManager");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Warn($"RgbManager sync failed: {ex.Message}");
+                    }
+                }
+                
+                _logging.Info($"RGB Sync complete: {successCount} device group(s) updated");
+            }, "Syncing color to all RGB devices...");
         }
 
         private async Task ApplyCorsairCustomColorAsync()

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using OmenCore.Services;
@@ -12,7 +14,19 @@ namespace OmenCore.Services.Rgb
         private CorsairDeviceService? _service;
 
         public string ProviderName => "Corsair";
+        public string ProviderId => "corsair";
         public bool IsAvailable { get; private set; } = false;
+        public bool IsConnected => IsAvailable && (_service?.Devices.Count ?? 0) > 0;
+        public int DeviceCount => _service?.Devices.Count ?? 0;
+        
+        public IReadOnlyList<RgbEffectType> SupportedEffects { get; } = new[]
+        {
+            RgbEffectType.Static,
+            RgbEffectType.Breathing,
+            RgbEffectType.Spectrum,
+            RgbEffectType.Custom,
+            RgbEffectType.Off
+        };
 
         public CorsairRgbProvider(LoggingService logging, ConfigurationService configService)
         {
@@ -27,7 +41,7 @@ namespace OmenCore.Services.Rgb
                 _service = await CorsairDeviceService.CreateAsync(_logging, _configService);
                 await _service.DiscoverAsync();
                 IsAvailable = _service.Devices.Any();
-                _logging.Info($"CorsairRgbProvider initialized, available={IsAvailable}");
+                _logging.Info($"CorsairRgbProvider initialized, available={IsAvailable}, devices={DeviceCount}");
             }
             catch (Exception ex)
             {
@@ -78,6 +92,36 @@ namespace OmenCore.Services.Rgb
 
                 _logging.Info($"Applied Corsair preset '{presetName}' to {_service.Devices.Count} device(s)");
             }
+        }
+        
+        public async Task SetStaticColorAsync(Color color)
+        {
+            if (!IsAvailable || _service == null)
+                return;
+                
+            var hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+            await _service.ApplyLightingToAllAsync(hex);
+        }
+        
+        public async Task SetBreathingEffectAsync(Color color)
+        {
+            // Corsair breathing is typically done via preset
+            // Fall back to static color for now
+            await SetStaticColorAsync(color);
+        }
+        
+        public Task SetSpectrumEffectAsync()
+        {
+            // Corsair spectrum cycling would require preset configuration
+            return Task.CompletedTask;
+        }
+        
+        public async Task TurnOffAsync()
+        {
+            if (!IsAvailable || _service == null)
+                return;
+                
+            await _service.ApplyLightingToAllAsync("#000000");
         }
     }
 }

@@ -7,6 +7,41 @@
              xmlns:utils="clr-namespace:OmenCore.Utils"
              mc:Ignorable="d" 
              d:DesignHeight="700" d:DesignWidth="1000">
+    <UserControl.Resources>
+        <!-- Quick Action Button Style -->
+        <Style x:Key="QuickActionButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource SurfaceDarkBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" 
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource SurfaceMediumBrush}"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+    
     <ScrollViewer Style="{StaticResource SmoothScrollViewer}" 
                   Padding="0,0,12,0"
                   utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="1.2">
@@ -14,14 +49,16 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <Grid Grid.Row="0" Margin="0,0,0,24">
+        <!-- Header with Quick Actions -->
+        <Grid Grid.Row="0" Margin="0,0,0,20">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             
             <StackPanel Grid.Column="0">
@@ -32,6 +69,19 @@
                            Margin="0,2,0,0"/>
             </StackPanel>
             
+            <!-- Quick Action Buttons -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Style="{StaticResource QuickActionButton}" 
+                        Command="{Binding RefreshCommand}"
+                        ToolTip="Refresh all sensors" Margin="0,0,8,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Data="{StaticResource IconRestore}" Width="14" Height="14" 
+                              Fill="{StaticResource TextSecondaryBrush}" Stretch="Uniform" Margin="0,0,6,0"/>
+                        <TextBlock Text="Refresh" FontSize="12"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            
             <!-- Throttling Status Indicator with pulse animation -->
             <Border x:Name="ThrottlingIndicator" Grid.Column="1"
                     Visibility="{Binding IsThrottling, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}"
@@ -40,7 +90,7 @@
                     BorderThickness="1.5"
                     CornerRadius="6"
                     Padding="14,8"
-                    Margin="10,0"
+                    Margin="20,0"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Center"
                     ToolTip="System is throttling due to thermal or power limits. Consider improving cooling or reducing workload.">
@@ -81,107 +131,155 @@
             <!-- CPU Card -->
             <Border Grid.Column="0" Style="{StaticResource SurfaceCard}" Padding="18,16" Margin="0,0,10,0"
                     ToolTip="CPU temperature and utilization. Green = OK, Yellow = Warm, Orange = Hot, Red = Critical">
-                <StackPanel>
-                    <Grid Margin="0,0,0,10">
-                        <TextBlock Text="PROCESSOR" 
-                                   Style="{StaticResource Label}"/>
-                        <Ellipse Width="10" Height="10" 
-                                 HorizontalAlignment="Right" 
-                                 VerticalAlignment="Center"
-                                 Fill="{Binding LatestMonitoringSample.CpuTemperatureC, Converter={StaticResource TemperatureToColorConverter}, ConverterParameter=cpu}"
-                                 ToolTip="Temperature status indicator"/>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconCpu}" Width="16" Height="16" 
+                                  Fill="{StaticResource AccentBrush}" Stretch="Uniform" Margin="0,0,8,0"/>
+                            <TextBlock Text="PROCESSOR" Style="{StaticResource Label}"/>
+                        </StackPanel>
+                        <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Background="{Binding LatestMonitoringSample.CpuTemperatureC, Converter={StaticResource TemperatureToColorConverter}, ConverterParameter=cpu}"
+                                CornerRadius="8" Padding="8,3"
+                                ToolTip="Temperature status">
+                            <TextBlock Text="{Binding LatestMonitoringSample.CpuTemperatureC, StringFormat={}{0:F0}°C, FallbackValue=--°C}"
+                                       Style="{StaticResource MonospaceValue}" FontSize="11" Foreground="White"/>
+                        </Border>
                     </Grid>
-                    <TextBlock Text="{Binding CpuSummary}" 
+                    <TextBlock Grid.Row="2" Text="{Binding CpuSummary}" 
                                Style="{StaticResource BodyText}"
                                FontSize="13"
                                LineHeight="18"/>
-                </StackPanel>
+                </Grid>
             </Border>
 
             <!-- GPU Card -->
             <Border Grid.Column="1" Style="{StaticResource SurfaceCard}" Padding="18,16" Margin="5,0"
                     ToolTip="GPU temperature, load, and VRAM usage. GPUs can safely run hotter than CPUs.">
-                <StackPanel>
-                    <Grid Margin="0,0,0,10">
-                        <TextBlock Text="GRAPHICS" 
-                                   Style="{StaticResource Label}"/>
-                        <Ellipse Width="10" Height="10" 
-                                 HorizontalAlignment="Right" 
-                                 VerticalAlignment="Center"
-                                 Fill="{Binding LatestMonitoringSample.GpuTemperatureC, Converter={StaticResource TemperatureToColorConverter}, ConverterParameter=gpu}"
-                                 ToolTip="Temperature status indicator"/>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconGpu}" Width="16" Height="16" 
+                                  Fill="#45C7FF" Stretch="Uniform" Margin="0,0,8,0"/>
+                            <TextBlock Text="GRAPHICS" Style="{StaticResource Label}"/>
+                        </StackPanel>
+                        <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Background="{Binding LatestMonitoringSample.GpuTemperatureC, Converter={StaticResource TemperatureToColorConverter}, ConverterParameter=gpu}"
+                                CornerRadius="8" Padding="8,3"
+                                ToolTip="Temperature status">
+                            <TextBlock Text="{Binding LatestMonitoringSample.GpuTemperatureC, StringFormat={}{0:F0}°C, FallbackValue=--°C}"
+                                       Style="{StaticResource MonospaceValue}" FontSize="11" Foreground="White"/>
+                        </Border>
                     </Grid>
-                    <TextBlock Text="{Binding GpuSummary}" 
+                    <TextBlock Grid.Row="2" Text="{Binding GpuSummary}" 
                                Style="{StaticResource BodyText}"
                                FontSize="13"
                                LineHeight="18"/>
-                </StackPanel>
+                </Grid>
             </Border>
 
             <!-- Memory Card -->
             <Border Grid.Column="2" Style="{StaticResource SurfaceCard}" Padding="18,16" Margin="5,0"
                     ToolTip="System RAM usage. High usage may cause slowdowns - consider closing unused applications.">
-                <StackPanel>
-                    <Grid Margin="0,0,0,10">
-                        <TextBlock Text="MEMORY" 
-                                   Style="{StaticResource Label}"/>
-                        <Ellipse Width="10" Height="10" 
-                                 HorizontalAlignment="Right" 
-                                 VerticalAlignment="Center"
-                                 Fill="{Binding LatestMonitoringSample.RamUsagePercent, Converter={StaticResource LoadToColorConverter}}"
-                                 ToolTip="Memory usage indicator"/>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconRam}" Width="16" Height="16" 
+                                  Fill="#9C27B0" Stretch="Uniform" Margin="0,0,8,0"/>
+                            <TextBlock Text="MEMORY" Style="{StaticResource Label}"/>
+                        </StackPanel>
+                        <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Background="{Binding LatestMonitoringSample.RamUsagePercent, Converter={StaticResource LoadToColorConverter}}"
+                                CornerRadius="8" Padding="8,3"
+                                ToolTip="Memory usage indicator">
+                            <TextBlock Text="{Binding LatestMonitoringSample.RamUsagePercent, StringFormat={}{0:F0}%, FallbackValue=--%}"
+                                       Style="{StaticResource MonospaceValue}" FontSize="11" Foreground="White"/>
+                        </Border>
                     </Grid>
-                    <TextBlock Text="{Binding MemorySummary}" 
+                    <TextBlock Grid.Row="2" Text="{Binding MemorySummary}" 
                                Style="{StaticResource BodyText}"
                                FontSize="13"
                                LineHeight="18"/>
-                </StackPanel>
+                </Grid>
             </Border>
 
             <!-- Storage Card (hidden when SSD data unavailable) -->
             <Border Grid.Column="3" Style="{StaticResource SurfaceCard}" Padding="18,16" Margin="5,0"
                     ToolTip="SSD temperature and disk activity. Optimal SSD temp is below 45°C."
                     Visibility="{Binding IsSsdDataAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <StackPanel>
-                    <Grid Margin="0,0,0,10">
-                        <TextBlock Text="STORAGE" 
-                                   Style="{StaticResource Label}"/>
-                        <Ellipse Width="10" Height="10" 
-                                 HorizontalAlignment="Right" 
-                                 VerticalAlignment="Center"
-                                 Fill="{Binding LatestMonitoringSample.SsdTemperatureC, Converter={StaticResource TemperatureToColorConverter}, ConverterParameter=ssd}"
-                                 ToolTip="SSD temperature indicator"/>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="💾" FontSize="14" Margin="0,0,8,0"/>
+                            <TextBlock Text="STORAGE" Style="{StaticResource Label}"/>
+                        </StackPanel>
+                        <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Background="{Binding LatestMonitoringSample.SsdTemperatureC, Converter={StaticResource TemperatureToColorConverter}, ConverterParameter=ssd}"
+                                CornerRadius="8" Padding="8,3"
+                                ToolTip="SSD temperature indicator">
+                            <TextBlock Text="{Binding LatestMonitoringSample.SsdTemperatureC, StringFormat={}{0:F0}°C, FallbackValue=--°C}"
+                                       Style="{StaticResource MonospaceValue}" FontSize="11" Foreground="White"/>
+                        </Border>
                     </Grid>
-                    <TextBlock Text="{Binding StorageSummary}" 
+                    <TextBlock Grid.Row="2" Text="{Binding StorageSummary}" 
                                Style="{StaticResource BodyText}"
                                FontSize="13"
                                LineHeight="18"/>
-                </StackPanel>
+                </Grid>
             </Border>
             
             <!-- Battery Card -->
             <Border Grid.Column="4" Style="{StaticResource SurfaceCard}" Padding="18,16" Margin="10,0,0,0"
                     ToolTip="Battery charge level and power status. Keep battery between 20-80% for longevity.">
-                <StackPanel>
-                    <Grid Margin="0,0,0,10">
-                        <TextBlock Text="BATTERY" 
-                                   Style="{StaticResource Label}"/>
-                        <Ellipse Width="10" Height="10" 
-                                 HorizontalAlignment="Right" 
-                                 VerticalAlignment="Center"
-                                 Fill="{Binding LatestMonitoringSample.BatteryChargePercent, Converter={StaticResource LoadToColorConverter}}"
-                                 ToolTip="Battery level indicator"/>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔋" FontSize="14" Margin="0,0,8,0"/>
+                            <TextBlock Text="BATTERY" Style="{StaticResource Label}"/>
+                        </StackPanel>
+                        <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Background="{Binding LatestMonitoringSample.BatteryChargePercent, Converter={StaticResource LoadToColorConverter}}"
+                                CornerRadius="8" Padding="8,3"
+                                ToolTip="Battery level indicator">
+                            <TextBlock Text="{Binding LatestMonitoringSample.BatteryChargePercent, StringFormat={}{0:F0}%, FallbackValue=--%}"
+                                       Style="{StaticResource MonospaceValue}" FontSize="11" Foreground="White"/>
+                        </Border>
                     </Grid>
-                    <TextBlock Text="{Binding BatterySummary}" 
+                    <TextBlock Grid.Row="2" Text="{Binding BatterySummary}" 
                                Style="{StaticResource BodyText}"
                                FontSize="13"
                                LineHeight="18"/>
-                </StackPanel>
+                </Grid>
             </Border>
         </Grid>
 
         <!-- Charts (only visible when not in low overhead mode) -->
-        <Grid Grid.Row="2" Visibility="{Binding MonitoringGraphsVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+        <Grid Grid.Row="3" Visibility="{Binding MonitoringGraphsVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" MinHeight="250"/>
                 <RowDefinition Height="*" MinHeight="250"/>
@@ -196,13 +294,14 @@
             <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource SurfaceCard}" Padding="20" Margin="0,0,10,10">
                 <StackPanel>
                     <Grid Margin="0,0,0,16">
-                        <TextBlock Text="CPU TEMPERATURE" 
-                                   Style="{StaticResource Label}" 
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Left"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconThermometer}" Width="16" Height="16" 
+                                  Fill="{StaticResource AccentBrush}" Stretch="Uniform" Margin="0,0,8,0"/>
+                            <TextBlock Text="CPU TEMPERATURE" Style="{StaticResource Label}"/>
+                        </StackPanel>
                         <TextBlock Text="{Binding LatestMonitoringSample.CpuTemperatureC, StringFormat={}{0:F0}°C, FallbackValue=--°C}" 
-                                   Style="{StaticResource ValueDisplay}"
-                                   FontSize="32"
+                                   Style="{StaticResource MonospaceValueLarge}"
+                                   Foreground="{StaticResource AccentBrush}"
                                    HorizontalAlignment="Right"/>
                     </Grid>
                     <controls:ThermalChart Samples="{Binding ThermalSamples}" 
@@ -214,12 +313,13 @@
             <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource SurfaceCard}" Padding="20" Margin="10,0,0,10">
                 <StackPanel>
                     <Grid Margin="0,0,0,16">
-                        <TextBlock Text="GPU TEMPERATURE" 
-                                   Style="{StaticResource Label}" 
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Left"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconThermometer}" Width="16" Height="16" 
+                                  Fill="#45C7FF" Stretch="Uniform" Margin="0,0,8,0"/>
+                            <TextBlock Text="GPU TEMPERATURE" Style="{StaticResource Label}"/>
+                        </StackPanel>
                         <TextBlock Text="{Binding LatestMonitoringSample.GpuTemperatureC, StringFormat={}{0:F0}°C, FallbackValue=--°C}" 
-                                   FontSize="32" FontWeight="Bold" 
+                                   Style="{StaticResource MonospaceValueLarge}"
                                    Foreground="#45C7FF" 
                                    HorizontalAlignment="Right"/>
                     </Grid>
@@ -232,10 +332,11 @@
             <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource SurfaceCard}" Padding="20" Margin="0,10,10,0">
                 <StackPanel>
                     <Grid Margin="0,0,0,16">
-                        <TextBlock Text="UTILIZATION" 
-                                   Style="{StaticResource Label}" 
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Left"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconMonitoring}" Width="16" Height="16" 
+                                  Fill="{StaticResource TextSecondaryBrush}" Stretch="Uniform" Margin="0,0,8,0"/>
+                            <TextBlock Text="UTILIZATION" Style="{StaticResource Label}"/>
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                             <StackPanel Margin="0,0,16,0">
                                 <TextBlock Text="CPU" 
@@ -243,7 +344,7 @@
                                            Foreground="{StaticResource TextTertiaryBrush}"
                                            HorizontalAlignment="Center"/>
                                 <TextBlock Text="{Binding LatestMonitoringSample.CpuLoadPercent, StringFormat={}{0:F0}%}" 
-                                           Style="{StaticResource SecondaryValue}"
+                                           Style="{StaticResource MonospaceValue}"
                                            FontSize="18"
                                            Foreground="{StaticResource AccentBrush}"
                                            HorizontalAlignment="Center"/>
@@ -254,7 +355,7 @@
                                            Foreground="{StaticResource TextTertiaryBrush}"
                                            HorizontalAlignment="Center"/>
                                 <TextBlock Text="{Binding LatestMonitoringSample.GpuLoadPercent, StringFormat={}{0:F0}%}" 
-                                           Style="{StaticResource SecondaryValue}"
+                                           Style="{StaticResource MonospaceValue}"
                                            FontSize="18"
                                            Foreground="#45C7FF"
                                            HorizontalAlignment="Center"/>
@@ -269,12 +370,15 @@
             <!-- CPU Clock Details -->
             <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource SurfaceCard}" Padding="20" Margin="10,10,0,0">
                 <StackPanel>
-                    <TextBlock Text="CPU FREQUENCIES" 
-                               Style="{StaticResource Label}" 
-                               Margin="0,0,0,16"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                        <Path Data="{StaticResource IconPerformance}" Width="16" Height="16" 
+                              Fill="#FFD700" Stretch="Uniform" Margin="0,0,8,0"/>
+                        <TextBlock Text="CPU FREQUENCIES" Style="{StaticResource Label}"/>
+                    </StackPanel>
                     <TextBlock Text="{Binding CpuClockSummary}" 
-                               Style="{StaticResource Caption}"
+                               Style="{StaticResource MonospaceValue}"
                                FontSize="13"
+                               FontWeight="Normal"
                                Foreground="{StaticResource TextPrimaryBrush}"
                                LineHeight="22"/>
                 </StackPanel>
@@ -284,10 +388,10 @@
             <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource SurfaceCard}" Padding="20" Margin="0,10,10,0">
                 <StackPanel>
                     <Grid Margin="0,0,0,16">
-                        <TextBlock Text="GPU VOLTAGE &amp; CURRENT" 
-                                   Style="{StaticResource Label}" 
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Left"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="⚡" FontSize="14" Margin="0,0,8,0"/>
+                            <TextBlock Text="GPU VOLTAGE &amp; CURRENT" Style="{StaticResource Label}"/>
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                             <StackPanel Margin="0,0,16,0">
                                 <TextBlock Text="VOLTAGE" 
@@ -295,7 +399,7 @@
                                            Foreground="{StaticResource TextTertiaryBrush}"
                                            HorizontalAlignment="Center"/>
                                 <TextBlock Text="{Binding LatestMonitoringSample.GpuVoltageV, StringFormat={}{0:F2}V, FallbackValue=--V}" 
-                                           Style="{StaticResource SecondaryValue}"
+                                           Style="{StaticResource MonospaceValue}"
                                            FontSize="18"
                                            Foreground="#FF6B6B"
                                            HorizontalAlignment="Center"/>
@@ -306,7 +410,7 @@
                                            Foreground="{StaticResource TextTertiaryBrush}"
                                            HorizontalAlignment="Center"/>
                                 <TextBlock Text="{Binding LatestMonitoringSample.GpuCurrentA, StringFormat={}{0:F1}A, FallbackValue=--A}" 
-                                           Style="{StaticResource SecondaryValue}"
+                                           Style="{StaticResource MonospaceValue}"
                                            FontSize="18"
                                            Foreground="#4CAF50"
                                            HorizontalAlignment="Center"/>
@@ -320,7 +424,7 @@
         </Grid>
 
         <!-- Low Overhead Message -->
-        <Border Grid.Row="2" 
+        <Border Grid.Row="3" 
                 Style="{StaticResource SurfaceCard}" 
                 Padding="48" 
                 Visibility="{Binding MonitoringLowOverheadMode, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -350,7 +454,7 @@
         </Border>
         
             <!-- Loading Overlay -->
-            <controls:LoadingOverlay Grid.RowSpan="3" Panel.ZIndex="1000" />
+            <controls:LoadingOverlay Grid.RowSpan="4" Panel.ZIndex="1000" />
         </Grid>
     </ScrollViewer>
 </UserControl>

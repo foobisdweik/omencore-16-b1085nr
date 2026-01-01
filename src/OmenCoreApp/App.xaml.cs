@@ -62,6 +62,12 @@ namespace OmenCore
             var fileVer = asm.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? "unknown";
             var asmVer = asm.GetName().Version?.ToString() ?? "unknown";
             Logging.Info($"OmenCore v{fileVer} starting up (Assembly: {asmVer})");
+            
+            // Log command line arguments for debugging
+            if (e.Args.Length > 0)
+            {
+                Logging.Info($"Command line arguments: {string.Join(" ", e.Args)}");
+            }
 
             // Check for WinRing0 driver availability
             CheckDriverStatus();
@@ -78,7 +84,9 @@ namespace OmenCore
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
             
             // Check if we should start minimized to tray
-            bool startMinimized = Configuration.Config.Monitoring?.StartMinimized ?? false;
+            // Priority: command line flag > config setting
+            bool hasMinimizedFlag = e.Args.Contains("--minimized") || e.Args.Contains("-m") || e.Args.Contains("/minimized");
+            bool startMinimized = hasMinimizedFlag || (Configuration.Config.Monitoring?.StartMinimized ?? false);
             
             if (startMinimized)
             {

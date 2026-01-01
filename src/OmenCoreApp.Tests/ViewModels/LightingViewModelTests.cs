@@ -65,7 +65,11 @@ namespace OmenCoreApp.Tests.ViewModels
         private class TestRgbProvider : IRgbProvider
         {
             public string ProviderName => "TestProvider";
+            public string ProviderId => "test";
             public bool IsAvailable { get; private set; } = true;
+            public bool IsConnected => IsAvailable;
+            public int DeviceCount => IsAvailable ? 1 : 0;
+            public IReadOnlyList<RgbEffectType> SupportedEffects => new[] { RgbEffectType.Static, RgbEffectType.Breathing, RgbEffectType.Spectrum };
             public string? LastEffect { get; private set; }
 
             public Task InitializeAsync()
@@ -77,6 +81,30 @@ namespace OmenCoreApp.Tests.ViewModels
             public Task ApplyEffectAsync(string effectId)
             {
                 LastEffect = effectId;
+                return Task.CompletedTask;
+            }
+
+            public Task SetStaticColorAsync(System.Drawing.Color color)
+            {
+                LastEffect = $"static:#{color.R:X2}{color.G:X2}{color.B:X2}";
+                return Task.CompletedTask;
+            }
+
+            public Task SetBreathingEffectAsync(System.Drawing.Color color)
+            {
+                LastEffect = $"breathing:#{color.R:X2}{color.G:X2}{color.B:X2}";
+                return Task.CompletedTask;
+            }
+
+            public Task SetSpectrumEffectAsync()
+            {
+                LastEffect = "spectrum";
+                return Task.CompletedTask;
+            }
+
+            public Task TurnOffAsync()
+            {
+                LastEffect = "off";
                 return Task.CompletedTask;
             }
         }

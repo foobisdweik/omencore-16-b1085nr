@@ -155,6 +155,48 @@
     <SolidColorBrush x:Key="InfoLightBrush" Color="{StaticResource InfoLight}" />
     <SolidColorBrush x:Key="FocusRingBrush" Color="{StaticResource FocusRing}" />
 
+    <!-- ==================== STATUS BADGE STYLES ==================== -->
+    
+    <!-- Status badge for OK/Good state -->
+    <Style x:Key="StatusBadgeOk" TargetType="Border">
+        <Setter Property="Background" Value="#1A4CAF50"/>
+        <Setter Property="BorderBrush" Value="#4CAF50"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="8,3"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+    </Style>
+    
+    <!-- Status badge for Warning state -->
+    <Style x:Key="StatusBadgeWarning" TargetType="Border">
+        <Setter Property="Background" Value="#1AFFAA33"/>
+        <Setter Property="BorderBrush" Value="#FFAA33"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="8,3"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+    </Style>
+    
+    <!-- Status badge for Critical state -->
+    <Style x:Key="StatusBadgeCritical" TargetType="Border">
+        <Setter Property="Background" Value="#1AE6002E"/>
+        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="8,3"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+    </Style>
+    
+    <!-- Status badge for Info/Neutral state -->
+    <Style x:Key="StatusBadgeInfo" TargetType="Border">
+        <Setter Property="Background" Value="#1A45C7FF"/>
+        <Setter Property="BorderBrush" Value="#45C7FF"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="8,3"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+    </Style>
+
     <!-- ==================== CARD STYLES ==================== -->
     
     <!-- Card helper style with subtle hover effects -->
@@ -195,6 +237,7 @@
 
     <!-- Typography -->
     <FontFamily x:Key="AppFontFamily">Segoe UI Variable Text, Segoe UI, "Segoe UI", Arial</FontFamily>
+    <FontFamily x:Key="MonospaceFontFamily">Cascadia Mono, Consolas, "Courier New", monospace</FontFamily>
 
     <Style TargetType="Window">
         <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}" />
@@ -205,6 +248,20 @@
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+    </Style>
+
+    <!-- Monospace style for numeric values (temps, speeds, voltages) -->
+    <Style x:Key="MonospaceValue" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontFamily" Value="{StaticResource MonospaceFontFamily}"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    
+    <!-- Large monospace value for dashboard displays -->
+    <Style x:Key="MonospaceValueLarge" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontFamily" Value="{StaticResource MonospaceFontFamily}"/>
+        <Setter Property="FontSize" Value="32"/>
+        <Setter Property="FontWeight" Value="Bold"/>
     </Style>
 
     <!-- Typography Hierarchy Styles -->

@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
 using System.Threading.Tasks;
 using OmenCore.Services;
 
@@ -12,8 +15,19 @@ namespace OmenCore.Services.Rgb
         private readonly RgbManager _manager;
         private readonly LoggingService _logging;
 
-        public string ProviderName => "SystemGeneric";
+        public string ProviderName => "System";
+        public string ProviderId => "system";
         public bool IsAvailable { get; private set; } = false;
+        public bool IsConnected => _manager.HasAnyProvider;
+        public int DeviceCount => _manager.TotalDeviceCount;
+        
+        public IReadOnlyList<RgbEffectType> SupportedEffects { get; } = new[]
+        {
+            RgbEffectType.Static,
+            RgbEffectType.Breathing,
+            RgbEffectType.Spectrum,
+            RgbEffectType.Off
+        };
 
         public SystemRgbProvider(RgbManager manager, LoggingService logging)
         {
@@ -24,12 +38,8 @@ namespace OmenCore.Services.Rgb
         public Task InitializeAsync()
         {
             // Consider available if any registered provider reports availability
-            IsAvailable = false;
-            foreach (var p in _manager.Providers)
-            {
-                if (p.IsAvailable) { IsAvailable = true; break; }
-            }
-            _logging.Info($"SystemRgbProvider initialized, available={IsAvailable}");
+            IsAvailable = _manager.Providers.Any(p => p.IsAvailable);
+            _logging.Info($"SystemRgbProvider initialized, available={IsAvailable}, total devices={DeviceCount}");
             return Task.CompletedTask;
         }
 
@@ -37,6 +47,26 @@ namespace OmenCore.Services.Rgb
         {
             // Apply to all providers via RgbManager
             return _manager.ApplyEffectToAllAsync(effectId);
+        }
+        
+        public Task SetStaticColorAsync(Color color)
+        {
+            return _manager.SyncStaticColorAsync(color);
+        }
+        
+        public Task SetBreathingEffectAsync(Color color)
+        {
+            return _manager.SyncBreathingEffectAsync(color);
+        }
+        
+        public Task SetSpectrumEffectAsync()
+        {
+            return _manager.SyncSpectrumEffectAsync();
+        }
+        
+        public Task TurnOffAsync()
+        {
+            return _manager.TurnOffAllAsync();
         }
     }
 }

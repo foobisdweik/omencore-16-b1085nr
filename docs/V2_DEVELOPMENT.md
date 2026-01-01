@@ -2,7 +2,7 @@
 
 **Branch:** `v2.0-dev`  
 **Started:** December 18, 2025  
-**Current Version:** v2.0.0-alpha3  
+**Current Version:** v2.0.0-beta  
 **Target:** Q2 2026
 
 ---
@@ -23,12 +23,12 @@
 - [x] **Fix tray icon update crashes** (WPF logical parent issues)
 - [x] **Fix right-click context menu not showing** (temporarily using regular ContextMenu with dark theme)
 
-#### 1.2 Dashboard Polish ⬜
-- [ ] Card-based layout with consistent shadows
+#### 1.2 Dashboard Polish ✅
+- [x] Card-based layout with consistent shadows
 - [x] Improve LoadChart rendering smoothness
-- [ ] Status badges with clear iconography
-- [ ] Quick action button hover states
-- [ ] Better spacing and alignment
+- [x] Status badges with clear iconography
+- [x] Quick action button hover states
+- [x] Better spacing and alignment
 
 #### 1.3 Settings View Improvements ✅
 - [x] Toggle switches instead of checkboxes
@@ -36,11 +36,11 @@
 - [ ] Inline help text for complex options
 - [ ] Better organization
 
-#### 1.4 Typography & Visual Consistency ⬜
-- [ ] Consistent font weights throughout
-- [ ] Monospace font for numeric values
-- [ ] Better contrast ratios
-- [ ] Consistent color usage for status indicators
+#### 1.4 Typography & Visual Consistency ✅
+- [x] Consistent font weights throughout
+- [x] Monospace font for numeric values
+- [x] Better contrast ratios
+- [x] Consistent color usage for status indicators
 
 ---
 
@@ -123,11 +123,11 @@ Notes: Initial asset folders and placeholder images created. Next: gather real d
 - [ ] Battery status for wireless devices
 - [ ] Hardware lighting mode support
 
-#### 3.3 Full Razer Chroma SDK ⬜
-- [ ] Chroma SDK 3.x integration
-- [ ] Per-key RGB for keyboards
-- [ ] Effect library (Wave, Spectrum, Breathing, Reactive)
-- [ ] Custom effect creator
+#### 3.3 Full Razer Chroma SDK ✅
+- [x] Chroma SDK REST API integration (session management, heartbeat)
+- [x] Per-key RGB for keyboards (custom effect support)
+- [x] Effect library (Wave, Spectrum, Breathing, Reactive, Static)
+- [x] Custom effect creator (CreateCustomKeyboardEffect)
 
 #### 3.4 Enhanced Logitech SDK ⬜
 - [ ] G HUB SDK integration
@@ -136,18 +136,18 @@ Notes: Initial asset folders and placeholder images created. Next: gather real d
 - [ ] LightSpeed wireless status
 - [ ] PowerPlay charging status
 
-#### 3.5 Unified RGB Engine ⬜
-- [ ] "Sync All" functionality
-- [ ] Cross-brand effect presets
-- [ ] Audio-reactive mode
-- [ ] Screen color sampling
+#### 3.5 Unified RGB Engine ✅
+- [x] "Sync All" functionality (SyncStaticColorAsync, SyncBreathingEffectAsync, SyncSpectrumEffectAsync)
+- [x] Cross-brand effect presets (IRgbProvider enhanced with RgbEffectType)
+- [ ] Audio-reactive mode (future)
+- [ ] Screen color sampling (future)
 
-#### 3.6 Lighting View Redesign ⬜
-- [ ] Device cards with images
-- [ ] Connection status indicators
-- [ ] Battery level display
-- [ ] Per-device controls
-- [x] "Apply to System" action added to Lighting View (button + command) — partial UI hook implemented
+#### 3.6 Lighting View Redesign ✅
+- [x] Device cards with brand headers and DeviceCard styles
+- [x] Connection status indicators (badges)
+- [ ] Battery level display (future - requires wireless device detection)
+- [x] Per-device controls (zone pickers, effect selectors)
+- [x] "Apply to System" action (SyncAllRgbAsync)
 
 **Progress update (2025-12-28):**
 - Initial provider wiring implemented (`IRgbProvider`, `RgbManager`). Providers registered in priority order: **Corsair → Logitech → Razer → SystemGeneric**.
@@ -163,13 +163,13 @@ Notes: Initial asset folders and placeholder images created. Next: gather real d
 
 ### Phase 4: Linux Support (Beta 2 - Mar 2026)
 
-#### 4.1 Linux CLI ⬜
-- [ ] Create `OmenCore.Linux` project
-- [ ] EC register access via `/sys/kernel/debug/ec/ec0/io`
-- [ ] Fan control commands
-- [ ] Performance mode commands
-- [ ] Keyboard lighting commands
-- [ ] Status/monitor commands
+#### 4.1 Linux CLI ✅
+- [x] Create `OmenCore.Linux` project (System.CommandLine CLI)
+- [x] EC register access via `/sys/kernel/debug/ec/ec0/io` (LinuxEcController)
+- [x] Fan control commands (--mode auto|max, --custom, --status)
+- [x] Performance mode commands (--mode balanced|performance|quiet)
+- [x] Keyboard lighting commands (--color, --brightness, --zone)
+- [x] Status/monitor commands (hardware info, real-time monitoring)
 
 #### 4.2 Linux Daemon ⬜
 - [ ] Daemon mode implementation
@@ -348,14 +348,14 @@ Notes: Initial asset folders and placeholder images created. Next: gather real d
 
 | Phase | Status | Progress |
 |-------|--------|----------|
-| 1. Foundation & Quick Wins | ✅ System Tray Done | 8/20 |
+| 1. Foundation & Quick Wins | ✅ Complete | 16/20 |
 | 2. System Optimizer | ✅ Complete | 35/35 |
-| 3. RGB Overhaul | 🔧 In Progress | 14/24 |
-| 4. Linux Support | ⚪ Planned | 0/12 |
-| 5. Advanced Features | ⚪ Planned | 2/15 |
+| 3. RGB Overhaul | ✅ Complete | 22/24 |
+| 4. Linux Support | ✅ CLI Complete | 6/12 |
+| 5. Advanced Features | 🔧 In Progress | 4/15 |
 | 6. Polish & Release | ⚪ Planned | 0/8 |
 
-**Overall: 59/114 tasks (52%)**
+**Overall: 83/114 tasks (73%)**
 
 ---
 

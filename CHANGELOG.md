@@ -7,6 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.0.0-beta] - 2025-12-28
+
+### 🚀 Major Architecture Changes
+
+#### Out-of-Process Hardware Monitoring
+- **HardwareWorker** - New separate process for hardware monitoring
+  - Eliminates stack overflow crashes from LibreHardwareMonitor recursive GPU queries
+  - JSON-based IPC over named pipes for parent-child communication
+  - Automatic restart with exponential backoff if worker crashes
+  - Parent process monitoring - worker exits cleanly if main app closes
+  - Log rotation: 5MB max file size, 3 backup files retained
+  - Graceful shutdown with CancellationToken support
+
+#### Self-Contained Deployment
+- **Both executables now embed .NET runtime** - No separate .NET installation required
+  - OmenCore.exe: Full WPF app with embedded runtime
+  - OmenCore.HardwareWorker.exe: Worker process with embedded runtime
+  - Single-file executables with native libraries extracted at first run
+
+### ✨ New Features
+
+#### Logitech SDK Improvements
+- **Spectrum/Flash Effects** - New effect types added to ILogitechSdkProvider interface
+  - `ApplySpectrumEffectAsync(device, speed)` - Rainbow color cycling
+  - `ApplyFlashEffectAsync(device, color, duration, interval)` - Strobe/alert effect
+- **80+ Device Support** - Massively expanded device PID database
+  - G502 X, G502 X PLUS, G502 X Lightspeed
+  - G PRO X 60 (LIGHTSPEED, wired variants)
+  - G309 LIGHTSPEED gaming mouse
+  - PRO X 2 LIGHTSPEED headset
+  - ASTRO A30, A50 Gen 4 headsets
+  - G915 X TKL, G915 X Full-size keyboards
+  - All 2024/2025 product releases covered
+  - Organized by device series (G5xx, G3xx, G9xx, PRO, ASTRO)
+
+#### Linux CLI Enhancements (OmenCore.Linux)
+- **ConfigCommand** - Full configuration management
+  - `omencore config --show` - Display current settings
+  - `omencore config --set key=value` - Update individual settings
+  - `omencore config --get key` - Query specific setting
+  - `omencore config --reset` - Restore defaults
+  - `omencore config --apply` - Apply configuration changes
+  - Config stored at `~/.config/omencore/config.json`
+- **DaemonCommand** - Systemd service management
+  - `omencore daemon --install` - Install as systemd service
+  - `omencore daemon --start/--stop/--status` - Control service
+  - `omencore daemon --generate-service` - Output service unit file
+  - Automatic dependency installation (polkit rules, etc.)
+- **JSON Output** - Machine-readable output for scripting
+  - `omencore status --json` - JSON formatted temps, fans, perf mode
+  - Global `--json` flag available on all commands
+
+#### System Optimizer (Windows)
+- **6 Optimization Categories** with individual toggle controls:
+  - **Power**: Ultimate Performance plan, Hardware GPU Scheduling, Game Mode, Foreground Priority
+  - **Services**: Telemetry, SysMain/Superfetch, Windows Search, DiagTrack
+  - **Network**: TCP NoDelay, TCP ACK Frequency, Delivery Optimization, Nagle Algorithm
+  - **Input**: Mouse Acceleration, Game DVR, Game Bar, Fullscreen Optimizations
+  - **Visual**: Transparency, Animations, Shadows, Best Performance preset
+  - **Storage**: SSD TRIM, Last Access Timestamps, 8.3 Names, Prefetch
+- **Risk Indicators** - Low/Medium/High risk badges on each optimization
+- **Preset Buttons** - "Gaming Maximum" and "Balanced" one-click presets
+- **Registry Backup** - Automatic backup before changes, restore on revert
+- **System Restore Points** - Creates restore point before applying optimizations
+
+### 🐛 Bug Fixes
+
+- **Stack Overflow Prevention** - Out-of-process architecture eliminates LibreHardwareMonitor crashes
+- **SafeFileHandle Disposal** - Fixed "Cannot access a disposed object" errors in HardwareWorker
+- **Version Consistency** - All assemblies now report 2.0.0 correctly
+- **Log Rotation** - HardwareWorker logs no longer grow unbounded
+
+### 🔧 Technical Changes
+
+- **ILogitechSdkProvider Interface** - Extended with spectrum and flash effect methods
+- **LogitechHidDirect** - Reorganized PID database by device series
+- **LogitechRgbProvider** - Added `RgbEffectType.Spectrum` to supported effects
+- **HardwareWorker IPC** - JSON protocol: `{"type":"temps"|"fans"|"ping"|"quit"}`
+- **Build Configuration** - Both csproj files now have explicit SelfContained=true
+
+### 📦 Dependencies
+
+- .NET 8.0 (embedded in single-file executables)
+- LibreHardwareMonitorLib 0.9.4
+- RGB.NET.Core 3.1.0
+- CUE.NET 1.2.0.1 (Corsair SDK)
+
+---
+
 ## [1.6.0-alpha] - 2025-12-25
 
 ### Added

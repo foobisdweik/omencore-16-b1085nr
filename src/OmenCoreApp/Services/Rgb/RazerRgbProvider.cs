@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Drawing;
 using System.Threading.Tasks;
 using OmenCore.Razer;
 using OmenCore.Services;
@@ -11,7 +13,21 @@ namespace OmenCore.Services.Rgb
         private readonly RazerService _razerService;
 
         public string ProviderName => "Razer";
+        public string ProviderId => "razer";
         public bool IsAvailable { get; private set; } = false;
+        public bool IsConnected => _razerService.IsSessionActive;
+        public int DeviceCount => _razerService.Devices.Count;
+        
+        public IReadOnlyList<RgbEffectType> SupportedEffects { get; } = new[]
+        {
+            RgbEffectType.Static,
+            RgbEffectType.Breathing,
+            RgbEffectType.Spectrum,
+            RgbEffectType.Wave,
+            RgbEffectType.Reactive,
+            RgbEffectType.Custom,
+            RgbEffectType.Off
+        };
 
         public RazerRgbProvider(LoggingService logging, RazerService razerService)
         {
@@ -25,7 +41,13 @@ namespace OmenCore.Services.Rgb
             {
                 var available = _razerService.Initialize();
                 IsAvailable = available;
-                _logging.Info($"RazerRgbProvider initialized, available={IsAvailable}");
+                
+                if (available)
+                {
+                    _razerService.DiscoverDevices();
+                }
+                
+                _logging.Info($"RazerRgbProvider initialized, available={IsAvailable}, devices={DeviceCount}");
             }
             catch (Exception ex)
             {
@@ -47,18 +69,93 @@ namespace OmenCore.Services.Rgb
             if (effectId.StartsWith("color:", StringComparison.OrdinalIgnoreCase))
             {
                 var hex = effectId["color:".Length..];
-                // parse hex to RGB
-                if (byte.TryParse(hex.Substring(1,2), System.Globalization.NumberStyles.HexNumber, null, out var r) &&
-                    byte.TryParse(hex.Substring(3,2), System.Globalization.NumberStyles.HexNumber, null, out var g) &&
-                    byte.TryParse(hex.Substring(5,2), System.Globalization.NumberStyles.HexNumber, null, out var b))
+                if (TryParseHexColor(hex, out var r, out var g, out var b))
                 {
                     _razerService.SetStaticColor(r, g, b);
                 }
                 return Task.CompletedTask;
             }
+            
+            if (effectId.StartsWith("breathing:", StringComparison.OrdinalIgnoreCase))
+            {
+                var hex = effectId["breathing:".Length..];
+                if (TryParseHexColor(hex, out var r, out var g, out var b))
+                {
+                    _razerService.SetBreathingEffect(r, g, b);
+                }
+                return Task.CompletedTask;
+            }
+            
+            if (effectId.Equals("effect:spectrum", StringComparison.OrdinalIgnoreCase))
+            {
+                _razerService.SetSpectrumEffect();
+                return Task.CompletedTask;
+            }
+            
+            if (effectId.Equals("effect:wave", StringComparison.OrdinalIgnoreCase))
+            {
+                _razerService.SetWaveEffect();
+                return Task.CompletedTask;
+            }
+            
+            if (effectId.Equals("off", StringComparison.OrdinalIgnoreCase))
+            {
+                _razerService.SetStaticColor(0, 0, 0);
+                return Task.CompletedTask;
+            }
 
             _logging.Info($"Razer effect requested: {effectId}");
             return Task.CompletedTask;
+        }
+        
+        public Task SetStaticColorAsync(Color color)
+        {
+            if (!IsAvailable)
+                return Task.CompletedTask;
+                
+            _razerService.SetStaticColor(color.R, color.G, color.B);
+            return Task.CompletedTask;
+        }
+        
+        public Task SetBreathingEffectAsync(Color color)
+        {
+            if (!IsAvailable)
+                return Task.CompletedTask;
+                
+            _razerService.SetBreathingEffect(color.R, color.G, color.B);
+            return Task.CompletedTask;
+        }
+        
+        public Task SetSpectrumEffectAsync()
+        {
+            if (!IsAvailable)
+                return Task.CompletedTask;
+                
+            _razerService.SetSpectrumEffect();
+            return Task.CompletedTask;
+        }
+        
+        public Task TurnOffAsync()
+        {
+            if (!IsAvailable)
+                return Task.CompletedTask;
+                
+            _razerService.SetStaticColor(0, 0, 0);
+            return Task.CompletedTask;
+        }
+        
+        private static bool TryParseHexColor(string hex, out byte r, out byte g, out byte b)
+        {
+            r = g = b = 0;
+            if (string.IsNullOrEmpty(hex) || hex.Length < 7)
+                return false;
+                
+            if (hex.StartsWith("#"))
+                hex = hex[1..];
+                
+            return byte.TryParse(hex.AsSpan(0, 2), System.Globalization.NumberStyles.HexNumber, null, out r) &&
+                   byte.TryParse(hex.AsSpan(2, 2), System.Globalization.NumberStyles.HexNumber, null, out g) &&
+                   byte.TryParse(hex.AsSpan(4, 2), System.Globalization.NumberStyles.HexNumber, null, out b);
         }
     }
 }

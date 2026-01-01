@@ -21,78 +21,134 @@ namespace OmenCore.Services.Logitech
         private const int LOGITECH_VID = 0x046D;
         
         // Known Logitech G product IDs and their device types
+        // Comprehensive list including 2024/2025 devices
         private static readonly Dictionary<int, (string Name, LogitechDeviceType Type)> KnownProducts = new()
         {
-            // Keyboards
+            // ============= KEYBOARDS =============
+            // G213 Series
             { 0xC336, ("G213 Prodigy", LogitechDeviceType.Keyboard) },
-            { 0xC339, ("G213 Prodigy (2)", LogitechDeviceType.Keyboard) },
+            { 0xC33F, ("G213 Prodigy (Alt)", LogitechDeviceType.Keyboard) },
+            
+            // G4xx Series
             { 0xC330, ("G410 Atlas Spectrum", LogitechDeviceType.Keyboard) },
-            { 0xC333, ("G610 Orion", LogitechDeviceType.Keyboard) },
-            { 0xC338, ("G610 Orion Brown", LogitechDeviceType.Keyboard) },
-            { 0xC331, ("G810 Orion Spectrum", LogitechDeviceType.Keyboard) },
-            { 0xC337, ("G810 Orion Spectrum (2)", LogitechDeviceType.Keyboard) },
-            { 0xC32B, ("G910 Orion Spark", LogitechDeviceType.Keyboard) },
-            { 0xC335, ("G910 Orion Spectrum", LogitechDeviceType.Keyboard) },
             { 0xC33A, ("G413 Carbon", LogitechDeviceType.Keyboard) },
+            { 0xC33B, ("G413 Silver", LogitechDeviceType.Keyboard) },
+            
+            // G5xx Series  
             { 0xC342, ("G512 Carbon", LogitechDeviceType.Keyboard) },
             { 0xC33C, ("G512 SE", LogitechDeviceType.Keyboard) },
+            { 0xC346, ("G512 RGB", LogitechDeviceType.Keyboard) },
+            
+            // G6xx Series
+            { 0xC333, ("G610 Orion", LogitechDeviceType.Keyboard) },
+            { 0xC338, ("G610 Orion Brown", LogitechDeviceType.Keyboard) },
+            
+            // G7xx Series (Wireless)
+            { 0xC547, ("G715 Wireless", LogitechDeviceType.Keyboard) },
+            { 0xC548, ("G713 Wired", LogitechDeviceType.Keyboard) },
+            
+            // G8xx Series
+            { 0xC331, ("G810 Orion Spectrum", LogitechDeviceType.Keyboard) },
+            { 0xC337, ("G810 Orion Spectrum (2)", LogitechDeviceType.Keyboard) },
+            { 0xC33E, ("G815 Lightsync", LogitechDeviceType.Keyboard) },
+            { 0xC33D, ("G815 Lightsync (Alt)", LogitechDeviceType.Keyboard) },
+            
+            // G9xx Series
+            { 0xC32B, ("G910 Orion Spark", LogitechDeviceType.Keyboard) },
+            { 0xC335, ("G910 Orion Spectrum", LogitechDeviceType.Keyboard) },
             { 0xC343, ("G915 Lightspeed", LogitechDeviceType.Keyboard) },
             { 0xC545, ("G915 TKL Lightspeed", LogitechDeviceType.Keyboard) },
             { 0xC541, ("G915 Wireless", LogitechDeviceType.Keyboard) },
-            { 0xC33E, ("G815 Lightsync", LogitechDeviceType.Keyboard) },
-            { 0xC547, ("G715 Wireless", LogitechDeviceType.Keyboard) },
-            { 0xC548, ("G713 Wired", LogitechDeviceType.Keyboard) },
+            
+            // G PRO Keyboards
             { 0xC341, ("G PRO Keyboard", LogitechDeviceType.Keyboard) },
             { 0xC339, ("G PRO X Keyboard", LogitechDeviceType.Keyboard) },
+            { 0xC34A, ("G PRO X TKL", LogitechDeviceType.Keyboard) },
+            { 0xC549, ("G PRO X 60", LogitechDeviceType.Keyboard) },
             
-            // Mice
+            // ============= MICE =============
+            // G1xx Series (Budget)
+            { 0xC084, ("G102/G203 Prodigy", LogitechDeviceType.Mouse) },
             { 0xC082, ("G203 Lightsync", LogitechDeviceType.Mouse) },
-            { 0xC092, ("G203 LIGHTSYNC", LogitechDeviceType.Mouse) },
-            { 0xC084, ("G203 Prodigy", LogitechDeviceType.Mouse) },
+            { 0xC092, ("G203 LIGHTSYNC (2)", LogitechDeviceType.Mouse) },
+            
+            // G3xx Series  
+            { 0xC07D, ("G302 Daedalus Prime", LogitechDeviceType.Mouse) },
+            { 0xC093, ("G305 Lightspeed", LogitechDeviceType.Mouse) },
+            { 0xC099, ("G309 Lightspeed", LogitechDeviceType.Mouse) },
+            
+            // G4xx Series
+            { 0xC07E, ("G402 Hyperion Fury", LogitechDeviceType.Mouse) },
             { 0xC083, ("G403 Prodigy", LogitechDeviceType.Mouse) },
             { 0xC08F, ("G403 Hero", LogitechDeviceType.Mouse) },
-            { 0xC07E, ("G402 Hyperion Fury", LogitechDeviceType.Mouse) },
+            { 0xC096, ("G403 Lightspeed", LogitechDeviceType.Mouse) },
+            
+            // G5xx Series
             { 0xC332, ("G502 Proteus Spectrum", LogitechDeviceType.Mouse) },
             { 0xC08B, ("G502 Hero", LogitechDeviceType.Mouse) },
             { 0xC08D, ("G502 Lightspeed", LogitechDeviceType.Mouse) },
             { 0xC094, ("G502 X Lightspeed", LogitechDeviceType.Mouse) },
             { 0xC095, ("G502 X Plus", LogitechDeviceType.Mouse) },
+            { 0xC098, ("G502 X", LogitechDeviceType.Mouse) },
+            
+            // G6xx Series (Wireless)
             { 0xC088, ("G603 Lightspeed", LogitechDeviceType.Mouse) },
-            { 0xC539, ("G604 Lightspeed", LogitechDeviceType.Mouse) },
+            { 0xC53A, ("G604 Lightspeed", LogitechDeviceType.Mouse) },
+            
+            // G7xx Series
             { 0xC537, ("G703 Lightspeed", LogitechDeviceType.Mouse) },
             { 0xC090, ("G703 Hero", LogitechDeviceType.Mouse) },
+            
+            // G9xx Series
             { 0xC085, ("G903 Lightspeed", LogitechDeviceType.Mouse) },
             { 0xC091, ("G903 Hero", LogitechDeviceType.Mouse) },
+            
+            // G PRO Mice
             { 0xC08A, ("G PRO Gaming Mouse", LogitechDeviceType.Mouse) },
             { 0xC08C, ("G PRO Wireless", LogitechDeviceType.Mouse) },
-            { 0xC547, ("G PRO X Superlight", LogitechDeviceType.Mouse) },
+            { 0xC09C, ("G PRO X Superlight", LogitechDeviceType.Mouse) },
             { 0xC09D, ("G PRO X Superlight 2", LogitechDeviceType.Mouse) },
-            { 0xC093, ("G305 Lightspeed", LogitechDeviceType.Mouse) },
-            { 0xC07D, ("G302 Daedalus Prime", LogitechDeviceType.Mouse) },
+            { 0xC09F, ("G PRO X Superlight 2 DEX", LogitechDeviceType.Mouse) },
             
-            // Headsets
-            { 0x0A5B, ("G535 Lightspeed", LogitechDeviceType.Headset) },
-            { 0x0AAA, ("G733 Lightspeed", LogitechDeviceType.Headset) },
-            { 0x0AB5, ("G935 Wireless", LogitechDeviceType.Headset) },
-            { 0x0A87, ("G933 Artemis Spectrum", LogitechDeviceType.Headset) },
-            { 0x0A89, ("G533 Wireless", LogitechDeviceType.Headset) },
-            { 0x0A6D, ("G633 Artemis Spectrum", LogitechDeviceType.Headset) },
+            // ============= HEADSETS =============
+            // G4xx Series
             { 0x0A66, ("G430 Gaming Headset", LogitechDeviceType.Headset) },
-            { 0x0AAC, ("PRO X Wireless", LogitechDeviceType.Headset) },
-            { 0x0AAE, ("PRO X 2 Lightspeed", LogitechDeviceType.Headset) },
             { 0x0ABE, ("G435 Lightspeed", LogitechDeviceType.Headset) },
             
-            // Mouse pads
-            { 0xC53A, ("G Powerplay", LogitechDeviceType.Mouse) },  // Mouse pad treated as accessory
-            { 0xC539, ("G840 XL", LogitechDeviceType.Mouse) },
+            // G5xx Series
+            { 0x0A89, ("G533 Wireless", LogitechDeviceType.Headset) },
+            { 0x0A5B, ("G535 Lightspeed", LogitechDeviceType.Headset) },
+            { 0x0A78, ("G560 Lightsync Speakers", LogitechDeviceType.Headset) },
             
-            // Speakers - treat as headset
-            { 0x0A78, ("G560 Lightsync", LogitechDeviceType.Headset) },
+            // G6xx Series
+            { 0x0A6D, ("G633 Artemis Spectrum", LogitechDeviceType.Headset) },
+            { 0x0A88, ("G635 Gaming Headset", LogitechDeviceType.Headset) },
             
-            // Webcams - not supported in current enum, skip or treat as Unknown
-            // { 0x085E, ("BRIO 4K", LogitechDeviceType.Webcam) },
-            // { 0x0892, ("StreamCam", LogitechDeviceType.Webcam) },
-            // { 0x0893, ("C922 Pro", LogitechDeviceType.Webcam) },
+            // G7xx Series
+            { 0x0AAA, ("G733 Lightspeed", LogitechDeviceType.Headset) },
+            { 0x0AB0, ("G733 Lightspeed (Alt)", LogitechDeviceType.Headset) },
+            
+            // G9xx Series
+            { 0x0A87, ("G933 Artemis Spectrum", LogitechDeviceType.Headset) },
+            { 0x0AB5, ("G935 Wireless", LogitechDeviceType.Headset) },
+            
+            // PRO Series Headsets
+            { 0x0AAC, ("PRO X Wireless", LogitechDeviceType.Headset) },
+            { 0x0AAE, ("PRO X 2 Lightspeed", LogitechDeviceType.Headset) },
+            { 0x0AB7, ("PRO X 2 Lightspeed (Alt)", LogitechDeviceType.Headset) },
+            
+            // ASTRO (Logitech-owned)
+            { 0x0AAD, ("ASTRO A50 Gen 4", LogitechDeviceType.Headset) },
+            { 0x0AB8, ("ASTRO A30", LogitechDeviceType.Headset) },
+            
+            // ============= ACCESSORIES =============
+            // Mouse Pads
+            { 0xC53B, ("G Powerplay", LogitechDeviceType.Mouse) },
+            { 0xC53F, ("G840 XL", LogitechDeviceType.Mouse) },
+            
+            // Receivers (useful for detecting wireless devices)
+            { 0xC539, ("Lightspeed Receiver", LogitechDeviceType.Mouse) },
+            { 0xC547, ("Lightspeed Receiver (2)", LogitechDeviceType.Mouse) },
         };
 
         public LogitechHidDirect(LoggingService logging)
@@ -280,6 +336,21 @@ namespace OmenCore.Services.Logitech
             // Breathing effect - for now just apply static color
             // Full effect support would need device-specific protocol
             _logging.Info($"[Direct HID] Breathing effect requested on {device.Name} - applying static color");
+            await ApplyStaticColorAsync(device, hexColor, 100);
+        }
+
+        public async Task ApplySpectrumEffectAsync(LogitechDevice device, int speed)
+        {
+            // Spectrum effect via HID++ would require device-specific commands
+            // For now, log and apply a representative color
+            _logging.Info($"[Direct HID] Spectrum effect requested on {device.Name} - not fully supported");
+            await ApplyStaticColorAsync(device, "#FF00FF", 100); // Purple to indicate spectrum mode
+        }
+
+        public async Task ApplyFlashEffectAsync(LogitechDevice device, string hexColor, int durationMs, int intervalMs)
+        {
+            // Flash effect via HID++ would require device-specific timing commands
+            _logging.Info($"[Direct HID] Flash effect requested on {device.Name} - applying static color");
             await ApplyStaticColorAsync(device, hexColor, 100);
         }
 

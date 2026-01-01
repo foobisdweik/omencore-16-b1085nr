@@ -25,9 +25,20 @@ class Program
     private static HardwareSample _lastSample = new();
     private static bool _running = true;
     private static DateTime _lastUpdate = DateTime.MinValue;
+    private static int _parentProcessId = -1;
 
     static async Task Main(string[] args)
     {
+        // Parse parent process ID from command line (passed by main app)
+        if (args.Length > 0 && int.TryParse(args[0], out var ppid))
+        {
+            _parentProcessId = ppid;
+            Console.WriteLine($"Parent process ID: {_parentProcessId}");
+        }
+        
+        // Rotate old log files
+        RotateLogIfNeeded();
+        
         // Set up crash handler to log before exit
         AppDomain.CurrentDomain.UnhandledException += (s, e) =>
         {
@@ -44,6 +55,9 @@ class Program
             // Start background update thread
             var updateTask = Task.Run(UpdateLoop);
             
+            // Start parent process monitor (exits worker if parent dies)
+            var parentMonitorTask = Task.Run(MonitorParentProcess);
+            
             // Run pipe server
             await RunPipeServer();
         }
@@ -57,6 +71,45 @@ class Program
             CleanupHardware();
         }
     }
+    
+    /// <summary>
+    /// Monitor parent process and exit if it dies (prevents orphaned workers).
+    /// </summary>
+    private static async Task MonitorParentProcess()
+    {
+        if (_parentProcessId <= 0) return;
+        
+        try
+        {
+            using var parentProcess = System.Diagnostics.Process.GetProcessById(_parentProcessId);
+            
+            // Poll every 2 seconds to check if parent is still alive
+            while (_running && !parentProcess.HasExited)
+            {
+                await Task.Delay(2000);
+            }
+            
+            if (parentProcess.HasExited)
+            {
+                Console.WriteLine($"Parent process {_parentProcessId} exited, shutting down worker...");
+                File.AppendAllText(GetLogPath(), $"[{DateTime.Now:O}] Parent process {_parentProcessId} exited, worker shutting down\n");
+                _running = false;
+                Environment.Exit(0);
+            }
+        }
+        catch (ArgumentException)
+        {
+            // Parent process doesn't exist (already exited)
+            Console.WriteLine($"Parent process {_parentProcessId} not found, shutting down worker...");
+            File.AppendAllText(GetLogPath(), $"[{DateTime.Now:O}] Parent process {_parentProcessId} not found, worker shutting down\n");
+            _running = false;
+            Environment.Exit(0);
+        }
+        catch (Exception ex)
+        {
+            File.AppendAllText(GetLogPath(), $"[{DateTime.Now:O}] Parent monitor error: {ex.Message}\n");
+        }
+    }
 
     private static string GetLogPath()
     {
@@ -64,6 +117,34 @@ class Program
         var logDir = Path.Combine(localAppData, "OmenCore");
         Directory.CreateDirectory(logDir);
         return Path.Combine(logDir, "HardwareWorker.log");
+    }
+    
+    /// <summary>
+    /// Rotate log file if it's too large (> 1MB) or too old (> 7 days).
+    /// </summary>
+    private static void RotateLogIfNeeded()
+    {
+        try
+        {
+            var logPath = GetLogPath();
+            if (!File.Exists(logPath)) return;
+            
+            var info = new FileInfo(logPath);
+            var shouldRotate = info.Length > 1024 * 1024 || // > 1MB
+                               info.LastWriteTime < DateTime.Now.AddDays(-7); // > 7 days old
+            
+            if (shouldRotate)
+            {
+                var backupPath = logPath + ".old";
+                if (File.Exists(backupPath))
+                    File.Delete(backupPath);
+                File.Move(logPath, backupPath);
+            }
+        }
+        catch
+        {
+            // Ignore rotation errors
+        }
     }
 
     private static void InitializeHardware()

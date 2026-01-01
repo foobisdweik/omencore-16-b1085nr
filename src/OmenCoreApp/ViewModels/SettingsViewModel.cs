@@ -1561,11 +1561,47 @@ namespace OmenCore.ViewModels
                     {
                         _logging.Info($"Created scheduled task '{taskName}' for elevated startup");
                         // NOTE: Don't add registry fallback - it causes double startup issues
+                        
+                        // Verify the task was created successfully
+                        if (CheckStartupTaskExists())
+                        {
+                            _logging.Info("✓ Startup task verified in Task Scheduler");
+                        }
                     }
                     else
                     {
                         _logging.Warn($"Task Scheduler creation returned exit code {createProcess.ExitCode}: {error}");
-                        _logging.Warn("Auto-start may not work. Try running OmenCore as administrator.");
+                        
+                        // If task creation failed, it's likely because we're not elevated
+                        // Try to show a helpful message
+                        var isElevated = System.Security.Principal.WindowsIdentity.GetCurrent()
+                            .Owner?.IsWellKnown(System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid) == true;
+                        
+                        if (!isElevated)
+                        {
+                            _logging.Warn("OmenCore is not running as administrator. To enable auto-start, please:");
+                            _logging.Warn("1. Right-click OmenCore and 'Run as administrator'");
+                            _logging.Warn("2. Enable 'Start with Windows' again");
+                            _logging.Warn("Alternatively, use the installer with the 'Start with Windows' option checked.");
+                            
+                            // Reset the checkbox since creation failed
+                            _startWithWindows = false;
+                            OnPropertyChanged(nameof(StartWithWindows));
+                            
+                            System.Windows.MessageBox.Show(
+                                "Auto-start requires administrator privileges to create a scheduled task.\n\n" +
+                                "To enable auto-start:\n" +
+                                "1. Right-click OmenCore and select 'Run as administrator'\n" +
+                                "2. Go to Settings and enable 'Start with Windows' again\n\n" +
+                                "Or, re-run the installer with the 'Start with Windows' option checked.",
+                                "Administrator Required",
+                                System.Windows.MessageBoxButton.OK,
+                                System.Windows.MessageBoxImage.Warning);
+                        }
+                        else
+                        {
+                            _logging.Warn("Auto-start task creation failed despite being elevated. Check Windows Event Log for details.");
+                        }
                     }
                 }
                 else

@@ -32,10 +32,10 @@ namespace OmenCore.Controls
         private const int TempGridStep = 10;    // Every 10°C
         private const int FanGridStep = 20;     // Every 20%
         
-        // Visual settings
-        private const double PointRadius = 8;
-        private const double PointHoverRadius = 10;
-        private const double LineThickness = 2.5;
+        // Visual settings - increased for easier touch/drag
+        private const double PointRadius = 10;
+        private const double PointHoverRadius = 13;
+        private const double LineThickness = 3.0;
         private const double GridLineThickness = 1;
         
         #endregion

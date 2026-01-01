@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using OmenCore.Services;
 using RGB.NET.Core;
+using DrawingColor = System.Drawing.Color;
 
 namespace OmenCore.Services.Rgb
 {
@@ -16,8 +18,17 @@ namespace OmenCore.Services.Rgb
         private readonly LoggingService _logging;
         private RGBSurface? _surface;
 
-        public string ProviderName => "RgbNetSystem";
+        public string ProviderName => "RGB.NET";
+        public string ProviderId => "rgbnet";
         public bool IsAvailable { get; private set; } = false;
+        public bool IsConnected => IsAvailable && (_surface?.Devices.Count() ?? 0) > 0;
+        public int DeviceCount => _surface?.Devices.Count() ?? 0;
+        
+        public IReadOnlyList<RgbEffectType> SupportedEffects { get; } = new[]
+        {
+            RgbEffectType.Static,
+            RgbEffectType.Off
+        };
 
         public RgbNetSystemProvider(LoggingService logging)
         {
@@ -72,40 +83,83 @@ namespace OmenCore.Services.Rgb
                     var g = Convert.ToByte(hex.Substring(2, 2), 16);
                     var b = Convert.ToByte(hex.Substring(4, 2), 16);
 
-                    // Attempt to set each device's buffer to the requested color
-                    foreach (var dev in _surface.Devices)
-                    {
-                        try
-                        {
-                            foreach (var led in dev)
-                            {
-                                led.Color = new RGB.NET.Core.Color(r, g, b);
-                            }
-                        }
-                        catch (Exception dex)
-                        {
-                            _logging.Warn($"Failed to set color on device {dev.DeviceInfo.Model}: {dex.Message}");
-                        }
-                    }
-
-                    // Flush to devices
-                    try
-                    {
-                        _surface.Update();
-                        _logging.Info($"RgbNetSystemProvider applied color #{hex} to {_surface.Devices.Count()} devices");
-                    }
-                    catch (Exception uex)
-                    {
-                        _logging.Warn($"RgbNetSystemProvider surface update failed: {uex.Message}");
-                    }
+                    ApplyColorToAllDevices(r, g, b);
                 }
                 catch (Exception ex)
                 {
                     _logging.Warn($"Failed to parse/apply color '{hex}': {ex.Message}");
                 }
             }
+            
+            if (effectId.Equals("off", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyColorToAllDevices(0, 0, 0);
+            }
 
             return Task.CompletedTask;
+        }
+        
+        public Task SetStaticColorAsync(DrawingColor color)
+        {
+            if (!IsAvailable || _surface == null)
+                return Task.CompletedTask;
+                
+            ApplyColorToAllDevices(color.R, color.G, color.B);
+            return Task.CompletedTask;
+        }
+        
+        public Task SetBreathingEffectAsync(DrawingColor color)
+        {
+            // RGB.NET doesn't natively support effects, just set static
+            return SetStaticColorAsync(color);
+        }
+        
+        public Task SetSpectrumEffectAsync()
+        {
+            // RGB.NET doesn't natively support effects
+            return Task.CompletedTask;
+        }
+        
+        public Task TurnOffAsync()
+        {
+            if (!IsAvailable || _surface == null)
+                return Task.CompletedTask;
+                
+            ApplyColorToAllDevices(0, 0, 0);
+            return Task.CompletedTask;
+        }
+        
+        private void ApplyColorToAllDevices(byte r, byte g, byte b)
+        {
+            if (_surface == null)
+                return;
+                
+            // Attempt to set each device's buffer to the requested color
+            foreach (var dev in _surface.Devices)
+            {
+                try
+                {
+                    foreach (var led in dev)
+                    {
+                        led.Color = new Color(r, g, b);
+                    }
+                }
+                catch (Exception dex)
+                {
+                    _logging.Warn($"Failed to set color on device {dev.DeviceInfo.Model}: {dex.Message}");
+                }
+            }
+
+            // Flush to devices
+            try
+            {
+                _surface.Update();
+                _logging.Info($"RgbNetSystemProvider applied color R={r},G={g},B={b} to {_surface.Devices.Count()} devices");
+            }
+            catch (Exception uex)
+            {
+                _logging.Warn($"RgbNetSystemProvider surface update failed: {uex.Message}");
+            }
         }
 
         public void Dispose()

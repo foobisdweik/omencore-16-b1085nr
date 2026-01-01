@@ -1231,6 +1231,9 @@ namespace OmenCore.ViewModels
             OnPropertyChanged(nameof(MonitoringLowOverheadMode));
             OnPropertyChanged(nameof(MonitoringGraphsVisible));
             _monitoringInitialized = true;
+            
+            // Restore saved settings on startup (fan preset, GPU boost, TCC offset)
+            _ = RestoreSettingsOnStartupAsync();
             _macroBufferNotifier = RecordingBuffer as INotifyCollectionChanged;
             if (_macroBufferNotifier != null)
             {
@@ -2125,6 +2128,134 @@ namespace OmenCore.ViewModels
                 }
                 OnPropertyChanged(nameof(LogBuffer));
             });
+        }
+
+        /// <summary>
+        /// Restore saved settings (fan preset, GPU power boost, etc.) on startup.
+        /// Uses retry logic to handle hardware not being ready immediately after boot.
+        /// </summary>
+        private async Task RestoreSettingsOnStartupAsync()
+        {
+            const int maxRetries = 5;
+            const int retryDelayMs = 2000;
+            
+            await Task.Delay(1000); // Brief initial delay for hardware to settle
+            
+            _logging.Info("Restoring saved settings on startup...");
+            
+            // 1. Restore fan preset
+            var savedFanPreset = _config.LastFanPresetName;
+            if (!string.IsNullOrEmpty(savedFanPreset))
+            {
+                for (int attempt = 1; attempt <= maxRetries; attempt++)
+                {
+                    try
+                    {
+                        // Look for custom preset first
+                        var preset = _config.FanPresets
+                            .FirstOrDefault(p => p.Name.Equals(savedFanPreset, StringComparison.OrdinalIgnoreCase));
+                        
+                        if (preset == null)
+                        {
+                            // Handle built-in presets
+                            var nameLower = savedFanPreset.ToLowerInvariant();
+                            if (nameLower.Contains("max"))
+                            {
+                                preset = new FanPreset { Name = "Max", Mode = FanMode.Max, Curve = new() { new FanCurvePoint { TemperatureC = 0, FanPercent = 100 } } };
+                            }
+                            else if (nameLower.Contains("auto") || nameLower.Contains("default"))
+                            {
+                                _fanService?.ApplyAutoMode();
+                                _logging.Info($"✓ Fan preset restored: {savedFanPreset} (Auto)");
+                                break;
+                            }
+                            else if (nameLower.Contains("quiet") || nameLower.Contains("silent"))
+                            {
+                                _fanService?.ApplyQuietMode();
+                                _logging.Info($"✓ Fan preset restored: {savedFanPreset} (Quiet)");
+                                break;
+                            }
+                            else
+                            {
+                                // Unknown preset name, use as-is with Performance mode
+                                preset = new FanPreset { Name = savedFanPreset, Mode = FanMode.Performance };
+                            }
+                        }
+                        
+                        if (preset != null && _fanService != null)
+                        {
+                            _fanService.ApplyPreset(preset, immediate: true);
+                            _logging.Info($"✓ Fan preset restored on startup: {savedFanPreset} (attempt {attempt})");
+                            
+                            // Update FanControl SelectedPreset if available
+                            if (FanControl?.FanPresets != null)
+                            {
+                                var matchingPreset = FanControl.FanPresets.FirstOrDefault(p => 
+                                    p.Name.Equals(savedFanPreset, StringComparison.OrdinalIgnoreCase));
+                                if (matchingPreset != null)
+                                {
+                                    FanControl.SelectedPreset = matchingPreset;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Warn($"Fan preset restore attempt {attempt} failed: {ex.Message}");
+                        if (attempt < maxRetries)
+                            await Task.Delay(retryDelayMs);
+                    }
+                }
+            }
+            else
+            {
+                _logging.Info("No saved fan preset to restore");
+            }
+            
+            // 2. Restore GPU Power Boost level
+            var savedGpuBoost = _config.LastGpuPowerBoostLevel;
+            if (!string.IsNullOrEmpty(savedGpuBoost) && _wmiBios != null)
+            {
+                for (int attempt = 1; attempt <= maxRetries; attempt++)
+                {
+                    try
+                    {
+                        var level = savedGpuBoost switch
+                        {
+                            "Minimum" => HpWmiBios.GpuPowerLevel.Minimum,
+                            "Medium" => HpWmiBios.GpuPowerLevel.Medium,
+                            "Maximum" => HpWmiBios.GpuPowerLevel.Maximum,
+                            "Extended" => HpWmiBios.GpuPowerLevel.Extended3,
+                            _ => HpWmiBios.GpuPowerLevel.Medium
+                        };
+                        
+                        if (_wmiBios.SetGpuPower(level))
+                        {
+                            _logging.Info($"✓ GPU Power Boost restored: {savedGpuBoost} (attempt {attempt})");
+                            // Update SystemControl if available
+                            if (SystemControl != null)
+                            {
+                                SystemControl.GpuPowerBoostLevel = savedGpuBoost;
+                            }
+                            break;
+                        }
+                        else
+                        {
+                            _logging.Warn($"GPU Power Boost restore returned false (attempt {attempt})");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Warn($"GPU Power Boost restore attempt {attempt} failed: {ex.Message}");
+                    }
+                    
+                    if (attempt < maxRetries)
+                        await Task.Delay(retryDelayMs);
+                }
+            }
+            
+            _logging.Info("Settings restoration complete");
         }
 
         private async void InitializeServicesAsync()

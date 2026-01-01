@@ -149,6 +149,44 @@ namespace OmenCore.Services
         }
 
         /// <summary>
+        /// Apply spectrum/rainbow cycling effect.
+        /// </summary>
+        public async Task ApplySpectrumEffectAsync(LogitechDevice device, int speed)
+        {
+            if (device == null)
+                return;
+
+            try
+            {
+                await _sdk.ApplySpectrumEffectAsync(device, speed);
+                _logging.Info($"Applied spectrum effect to {device.Name}");
+            }
+            catch (Exception ex)
+            {
+                _logging.Error($"Failed to apply spectrum effect to {device.Name}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Apply flash/strobe effect.
+        /// </summary>
+        public async Task ApplyFlashEffectAsync(LogitechDevice device, string hexColor, int durationMs = 5000, int intervalMs = 200)
+        {
+            if (device == null)
+                return;
+
+            try
+            {
+                await _sdk.ApplyFlashEffectAsync(device, hexColor, durationMs, intervalMs);
+                _logging.Info($"Applied flash effect to {device.Name}");
+            }
+            catch (Exception ex)
+            {
+                _logging.Error($"Failed to apply flash effect to {device.Name}", ex);
+            }
+        }
+
+        /// <summary>
         /// Get current DPI setting from a mouse.
         /// </summary>
         public async Task<int> GetDpiAsync(LogitechDevice device)

@@ -83,9 +83,13 @@ namespace OmenCore.Hardware
                 // Start worker process
                 _logger?.Invoke($"[Worker] Starting hardware worker: {workerPath}");
                 
+                // Pass our PID so worker can exit when we die
+                var currentPid = Environment.ProcessId;
+                
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = workerPath,
+                    Arguments = currentPid.ToString(),  // Pass parent PID
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     RedirectStandardOutput = false,

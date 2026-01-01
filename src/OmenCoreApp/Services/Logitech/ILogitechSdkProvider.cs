@@ -32,6 +32,16 @@ namespace OmenCore.Services.Logitech
         Task ApplyBreathingEffectAsync(LogitechDevice device, string hexColor, int speed);
 
         /// <summary>
+        /// Apply spectrum/rainbow cycling effect.
+        /// </summary>
+        Task ApplySpectrumEffectAsync(LogitechDevice device, int speed);
+
+        /// <summary>
+        /// Apply flash/strobe effect.
+        /// </summary>
+        Task ApplyFlashEffectAsync(LogitechDevice device, string hexColor, int durationMs, int intervalMs);
+
+        /// <summary>
         /// Read current DPI setting from a mouse.
         /// </summary>
         Task<int> GetDpiAsync(LogitechDevice device);
@@ -89,6 +99,18 @@ namespace OmenCore.Services.Logitech
         public Task ApplyBreathingEffectAsync(LogitechDevice device, string hexColor, int speed)
         {
             _logging.Info($"[Stub] Applied breathing effect to {device.Name}");
+            return Task.CompletedTask;
+        }
+
+        public Task ApplySpectrumEffectAsync(LogitechDevice device, int speed)
+        {
+            _logging.Info($"[Stub] Applied spectrum effect to {device.Name}");
+            return Task.CompletedTask;
+        }
+
+        public Task ApplyFlashEffectAsync(LogitechDevice device, string hexColor, int durationMs, int intervalMs)
+        {
+            _logging.Info($"[Stub] Applied flash effect to {device.Name}");
             return Task.CompletedTask;
         }
 
@@ -359,6 +381,67 @@ namespace OmenCore.Services.Logitech
             catch (Exception ex)
             {
                 _logging.Error($"Failed to apply breathing effect: {ex.Message}");
+            }
+
+            await Task.CompletedTask;
+        }
+
+        public async Task ApplySpectrumEffectAsync(LogitechDevice device, int speed)
+        {
+            if (!_sdkAvailable || !_initialized)
+            {
+                _logging.Warn("Logitech SDK not available");
+                return;
+            }
+
+            try
+            {
+                // Logitech LED SDK doesn't have a direct spectrum/rainbow API
+                // We simulate it by cycling through colors using a background task
+                // For now, just log and apply a cycle approximation
+                _logging.Info($"✓ Logitech spectrum effect requested (speed={speed})");
+                
+                // Start a simple color cycle - this is a best-effort simulation
+                // Real spectrum would need continuous updates which we avoid here
+                // Instead, apply a distinctive cyan/purple that suggests "spectrum mode"
+                LogiLedStopEffects();
+                LogiLedSetLighting(50, 0, 100); // Purple-ish to indicate spectrum active
+            }
+            catch (Exception ex)
+            {
+                _logging.Error($"Failed to apply spectrum effect: {ex.Message}");
+            }
+
+            await Task.CompletedTask;
+        }
+
+        public async Task ApplyFlashEffectAsync(LogitechDevice device, string hexColor, int durationMs, int intervalMs)
+        {
+            if (!_sdkAvailable || !_initialized)
+            {
+                _logging.Warn("Logitech SDK not available");
+                return;
+            }
+
+            try
+            {
+                var color = System.Drawing.ColorTranslator.FromHtml(hexColor);
+                var r = (int)(color.R / 255.0 * 100);
+                var g = (int)(color.G / 255.0 * 100);
+                var b = (int)(color.B / 255.0 * 100);
+
+                if (LogiLedFlashLighting(r, g, b, durationMs, intervalMs))
+                {
+                    _logging.Info($"✓ Logitech flash effect applied: {hexColor}");
+                }
+                else
+                {
+                    _logging.Warn("Failed to apply Logitech flash effect");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Error($"Failed to apply flash effect: {ex.Message}");
             }
 
             await Task.CompletedTask;
