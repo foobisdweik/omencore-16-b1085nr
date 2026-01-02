@@ -23,13 +23,11 @@ Cross-platform graphical interface for Linux:
 
 New project: `src/OmenCore.Avalonia/` with full MVVM architecture
 
-#### ⚡ GPU Overclocking (NVAPI)
-NVIDIA GPU control via NVAPI SDK integration:
-- **Core clock offset** - Adjust GPU core clock (-500 to +200 MHz)
-- **Memory clock offset** - Adjust VRAM clock (-500 to +500 MHz)
-- **Power limit control** - Set GPU power limit (50-115%)
-- **Laptop detection** - Conservative limits for mobile GPUs
-- **Profile support** - Save/load GPU OC profiles
+#### ⚡ GPU Overclocking (NVAPI) - Placeholder
+NVIDIA GPU control framework (not yet functional):
+- **Service stub** - NvapiService.cs with NVAPI P/Invoke structure
+- **ViewModel properties** - Core/memory clock offset bindings ready
+- **Note:** Actual NVAPI SDK integration pending - currently logs intent only
 
 New file: `src/OmenCoreApp/Hardware/NvapiService.cs`
 
