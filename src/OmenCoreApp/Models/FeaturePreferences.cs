@@ -9,14 +9,23 @@ namespace OmenCore.Models
         /// <summary>
         /// Enable Corsair iCUE device integration (keyboards, mice).
         /// Disable if you don't have Corsair peripherals.
+        /// Default: false (user must enable if they have Corsair devices)
         /// </summary>
-        public bool CorsairIntegrationEnabled { get; set; } = true;
+        public bool CorsairIntegrationEnabled { get; set; } = false;
         
         /// <summary>
         /// Enable Logitech G HUB device integration.
         /// Disable if you don't have Logitech G peripherals.
+        /// Default: false (user must enable if they have Logitech devices)
         /// </summary>
-        public bool LogitechIntegrationEnabled { get; set; } = true;
+        public bool LogitechIntegrationEnabled { get; set; } = false;
+        
+        /// <summary>
+        /// Enable Razer Chroma device integration.
+        /// Disable if you don't have Razer peripherals.
+        /// Default: false (user must enable if they have Razer devices)
+        /// </summary>
+        public bool RazerIntegrationEnabled { get; set; } = false;
         
         /// <summary>
         /// Enable automatic game profile switching.

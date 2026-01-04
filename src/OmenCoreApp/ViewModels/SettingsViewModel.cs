@@ -346,7 +346,7 @@ namespace OmenCore.ViewModels
             }
         }
 
-        public string[] FanPresetOptions => new[] { "Auto", "Quiet", "Performance", "Max" };
+        public string[] FanPresetOptions => new[] { "Auto", "Quiet", "Extreme", "Max" };
         public string[] PerformanceModeOptions => new[] { "Silent", "Balanced", "Performance", "Turbo" };
 
         private string _currentPowerStatus = "Unknown";
@@ -1523,7 +1523,16 @@ namespace OmenCore.ViewModels
             _historyCount = _config.Monitoring.HistoryCount;
             _lowOverheadMode = _config.Monitoring.LowOverheadMode;
             _autoCheckUpdates = _config.Updates?.AutoCheckEnabled ?? true;
-            // Note: IncludePreReleases not yet in UpdatePreferences, using default false
+            _includePreReleases = _config.Updates?.IncludePreReleases ?? false;
+            // Map CheckIntervalHours to dropdown index: 0=Every startup, 1=Every 6 hours, 2=Daily(12h), 3=Weekly
+            _updateCheckIntervalIndex = _config.Updates?.CheckIntervalHours switch
+            {
+                0 => 0,      // Every startup
+                6 => 1,      // Every 6 hours
+                12 => 2,     // Daily
+                168 => 3,    // Weekly
+                _ => 2       // Default to daily
+            };
             
             // Load hotkey and notification settings
             _hotkeysEnabled = _config.Monitoring.HotkeysEnabled;
@@ -1577,7 +1586,16 @@ namespace OmenCore.ViewModels
             if (_config.Updates == null)
                 _config.Updates = new UpdatePreferences();
             _config.Updates.AutoCheckEnabled = _autoCheckUpdates;
-            // Note: IncludePreReleases not yet in UpdatePreferences
+            _config.Updates.IncludePreReleases = _includePreReleases;
+            // Map dropdown index to hours: 0=Every startup(0), 1=Every 6 hours(6), 2=Daily(12), 3=Weekly(168)
+            _config.Updates.CheckIntervalHours = _updateCheckIntervalIndex switch
+            {
+                0 => 0,      // Every startup
+                1 => 6,      // Every 6 hours  
+                2 => 12,     // Daily
+                3 => 168,    // Weekly
+                _ => 12      // Default to daily
+            };
 
             _configService.Save(_config);
         }

@@ -429,7 +429,7 @@ namespace OmenCore.ViewModels
             
             // Default to Auto without applying/saving to config
             _suppressApplyOnSelection = true;
-            SelectedPreset = FanPresets[1]; // Default to Auto
+            SelectedPreset = FanPresets[2]; // Default to Auto (index 2: Max=0, Extreme=1, Auto=2)
             _suppressApplyOnSelection = false;
         }
         
@@ -1117,10 +1117,22 @@ namespace OmenCore.ViewModels
 
             // Handle built-in names
             var nameLower = saved.ToLowerInvariant();
-            if (nameLower.Contains("max"))
+            if (nameLower.Contains("max") && !nameLower.Contains("extreme"))
             {
                 _fanService.ApplyMaxCooling();
                 _logging.Info($"Manually reapplied saved preset: {saved} (Max)");
+                return Task.CompletedTask;
+            }
+
+            if (nameLower.Contains("extreme"))
+            {
+                var extremePreset = FanPresets.FirstOrDefault(p => p.Name == "Extreme");
+                if (extremePreset != null)
+                {
+                    _fanService.ApplyPreset(extremePreset);
+                    SelectedPreset = extremePreset;
+                }
+                _logging.Info($"Manually reapplied saved preset: {saved} (Extreme)");
                 return Task.CompletedTask;
             }
 

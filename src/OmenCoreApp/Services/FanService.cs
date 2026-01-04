@@ -215,8 +215,19 @@ namespace OmenCore.Services
             {
                 _logging.Info($"Fan preset '{preset.Name}' applied via {Backend}");
                 
-                // Check if preset has a custom curve to apply
+                // Update current fan mode based on preset
                 var nameLower = preset.Name.ToLowerInvariant();
+                if (nameLower.Contains("max") && !nameLower.Contains("extreme"))
+                    _currentFanMode = "Max";
+                else if (nameLower.Contains("extreme"))
+                    _currentFanMode = "Extreme";
+                else if (nameLower.Contains("auto") || nameLower.Contains("default") || nameLower.Contains("balanced"))
+                    _currentFanMode = "Auto";
+                else if (nameLower.Contains("quiet") || nameLower.Contains("silent"))
+                    _currentFanMode = "Quiet";
+                else
+                    _currentFanMode = preset.Name; // Use preset name for custom presets
+                
                 bool isMaxPreset = nameLower.Contains("max") && !nameLower.Contains("auto");
                 
                 if (isMaxPreset)

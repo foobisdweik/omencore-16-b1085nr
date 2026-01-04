@@ -55,11 +55,8 @@ namespace OmenCore
             // Check for single instance - prevent multiple copies running
             if (!AcquireSingleInstance())
             {
-                MessageBox.Show(
-                    "OmenCore is already running.\n\nLook for the OmenCore icon in your system tray (notification area).",
-                    "OmenCore Already Running",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                // Another instance is running - try to bring it to front
+                BringExistingInstanceToFront();
                 Shutdown();
                 return;
             }
@@ -105,11 +102,13 @@ namespace OmenCore
             
             if (startMinimized)
             {
-                // Start minimized to tray - don't show window
+                // Start minimized to tray - don't show window but initialize it
                 Logging.Info("Starting minimized to system tray");
                 mainWindow.WindowState = WindowState.Minimized;
                 mainWindow.ShowInTaskbar = false;
-                // Don't call Show() - window stays hidden, tray icon is active
+                // Initialize the window (triggers Loaded event for hotkey registration) but keep it hidden
+                mainWindow.Show();
+                mainWindow.Hide();
             }
             else
             {
@@ -596,6 +595,46 @@ namespace OmenCore
                 return true;
             }
         }
+        
+        /// <summary>
+        /// Attempts to bring an existing instance of OmenCore to the front.
+        /// Uses window enumeration to find and activate the existing window.
+        /// </summary>
+        private static void BringExistingInstanceToFront()
+        {
+            try
+            {
+                var currentProcess = System.Diagnostics.Process.GetCurrentProcess();
+                foreach (var process in System.Diagnostics.Process.GetProcessesByName(currentProcess.ProcessName))
+                {
+                    if (process.Id != currentProcess.Id && process.MainWindowHandle != IntPtr.Zero)
+                    {
+                        // Found another instance with a window - bring it to front
+                        NativeMethods.SetForegroundWindow(process.MainWindowHandle);
+                        
+                        // If minimized, restore it
+                        if (NativeMethods.IsIconic(process.MainWindowHandle))
+                        {
+                            NativeMethods.ShowWindow(process.MainWindowHandle, NativeMethods.SW_RESTORE);
+                        }
+                        return;
+                    }
+                }
+                
+                // No window found - the other instance might be minimized to tray
+                // Post a message to show the window (using registered window message)
+                var hwnd = NativeMethods.FindWindow(null, "OmenCore");
+                if (hwnd != IntPtr.Zero)
+                {
+                    NativeMethods.SetForegroundWindow(hwnd);
+                    NativeMethods.ShowWindow(hwnd, NativeMethods.SW_RESTORE);
+                }
+            }
+            catch
+            {
+                // Silently fail - the message box fallback was already removed
+            }
+        }
 
         protected override void OnExit(ExitEventArgs e)
         {
@@ -635,6 +674,7 @@ namespace OmenCore
             public const uint FILE_SHARE_READ = 0x00000001;
             public const uint FILE_SHARE_WRITE = 0x00000002;
             public const uint OPEN_EXISTING = 3;
+            public const int SW_RESTORE = 9;
 
             [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
             public static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFile(
@@ -645,6 +685,21 @@ namespace OmenCore
                 uint dwCreationDisposition,
                 uint dwFlagsAndAttributes,
                 IntPtr hTemplateFile);
+            
+            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+            public static extern bool SetForegroundWindow(IntPtr hWnd);
+            
+            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+            public static extern bool IsIconic(IntPtr hWnd);
+            
+            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+            public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+            
+            [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+            public static extern IntPtr FindWindow(string? lpClassName, string lpWindowName);
         }
 
         private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

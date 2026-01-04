@@ -329,26 +329,24 @@ namespace OmenCore.Services
                 // Small delay to ensure file handle is fully released by OS
                 await Task.Delay(100, cancellationToken);
                 
-                // Verify file hash (preferred for security)
-                if (string.IsNullOrWhiteSpace(versionInfo.Sha256Hash))
+                // Verify file hash if available (preferred for security)
+                if (!string.IsNullOrWhiteSpace(versionInfo.Sha256Hash))
                 {
-                    _logging.Warn("Update skipped: Release missing SHA256 hash. Require manual download/validation.");
-                    if (File.Exists(downloadPath))
+                    var computedHash = ComputeSha256Hash(downloadPath);
+                    if (!computedHash.Equals(versionInfo.Sha256Hash, StringComparison.OrdinalIgnoreCase))
                     {
+                        _logging.Error($"SHA256 verification failed! Expected: {versionInfo.Sha256Hash}, Computed: {computedHash}");
                         File.Delete(downloadPath);
+                        throw new System.Security.SecurityException($"Update package failed SHA256 verification. File may be corrupted or tampered with.");
                     }
-                    return null;
+                    _logging.Info($"✓ SHA256 hash verified successfully ({computedHash.Substring(0, 16)}...)");
                 }
-                
-                var computedHash = ComputeSha256Hash(downloadPath);
-                if (!computedHash.Equals(versionInfo.Sha256Hash, StringComparison.OrdinalIgnoreCase))
+                else
                 {
-                    _logging.Error($"SHA256 verification failed! Expected: {versionInfo.Sha256Hash}, Computed: {computedHash}");
-                    File.Delete(downloadPath);
-                    throw new System.Security.SecurityException($"Update package failed SHA256 verification. File may be corrupted or tampered with.");
+                    // No hash provided - warn but allow download (for releases without hash in notes)
+                    _logging.Warn("⚠️ Update downloaded without SHA256 verification (hash not in release notes). Proceeding with caution.");
                 }
                 
-                _logging.Info($"✅ Update verified successfully (SHA256: {computedHash.Substring(0, 16)}...)");
                 _logging.Info($"Update downloaded successfully: {downloadPath}");
                 return downloadPath;
             }

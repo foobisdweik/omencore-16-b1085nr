@@ -2188,9 +2188,27 @@ namespace OmenCore.ViewModels
                         {
                             // Handle built-in presets
                             var nameLower = savedFanPreset.ToLowerInvariant();
-                            if (nameLower.Contains("max"))
+                            if (nameLower.Contains("max") && !nameLower.Contains("extreme"))
                             {
                                 preset = new FanPreset { Name = "Max", Mode = FanMode.Max, Curve = new() { new FanCurvePoint { TemperatureC = 0, FanPercent = 100 } } };
+                            }
+                            else if (nameLower.Contains("extreme"))
+                            {
+                                // Extreme is a built-in preset with Performance mode and aggressive curve
+                                preset = new FanPreset 
+                                { 
+                                    Name = "Extreme", 
+                                    Mode = FanMode.Performance,
+                                    Curve = new() 
+                                    { 
+                                        new FanCurvePoint { TemperatureC = 40, FanPercent = 50 },
+                                        new FanCurvePoint { TemperatureC = 50, FanPercent = 65 },
+                                        new FanCurvePoint { TemperatureC = 60, FanPercent = 80 },
+                                        new FanCurvePoint { TemperatureC = 70, FanPercent = 90 },
+                                        new FanCurvePoint { TemperatureC = 80, FanPercent = 95 },
+                                        new FanCurvePoint { TemperatureC = 90, FanPercent = 100 }
+                                    }
+                                };
                             }
                             else if (nameLower.Contains("auto") || nameLower.Contains("default"))
                             {
@@ -2277,6 +2295,33 @@ namespace OmenCore.ViewModels
                     catch (Exception ex)
                     {
                         _logging.Warn($"GPU Power Boost restore attempt {attempt} failed: {ex.Message}");
+                    }
+                    
+                    if (attempt < maxRetries)
+                        await Task.Delay(retryDelayMs);
+                }
+            }
+            
+            // 3. Restore Battery Care mode (80% charge limit)
+            if (_config.Battery?.ChargeLimitEnabled == true && _wmiBios != null)
+            {
+                for (int attempt = 1; attempt <= maxRetries; attempt++)
+                {
+                    try
+                    {
+                        if (_wmiBios.SetBatteryCareMode(true))
+                        {
+                            _logging.Info($"✓ Battery Care (80% charge limit) restored on startup (attempt {attempt})");
+                            break;
+                        }
+                        else
+                        {
+                            _logging.Warn($"Battery Care restore returned false (attempt {attempt})");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Warn($"Battery Care restore attempt {attempt} failed: {ex.Message}");
                     }
                     
                     if (attempt < maxRetries)

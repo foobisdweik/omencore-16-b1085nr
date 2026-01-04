@@ -56,11 +56,8 @@ namespace OmenCore.Views
             {
                 UpdateMaximizedBounds();
             }
-            else if (WindowState == WindowState.Minimized)
-            {
-                // Hide to tray instead of showing in taskbar
-                Hide();
-            }
+            // Note: We no longer hide to tray on minimize - that was causing Issue #20
+            // Minimize now properly minimizes to taskbar
         }
 
         private void UpdateMaximizeButtonGlyph()
@@ -91,8 +88,8 @@ namespace OmenCore.Views
         {
             _ = sender;
             _ = e;
-            // Minimize to system tray instead of taskbar
-            Hide();
+            // Minimize to taskbar (normal Windows behavior)
+            WindowState = WindowState.Minimized;
         }
 
         private void MaximizeButton_Click(object sender, RoutedEventArgs e)

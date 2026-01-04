@@ -1293,7 +1293,7 @@ namespace OmenCore.ViewModels
         /// Applies saved keyboard colors on app startup.
         /// Call this after the keyboard lighting service is ready.
         /// </summary>
-        public Task ApplySavedKeyboardColorsAsync()
+        public async Task ApplySavedKeyboardColorsAsync()
         {
             try
             {
@@ -1301,13 +1301,20 @@ namespace OmenCore.ViewModels
                 if (config == null || !config.ApplyOnStartup)
                 {
                     _logging.Info("Keyboard color restore disabled or no saved colors");
-                    return Task.CompletedTask;
+                    return;
                 }
                 
                 if (_keyboardLightingService == null || !_keyboardLightingService.IsAvailable)
                 {
                     _logging.Warn("Keyboard lighting not available for color restore");
-                    return Task.CompletedTask;
+                    return;
+                }
+                
+                // Check if user had backlight OFF - don't turn it on!
+                if (!config.BacklightWasEnabled)
+                {
+                    _logging.Info("Keyboard backlight was OFF - respecting user preference, not restoring colors");
+                    return;
                 }
                 
                 // Apply the saved colors
@@ -1326,8 +1333,6 @@ namespace OmenCore.ViewModels
             {
                 _logging.Warn($"Failed to restore keyboard colors: {ex.Message}");
             }
-
-            return Task.CompletedTask;
         }
 
         private void ApplyKeyboardPresetColors(KeyboardPreset preset)

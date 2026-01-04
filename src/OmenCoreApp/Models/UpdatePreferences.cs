@@ -20,6 +20,11 @@ namespace OmenCore.Models
         public int CheckIntervalHours { get; set; } = 12;
         
         /// <summary>
+        /// Include pre-release versions (beta, alpha) in update checks
+        /// </summary>
+        public bool IncludePreReleases { get; set; } = false;
+        
+        /// <summary>
         /// Last time an update check was performed
         /// </summary>
         public DateTime? LastCheckTime { get; set; }

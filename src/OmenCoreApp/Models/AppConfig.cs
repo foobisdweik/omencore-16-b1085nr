@@ -169,6 +169,12 @@ namespace OmenCore.Models
         
         /// <summary>Whether to apply keyboard colors on startup</summary>
         public bool ApplyOnStartup { get; set; } = true;
+        
+        /// <summary>
+        /// Whether the keyboard backlight was ON when user last used OmenCore.
+        /// Used to restore backlight state on startup.
+        /// </summary>
+        public bool BacklightWasEnabled { get; set; } = true;
     }
     
     /// <summary>

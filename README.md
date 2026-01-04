@@ -23,6 +23,45 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 
 ---
 
+## 🆕 What's New in v2.1.0
+
+### 🔀 Independent CPU/GPU Fan Curves
+- **Separate fan curves** for CPU and GPU based on individual component temps
+- CPU fan responds only to CPU temperature, GPU fan to GPU temperature
+- Visual curve editors for each fan
+- Reduces noise during single-component workloads
+
+### 🐧 Linux GUI (Avalonia)
+- Full graphical interface for Linux users
+- Dashboard, fan control, system control, and settings views
+- Dark OMEN theme matching Windows UI
+
+### ⚡ GPU Overclocking (NVAPI)
+- Core clock offset: -500 to +300 MHz
+- Memory clock offset: -500 to +1500 MHz
+- Power limit: 50-125%
+- Automatic laptop detection with conservative limits
+
+### 🌈 Ambient Lighting
+- Ambilight-style screen color sampling
+- Syncs RGB devices to screen colors
+- Configurable zones and saturation
+
+### 🎮 Game Library
+- Scans Steam, Epic, GOG, Xbox, Ubisoft, EA
+- Create profiles directly from your library
+- Launch games from OmenCore
+
+### 🐛 Bug Fixes (13 total)
+- Settings now persist properly
+- Fan preset defaults to Auto, not Extreme
+- Ctrl+Shift+O hotkey works on startup
+- Single instance brings window to front
+- SDK services disabled by default (faster startup)
+- Full changelog: [CHANGELOG_v2.1.0.md](docs/CHANGELOG_v2.1.0.md)
+
+---
+
 ## 🆕 What's New in v2.0.1-beta
 
 ### 🐧 Linux Support (Experimental)
@@ -363,8 +402,9 @@ OmenCore is designed to **completely replace** OMEN Gaming Hub. You can safely u
 
 ### Hardware
 - **CPU**: Intel 6th-gen+ (Skylake or newer) for undervolting/TCC offset; AMD Ryzen supported for monitoring/fan control
-- **Laptop**: HP OMEN 15/16/17 series and HP Victus (2019-2024 models)
-  - ✅ Tested: OMEN 15-dh, 16-b, 16-k, 17-ck (2023), Victus 15/16
+- **Laptop**: HP OMEN 15/16/17 series and HP Victus (2019-2025 models)
+  - ✅ Tested: OMEN 15-dh, 16-b, 16-k, 17-ck (2023/2024), Victus 15/16
+  - ✅ **OMEN Max 16 (2025)**: Per-key RGB, RTX 50-series, full support
   - ✅ **OMEN Transcend 14/16**: Supported via WMI BIOS
   - ✅ **2023+ models**: Full WMI BIOS support, no OGH needed
 - **Desktop**: HP OMEN 25L/30L/40L/45L (limited support)
@@ -913,6 +953,7 @@ Contributions welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md
 - [ ] Localization (translations)
 
 **Testing needed**:
+- OMEN Max 16/17 (2025) - RTX 50-series models
 - OMEN 15-en, 16-n, 17-ck models
 - Desktop OMEN 25L/30L/40L/45L
 - Windows 11 24H2

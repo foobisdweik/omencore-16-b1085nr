@@ -285,6 +285,78 @@ New files:
 - **Fix:** Changed `SaveLastPresetToConfig()` and related methods to use `_configService.Config` (in-memory) instead of `Load()` (disk read)
 - **Files changed:** `FanControlViewModel.cs`
 
+#### ⚙️ Settings Not Persisting (Update Interval, Pre-releases) ([#20](https://github.com/theantipopau/omencore/issues/20))
+- **Issue:** Update check interval and "Include pre-release versions" settings reset to defaults after restart
+- **Cause:** `LoadSettings()` wasn't mapping `CheckIntervalHours` to `UpdateCheckIntervalIndex`, and `IncludePreReleases` wasn't loaded
+- **Fix:** Added proper mapping between hours (6/12/168) and dropdown index (0-3), added IncludePreReleases to load/save
+- **Files changed:** `SettingsViewModel.cs`, `UpdatePreferences.cs`
+
+#### 🪟 Minimize Goes to Tray Instead of Taskbar ([#20](https://github.com/theantipopau/omencore/issues/20))
+- **Issue:** Clicking minimize button hid the window completely instead of minimizing to taskbar
+- **Cause:** `MinimizeButton_Click` called `Hide()` and `StateChanged` event also called `Hide()` on minimize
+- **Fix:** Changed minimize button to use `WindowState.Minimized`, removed Hide() call from StateChanged event
+- **Files changed:** `MainWindow.xaml.cs`
+
+#### 🔥 Fan Preset Defaults to Extreme Instead of Auto ([#20](https://github.com/theantipopau/omencore/issues/20), [#23](https://github.com/theantipopau/omencore/issues/23))
+- **Issue:** On startup, fan preset always showed "Extreme" selected even when user had set "Auto" or "Quiet"
+- **Cause:** Constructor set `SelectedPreset = FanPresets[1]` (Extreme) instead of index 2 (Auto)
+- **Fix:** Changed default selection to `FanPresets[2]` (Auto), added "Extreme" preset handling in restore logic
+- **Files changed:** `FanControlViewModel.cs`, `MainViewModel.cs`
+
+#### 🔒 Auto-Update Blocked by Missing SHA256 ([#20](https://github.com/theantipopau/omencore/issues/20))
+- **Issue:** Auto-update downloads failed with "SHA256 verification failed" when GitHub release had no hash file
+- **Cause:** SHA256 verification was mandatory - missing hash was treated as a security failure
+- **Fix:** Made SHA256 optional - downloads proceed with warning if hash unavailable
+- **Files changed:** `AutoUpdateService.cs`
+
+#### ⌨️ Ctrl+Shift+O Hotkey Not Working on Startup ([#19](https://github.com/theantipopau/omencore/issues/19))
+- **Issue:** Global hotkey didn't work until user manually opened and closed the window once
+- **Cause:** `RegisterHotKey` requires a window handle, which isn't available until window is shown
+- **Fix:** Added `Show()/Hide()` sequence during startup to create window handle before hotkey registration
+- **Files changed:** `App.xaml.cs`
+
+#### 🔄 Single Instance Doesn't Bring Window to Front ([#19](https://github.com/theantipopau/omencore/issues/19))
+- **Issue:** Opening OmenCore when already running did nothing - existing window stayed minimized/hidden
+- **Cause:** Mutex prevented duplicate instance but didn't activate the existing window
+- **Fix:** Added `BringExistingInstanceToFront()` using P/Invoke (FindWindow, SetForegroundWindow, ShowWindow)
+- **Files changed:** `App.xaml.cs`
+
+#### 🌈 Keyboard Backlight Turns On Unwanted After Restart ([#20](https://github.com/theantipopau/omencore/issues/20))
+- **Issue:** Keyboard backlight would turn on after restart even if user had turned it off
+- **Cause:** Color restoration always happened regardless of user's backlight preference
+- **Fix:** Added `BacklightWasEnabled` config property, only restore colors if user had backlight on
+- **Files changed:** `AppConfig.cs`, `LightingViewModel.cs`
+
+#### 🔋 Battery Care 80% Limit Not Restored on Startup ([#20](https://github.com/theantipopau/omencore/issues/20))
+- **Issue:** Battery charge limit setting was saved but not reapplied when OmenCore started
+- **Cause:** `RestoreSettingsOnStartupAsync()` only restored fan preset and GPU boost, not battery care
+- **Fix:** Added battery care restoration with retry logic to startup sequence
+- **Files changed:** `MainViewModel.cs`
+
+#### 📊 Quick Profiles UI Shows Wrong Selection ([#20](https://github.com/theantipopau/omencore/issues/20))
+- **Issue:** General view profile buttons didn't reflect the actual active profile
+- **Cause:** `DetermineActiveProfile()` only checked runtime mode, not saved config; `FanService` didn't update `_currentFanMode` when applying presets
+- **Fix:** Enhanced `DetermineActiveProfile()` to check saved preset name, updated `ApplyPreset()` to set `_currentFanMode`
+- **Files changed:** `GeneralViewModel.cs`, `FanService.cs`
+
+#### ⚡ Power Automation Presets Don't Match Advanced Tab ([#20](https://github.com/theantipopau/omencore/issues/20))
+- **Issue:** Power automation fan preset dropdown showed "Performance" but Advanced tab has "Extreme"
+- **Cause:** `FanPresetOptions` was hardcoded as `["Auto", "Quiet", "Performance", "Max"]` instead of actual presets
+- **Fix:** Updated to `["Auto", "Quiet", "Extreme", "Max"]` to match built-in presets
+- **Files changed:** `SettingsViewModel.cs`
+
+#### 🛡️ SDK Services Enabled by Default (Slow Startup) ([#18](https://github.com/theantipopau/omencore/issues/18))
+- **Issue:** Corsair, Logitech, and Razer SDK services were enabled by default, causing slow startup for users without those peripherals
+- **Cause:** Default values in `FeaturePreferences` were all `true`
+- **Fix:** Changed Corsair, Logitech, and Razer integration defaults to `false`
+- **Files changed:** `FeaturePreferences.cs`
+
+#### 🚫 Bloatware Optimizer Detects OmenCore as Bloatware
+- **Issue:** OmenCore appeared in its own bloatware list as a recommended removal
+- **Cause:** Detection logic matched any "Omen" process/startup/task including OmenCore itself
+- **Fix:** Added explicit exclusions for "OmenCore" in startup, process, and task detection
+- **Files changed:** `BloatwareManagerService.cs`
+
 ### Safety
 
 #### ⚠️ EC Write Safety (Pre-existing)
