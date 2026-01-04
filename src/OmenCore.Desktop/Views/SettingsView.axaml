@@ -1,0 +1,233 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OmenCore.Desktop.Views.SettingsView">
+    
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="20">
+            <!-- Header -->
+            <TextBlock Text="Settings" Classes="Title"/>
+            <TextBlock Text="Configure OmenCore application preferences"
+                       Foreground="#888888" FontSize="14"/>
+            
+            <!-- General Settings -->
+            <Border Classes="Card">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="General" FontWeight="SemiBold" FontSize="16"/>
+                    
+                    <StackPanel Spacing="16">
+                        <!-- Start with System -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Start with System"/>
+                                <TextBlock Text="Launch OmenCore when you log in"
+                                           Foreground="#888888" FontSize="12"/>
+                            </StackPanel>
+                            <ToggleSwitch Name="StartWithSystemToggle" Grid.Column="1"/>
+                        </Grid>
+                        
+                        <!-- Start Minimized -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Start Minimized"/>
+                                <TextBlock Text="Start in system tray"
+                                           Foreground="#888888" FontSize="12"/>
+                            </StackPanel>
+                            <ToggleSwitch Name="StartMinimizedToggle" Grid.Column="1"/>
+                        </Grid>
+                        
+                        <!-- Close to Tray -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Close to Tray"/>
+                                <TextBlock Text="Minimize to system tray instead of closing"
+                                           Foreground="#888888" FontSize="12"/>
+                            </StackPanel>
+                            <ToggleSwitch Name="CloseToTrayToggle" Grid.Column="1"
+                                          IsChecked="True"/>
+                        </Grid>
+                        
+                        <!-- Check for Updates -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Check for Updates"/>
+                                <TextBlock Text="Automatically check for new versions"
+                                           Foreground="#888888" FontSize="12"/>
+                            </StackPanel>
+                            <ToggleSwitch Name="CheckUpdatesToggle" Grid.Column="1"
+                                          IsChecked="True"/>
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            
+            <!-- Hardware Settings -->
+            <Border Classes="Card">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Hardware" FontWeight="SemiBold" FontSize="16"/>
+                    
+                    <StackPanel Spacing="16">
+                        <!-- Polling Interval -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Hardware Polling Interval"/>
+                                <TextBlock Text="How often to update sensor readings"
+                                           Foreground="#888888" FontSize="12"/>
+                            </StackPanel>
+                            <ComboBox Name="PollingIntervalCombo" Grid.Column="1"
+                                      Width="120" SelectedIndex="1">
+                                <ComboBoxItem Content="500ms"/>
+                                <ComboBoxItem Content="1 second"/>
+                                <ComboBoxItem Content="2 seconds"/>
+                                <ComboBoxItem Content="5 seconds"/>
+                            </ComboBox>
+                        </Grid>
+                        
+                        <!-- Apply Fan on Start -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Apply Fan Profile on Start"/>
+                                <TextBlock Text="Restore last fan settings when app starts"
+                                           Foreground="#888888" FontSize="12"/>
+                            </StackPanel>
+                            <ToggleSwitch Name="ApplyFanOnStartToggle" Grid.Column="1"
+                                          IsChecked="True"/>
+                        </Grid>
+                        
+                        <!-- Apply Lighting on Start -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Apply Lighting on Start"/>
+                                <TextBlock Text="Restore last lighting settings when app starts"
+                                           Foreground="#888888" FontSize="12"/>
+                            </StackPanel>
+                            <ToggleSwitch Name="ApplyLightingOnStartToggle" Grid.Column="1"
+                                          IsChecked="True"/>
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            
+            <!-- Theme Settings -->
+            <Border Classes="Card">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Appearance" FontWeight="SemiBold" FontSize="16"/>
+                    
+                    <StackPanel Spacing="16">
+                        <!-- Theme -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Theme"/>
+                                <TextBlock Text="Application color theme"
+                                           Foreground="#888888" FontSize="12"/>
+                            </StackPanel>
+                            <ComboBox Name="ThemeCombo" Grid.Column="1"
+                                      Width="120" SelectedIndex="0">
+                                <ComboBoxItem Content="Dark"/>
+                                <ComboBoxItem Content="Light"/>
+                                <ComboBoxItem Content="System"/>
+                            </ComboBox>
+                        </Grid>
+                        
+                        <!-- Accent Color -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Accent Color"/>
+                                <TextBlock Text="Primary accent color"
+                                           Foreground="#888888" FontSize="12"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8" Grid.Column="1">
+                                <Button Background="#FF4444" Width="32" Height="32" CornerRadius="16"
+                                        Tag="#FF4444" Click="AccentColor_Click"/>
+                                <Button Background="#44FF44" Width="32" Height="32" CornerRadius="16"
+                                        Tag="#44FF44" Click="AccentColor_Click"/>
+                                <Button Background="#4488FF" Width="32" Height="32" CornerRadius="16"
+                                        Tag="#4488FF" Click="AccentColor_Click"/>
+                                <Button Background="#FF44FF" Width="32" Height="32" CornerRadius="16"
+                                        Tag="#FF44FF" Click="AccentColor_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            
+            <!-- Advanced Settings -->
+            <Border Classes="Card">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Advanced" FontWeight="SemiBold" FontSize="16"/>
+                    
+                    <StackPanel Spacing="16">
+                        <!-- Debug Logging -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Debug Logging"/>
+                                <TextBlock Text="Enable detailed logging for troubleshooting"
+                                           Foreground="#888888" FontSize="12"/>
+                            </StackPanel>
+                            <ToggleSwitch Name="DebugLoggingToggle" Grid.Column="1"/>
+                        </Grid>
+                        
+                        <!-- WinRing0 Driver -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Hardware Driver"/>
+                                <TextBlock Name="DriverStatusText" Text="WinRing0: Not loaded"
+                                           Foreground="#888888" FontSize="12"/>
+                            </StackPanel>
+                            <Button Content="Reinstall" Grid.Column="1"
+                                    Click="ReinstallDriver_Click" Padding="16,8"/>
+                        </Grid>
+                        
+                        <!-- Config Location -->
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Configuration"/>
+                                <TextBlock Name="ConfigPathText" Text="~/.config/omencore"
+                                           Foreground="#888888" FontSize="12"/>
+                            </StackPanel>
+                            <Button Content="Open Folder" Grid.Column="1"
+                                    Click="OpenConfigFolder_Click" Padding="16,8"/>
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            
+            <!-- About Section -->
+            <Border Classes="Card">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="About" FontWeight="SemiBold" FontSize="16"/>
+                    
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <!-- Logo placeholder -->
+                        <Border Width="64" Height="64" CornerRadius="8"
+                                Background="#333333">
+                            <TextBlock Text="🔥" FontSize="32"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="OmenCore" FontWeight="Bold" FontSize="18"/>
+                            <TextBlock Name="VersionText" Text="Version 2.1.0"
+                                       Foreground="#888888"/>
+                            <TextBlock Text="Open-source HP OMEN control software"
+                                       Foreground="#888888" FontSize="12"/>
+                        </StackPanel>
+                    </StackPanel>
+                    
+                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,0">
+                        <Button Content="GitHub" Click="OpenGitHub_Click" Padding="16,8"/>
+                        <Button Content="Report Issue" Click="OpenIssues_Click" Padding="16,8"/>
+                        <Button Content="Check Updates" Click="CheckUpdates_Click" Padding="16,8"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            
+            <!-- Save/Reset Buttons -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+                <Button Content="Reset to Defaults" Click="ResetSettings_Click" Padding="20,12"/>
+                <Button Content="Save Settings" Classes="Primary" Click="SaveSettings_Click"
+                        Padding="20,12"/>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

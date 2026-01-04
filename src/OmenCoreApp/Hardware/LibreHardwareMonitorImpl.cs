@@ -30,7 +30,7 @@ namespace OmenCore.Hardware
         // Out-of-process worker for crash isolation
         private HardwareWorkerClient? _workerClient;
         private bool _useWorker = false;
-        private bool _workerInitializing = false; // Track async initialization state
+        private volatile bool _workerInitializing = false; // Track async initialization state (volatile for thread safety)
 
         // Cache for performance
         private double _cachedCpuTemp = 0;

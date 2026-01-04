@@ -91,8 +91,24 @@ namespace OmenCore.Services
             _wmiBios = wmiBios;
             _oghProxy = oghProxy;
             
-            // Determine which backend to use
+            // Determine which backend to use (will be re-checked before each operation)
             DetermineActiveBackend();
+        }
+        
+        /// <summary>
+        /// Refresh the active backend detection. Call this before fan boost operations
+        /// to pick up newly installed drivers (PawnIO) or started services (OGH).
+        /// </summary>
+        public void RefreshBackend()
+        {
+            // Reset the EC write test cache so it will be re-tested
+            _ecWriteTestDone = false;
+            _ecWriteWorks = false;
+            
+            // Re-determine the best available backend
+            DetermineActiveBackend();
+            
+            _logging.Info($"Fan control backend refreshed: {ActiveBackendName}");
         }
         
         /// <summary>
@@ -281,9 +297,13 @@ namespace OmenCore.Services
         /// <param name="cancellationToken">Token to cancel the operation</param>
         public async Task StartCleaningAsync(Action<FanCleaningProgress> progressCallback, CancellationToken cancellationToken)
         {
+            // Refresh backend detection to pick up newly installed drivers (PawnIO)
+            // This fixes the issue where PawnIO works initially but errors after refresh
+            RefreshBackend();
+            
             if (!IsSupported)
             {
-                throw new InvalidOperationException("Fan boost is not supported on this system");
+                throw new InvalidOperationException($"Fan boost is not supported on this system.\n\n{UnsupportedReason}");
             }
 
             string modeName = SupportsTrueFanReversal ? "Fan Cleaner" : "Fan Boost";
@@ -292,12 +312,12 @@ namespace OmenCore.Services
             {
                 progressCallback(new FanCleaningProgress 
                 { 
-                    Message = $"Initializing {modeName}...", 
+                    Message = $"Initializing {modeName} ({ActiveBackendName})...", 
                     ProgressPercent = 0,
                     IsTrueFanReversal = SupportsTrueFanReversal
                 });
 
-                _logging.Info($"{modeName}: Starting fan maintenance cycle");
+                _logging.Info($"{modeName}: Starting fan maintenance cycle using {ActiveBackendName}");
                 
                 if (SupportsTrueFanReversal)
                 {

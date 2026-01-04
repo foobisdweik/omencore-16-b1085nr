@@ -32,6 +32,7 @@ namespace OmenCore.Models
         public FanTransitionSettings FanTransition { get; set; } = new();
         public OsdSettings Osd { get; set; } = new();
         public BatterySettings Battery { get; set; } = new();
+        public AmbientLightingSettings AmbientLighting { get; set; } = new();
         public bool FirstRunCompleted { get; set; } = false;
 
         /// <summary>
@@ -76,6 +77,11 @@ namespace OmenCore.Models
         public string? LastGpuPowerBoostLevel { get; set; }
         
         /// <summary>
+        /// GPU overclocking settings (NVAPI-based core/memory clock offsets and power limit).
+        /// </summary>
+        public GpuOcSettings? GpuOc { get; set; }
+        
+        /// <summary>
         /// Last applied TCC (Thermal Control Circuit) offset in degrees C.
         /// Re-applied on startup to maintain CPU temperature limits.
         /// 0 = no limit (full TjMax), higher values = lower temp limit.
@@ -86,6 +92,24 @@ namespace OmenCore.Models
         /// Last applied fan preset name for restoration on startup.
         /// </summary>
         public string? LastFanPresetName { get; set; }
+        
+        /// <summary>
+        /// Whether independent CPU/GPU fan curves are enabled.
+        /// When enabled, CPU and GPU fans are controlled separately based on their respective temperatures.
+        /// </summary>
+        public bool IndependentFanCurvesEnabled { get; set; } = false;
+        
+        /// <summary>
+        /// Custom CPU fan curve points (used when IndependentFanCurvesEnabled is true).
+        /// Each point maps a temperature (°C) to a fan percentage.
+        /// </summary>
+        public List<FanCurvePoint>? CpuFanCurve { get; set; }
+        
+        /// <summary>
+        /// Custom GPU fan curve points (used when IndependentFanCurvesEnabled is true).
+        /// Each point maps a temperature (°C) to a fan percentage.
+        /// </summary>
+        public List<FanCurvePoint>? GpuFanCurve { get; set; }
         
         /// <summary>
         /// Power automation settings for AC/Battery profile switching.
@@ -289,5 +313,50 @@ namespace OmenCore.Models
         
         /// <summary>Show battery health warnings</summary>
         public bool ShowHealthWarnings { get; set; } = true;
+    }
+    
+    /// <summary>
+    /// Ambient lighting (screen color sampling) settings.
+    /// </summary>
+    public class AmbientLightingSettings
+    {
+        /// <summary>Enable ambient lighting feature</summary>
+        public bool Enabled { get; set; } = false;
+        
+        /// <summary>Update interval in milliseconds (16-500, default 33 = ~30 FPS)</summary>
+        public int UpdateIntervalMs { get; set; } = 33;
+        
+        /// <summary>Saturation boost (0.5-2.0, default 1.2)</summary>
+        public float SaturationBoost { get; set; } = 1.2f;
+        
+        /// <summary>Brightness multiplier (0.0-1.0, default 1.0)</summary>
+        public float Brightness { get; set; } = 1.0f;
+        
+        /// <summary>Number of frames to smooth colors over (1-10, default 3)</summary>
+        public int SmoothingFrames { get; set; } = 3;
+        
+        /// <summary>Apply ambient colors to keyboard</summary>
+        public bool ApplyToKeyboard { get; set; } = true;
+        
+        /// <summary>Apply ambient colors to peripherals (mouse, headset)</summary>
+        public bool ApplyToPeripherals { get; set; } = true;
+    }
+    
+    /// <summary>
+    /// GPU overclocking settings (NVAPI-based).
+    /// </summary>
+    public class GpuOcSettings
+    {
+        /// <summary>GPU core clock offset in MHz (-500 to +300)</summary>
+        public int CoreClockOffsetMHz { get; set; } = 0;
+        
+        /// <summary>GPU memory clock offset in MHz (-500 to +1500)</summary>
+        public int MemoryClockOffsetMHz { get; set; } = 0;
+        
+        /// <summary>Power limit percentage (50-125, 100 = default TDP)</summary>
+        public int PowerLimitPercent { get; set; } = 100;
+        
+        /// <summary>Reapply OC settings on application startup</summary>
+        public bool ApplyOnStartup { get; set; } = false;
     }
 }

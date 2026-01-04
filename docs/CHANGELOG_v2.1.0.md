@@ -1,17 +1,17 @@
-# Changelog v2.0.1-beta
+# Changelog v2.1.0
 
-All notable changes to OmenCore v2.0.1 will be documented in this file.
+All notable changes to OmenCore v2.1.0 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [2.0.1-beta] - 2026-01-02
+## [2.1.0] - 2026-01-02
 
 ### Added
 
-#### � Independent CPU/GPU Fan Curves
+#### 🔀 Independent CPU/GPU Fan Curves
 Separate fan control for CPU and GPU based on individual component temperatures:
 - **Visual curve editors** - Dedicated editors for CPU and GPU fan curves
 - **True independent control** - Uses `SetFanLevel(fan1Level, fan2Level)` WMI
@@ -21,7 +21,7 @@ Separate fan control for CPU and GPU based on individual component temperatures:
 
 New properties in config: `IndependentFanCurvesEnabled`, `CpuFanCurve`, `GpuFanCurve`
 
-#### �🐧 Linux GUI (Avalonia UI)
+#### 🐧 Linux GUI (Avalonia UI)
 Cross-platform graphical interface for Linux:
 - **Dashboard view** - Real-time temperatures, fan speeds, CPU/GPU/RAM usage
 - **Fan control view** - Custom fan curves with presets (Silent/Balanced/Performance/Aggressive)
@@ -33,13 +33,28 @@ Cross-platform graphical interface for Linux:
 
 New project: `src/OmenCore.Avalonia/` with full MVVM architecture
 
-#### ⚡ GPU Overclocking (NVAPI) - Placeholder
-NVIDIA GPU control framework (not yet functional):
-- **Service stub** - NvapiService.cs with NVAPI P/Invoke structure
-- **ViewModel properties** - Core/memory clock offset bindings ready
-- **Note:** Actual NVAPI SDK integration pending - currently logs intent only
+#### ⚡ GPU Overclocking (NVAPI)
+Full NVIDIA GPU overclocking via NVAPI SDK:
+- **Core clock offset** - Adjustable from -500 to +300 MHz (laptop) / +300 MHz (desktop)
+- **Memory clock offset** - Adjustable from -500 to +1500 MHz
+- **Power limit control** - 50% to 125% TDP adjustment
+- **UI sliders** - Full integration in System Control view
+- **Config persistence** - Settings saved and reapplied on startup
+- **Safety limits** - Conservative limits for laptop GPUs automatically detected
+- **Status display** - Real-time GPU name and OC capability status
 
-New file: `src/OmenCoreApp/Hardware/NvapiService.cs`
+New files: `src/OmenCoreApp/Hardware/NvapiService.cs`, `GpuOcSettings` in AppConfig
+
+#### 🌈 Ambient Lighting (Screen Color Sampling)
+Ambilight-style screen color sync for RGB devices:
+- **Edge sampling** - Captures colors from screen edges (top, bottom, left, right)
+- **Zone-based** - Configurable zones per edge (1-20)
+- **Saturation boost** - 0.5x to 2.0x color enhancement
+- **Update rate control** - 10-60 FPS adjustable
+- **Settings toggle** - Enable/disable with sliders in Settings view
+- **Multi-provider support** - Works with keyboard and all RGB peripherals
+
+New files: `ScreenColorSamplingService.cs`, `AmbientLightingSettings` in AppConfig
 
 #### ⚡ CPU Power Limits (PL1/PL2)
 Intel CPU power limit controls:
@@ -102,10 +117,33 @@ New files:
 
 #### Linux CLI
 - **DaemonCommand** - Complete rewrite with TOML config support
-- **Version** - Updated to v2.0.1-beta
+- **Version** - Updated to v2.1.0
 - **Tomlyn** package added for TOML parsing
 
 ### Fixed
+
+#### � EC Fan Control Safety Allowlist
+- **Issue:** Fan preset 'Max' failed with "EC write to address 0x2C is blocked for safety"
+- **Root Cause:** Missing EC registers 0x2C/0x2D (XSS1/XSS2 - Fan 1/2 set speed %) from safety allowlist. These are used by OmenMon-style fan control on newer OMEN models (2022+)
+- **Fix:** Added 0x2C, 0x2D, 0x2E, 0x2F to `AllowedWriteAddresses` in both EC backends
+- **Files changed:** `PawnIOEcAccess.cs`, `WinRing0EcAccess.cs`
+#### 🐧 Linux CLI Crash on Any Command
+- **Issue:** Running any command (`battery status`, `fan`, etc.) threw `ArgumentException: An item with the same key has already been added. Key: --version`
+- **Root Cause:** System.CommandLine automatically adds `--version` to `RootCommand`. We were manually handling `--version` before parsing but the conflict occurred when the parser initialized. Additionally, global `--json` option conflicted with local `--json` in StatusCommand, and `-v` for verbose could conflict with `-V` for version.
+- **Fix:** Removed duplicate global `--json` option (StatusCommand has its own), simplified verbose to `--verbose` only (no `-v` alias), kept manual `--version` handling before parsing
+- **Files changed:** `src/OmenCore.Linux/Program.cs`
+
+#### 🔄 HardwareWorker SafeFileHandle Error Spam
+- **Issue:** HardwareWorker.log filled with repeated "Error updating Primary: Cannot access a disposed object. Object name: 'SafeFileHandle'" when storage devices go to sleep
+- **Root Cause:** LibreHardwareMonitor throws ObjectDisposedException when storage devices disconnect or enter sleep mode - this is normal/benign behavior
+- **Fix:** Added error rate-limiting to only log these errors once per hour per hardware component, filtering known benign disposed object errors
+- **Files changed:** `src/OmenCore.HardwareWorker/Program.cs`
+
+#### 🔄 Multiple WMI BIOS Heartbeat Timers
+- **Issue:** Log showed "✓ WMI BIOS heartbeat started" 3 times on startup, indicating 3 separate HpWmiBios instances each starting their own heartbeat timer
+- **Root Cause:** HpWmiBios was being instantiated in MainViewModel, WmiFanController, and CapabilityDetectionService - each starting its own 60-second heartbeat timer
+- **Fix:** Added singleton pattern to heartbeat timer - only one heartbeat runs globally even with multiple HpWmiBios instances
+- **Files changed:** `src/OmenCoreApp/Hardware/HpWmiBios.cs`
 
 #### 🔒 Thread Safety Improvements
 - **Issue:** Race conditions in tray icon updates and OMEN key debouncing could cause inconsistent behavior
@@ -229,6 +267,24 @@ New files:
   - Added fallback dimensions and bounds checking
 - **Files changed:** `HotkeyOsdWindow.xaml.cs`
 
+#### 🐧 Linux CLI Crash on Startup (Duplicate --version Option)
+- **Issue:** Running `omencore-cli` on Linux crashed immediately with: `System.ArgumentException: An item with the same key has already been added. Key: --version`
+- **Cause:** Code was adding a custom `--version` option, but System.CommandLine's `RootCommand` already has a built-in `--version` option by default
+- **Fix:** Removed the redundant custom version option - the built-in one now works correctly
+- **Files changed:** `src/OmenCore.Linux/Program.cs`
+
+#### 🔑 Calculator Key Triggering OMEN Key Action
+- **Issue:** Pressing Calculator key launches OmenCore instead of the calculator when OMEN key interception is enabled
+- **Cause:** Calculator key sends VK_LAUNCH_APP2 (0xB7) same as OMEN key, and previous code accepted ANY scan code with this VK
+- **Fix:** Now requires scan code to match known OMEN scan codes; unknown scan codes (like Calculator) are rejected
+- **Files changed:** `OmenKeyService.cs`
+
+#### 💾 Fan Preset Not Persisting Across Restarts
+- **Issue:** Selected fan preset (Max, Silent, etc.) not restored after app restart - always shows "No saved fan preset to restore"
+- **Cause:** Race condition - `ConfigService.Load()` reads from disk while `Config` property holds in-memory changes, potentially overwriting unsaved data
+- **Fix:** Changed `SaveLastPresetToConfig()` and related methods to use `_configService.Config` (in-memory) instead of `Load()` (disk read)
+- **Files changed:** `FanControlViewModel.cs`
+
 ### Safety
 
 #### ⚠️ EC Write Safety (Pre-existing)
@@ -240,7 +296,7 @@ OmenCore includes an **EC write address allowlist** that prevents accidental wri
 
 This safety measure protects against hardware damage from incorrect EC writes.
 
-### 🔀 Independent CPU/GPU Fan Curves
+### 🔀 Independent CPU/GPU Fan Curves - How To Use
 
 **New Feature:** You can now set separate fan curves for CPU and GPU fans, each responding to their respective component temperatures.
 
@@ -272,6 +328,19 @@ When "External controller detected: HP OmenCap (DriverStore)" appears:
 - HP OmenCap is an HP-provided undervolt controller that may conflict with OmenCore
 - If undervolt controls don't work, the CPU may have voltage locked by BIOS (Intel Plundervolt mitigation)
 - OmenCore respects external controllers by default (can be changed in settings)
+
+#### ⌨️ Keyboard RGB on Replacement Motherboards (Thetiger OMN, etc.)
+Some HP laptops with replacement motherboards (showing codenames like "Thetiger OMN" instead of product names) may have issues with keyboard RGB:
+- **WMI BIOS backend may not work** - Colors set but don't persist after sleep/restart
+- **Try EC backend** - Go to Settings → Hardware → Keyboard Backend → EC (experimental)
+- **OmenMon compatibility** - If RGB works in OmenMon but not OmenCore, EC backend is likely needed
+- **Enable experimental EC keyboard** - Settings → Hardware → Enable experimental EC keyboard control
+
+#### 📊 OSD Overlay Toggle Hotkey
+The OSD overlay hotkey (default: Ctrl+Shift+F12) only works if OSD is enabled:
+- **Enable OSD first** - Go to Settings → On-Screen Display → Enable "Show OSD overlay"
+- **Then hotkey works** - After enabling, the hotkey toggles overlay visibility
+- **Per-key RGB** - Per-key keyboard RGB is not yet implemented (4-zone only)
 
 ### Technical
 
@@ -355,26 +424,9 @@ omencore-cli daemon --uninstall       # Remove service
 
 ---
 
-## Development Progress
-
-| Phase | Status | Progress |
-|-------|--------|----------|
-| 1. Foundation & Quick Wins | ✅ Complete | 16/20 |
-| 2. System Optimizer | ✅ Complete | 35/35 |
-| 3. RGB Overhaul | ✅ Complete | 22/24 |
-| 4. Linux Support | ✅ Complete | 11/12 |
-| 5. Advanced Features | ✅ Complete | 15/15 |
-| 6. Polish & Release | 🔧 In Progress | 22/24 |
-
-**Overall: 121/130 tasks (93%)**
-
----
-
 ## Current Status
 
-- **Version:** 2.0.1-beta
+- **Version:** 2.1.0
 - **Branch:** `main`
 - **Build:** ✅ Succeeded (all 5 projects)
 - **Tests:** ✅ 66/66 passing
-- **Windows:** OmenCoreSetup-2.0.1-beta.exe (100 MB)
-- **Linux:** OmenCore-2.0.1-beta-linux-x64.zip (5.7 MB)

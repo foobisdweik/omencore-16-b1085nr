@@ -146,7 +146,7 @@ namespace OmenCore.Utils
             contextMenu.Resources.MergedDictionaries.Add(darkResources);
 
             // ═══ HEADER ═══
-            var headerItem = new MenuItem { Header = "🎮 OmenCore v2.0.1-beta", IsEnabled = false };
+            var headerItem = new MenuItem { Header = "🎮 OmenCore v2.1.0", IsEnabled = false };
             contextMenu.Items.Add(headerItem);
             contextMenu.Items.Add(new Separator());
 
@@ -386,7 +386,7 @@ namespace OmenCore.Utils
                 var memTotalGb = _latestSample.RamTotalGb;
                 var memPercent = memTotalGb > 0 ? (memUsedGb * 100.0 / memTotalGb) : 0;
                 
-                _trayIcon.ToolTipText = $"🎮 OmenCore v2.0.1-beta\n" +
+                _trayIcon.ToolTipText = $"🎮 OmenCore v2.1.0\n" +
                                        $"━━━━━━━━━━━━━━━━━━\n" +
                                        $"🔥 CPU: {cpuTemp:F0}°C @ {cpuLoad:F0}%\n" +
                                        $"🎯 GPU: {gpuTemp:F0}°C @ {gpuLoad:F0}%\n" +

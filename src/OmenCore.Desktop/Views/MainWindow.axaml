@@ -1,0 +1,75 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:views="using:OmenCore.Desktop.Views"
+        mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="768"
+        x:Class="OmenCore.Desktop.Views.MainWindow"
+        Title="OmenCore"
+        Width="1024" Height="768"
+        MinWidth="800" MinHeight="600"
+        WindowStartupLocation="CenterScreen">
+    
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        
+        <!-- Navigation sidebar -->
+        <Border Grid.Column="0" Background="{DynamicResource SurfaceBrush}">
+            <DockPanel>
+                <!-- Logo header -->
+                <StackPanel DockPanel.Dock="Top" Margin="16">
+                    <TextBlock Text="OMEN" Classes="Title" Foreground="{DynamicResource OmenRedBrush}" />
+                    <TextBlock Text="Core v2.1.0" Classes="Body" />
+                </StackPanel>
+                
+                <!-- Navigation items -->
+                <ListBox Name="NavList" 
+                         SelectionChanged="NavList_SelectionChanged"
+                         SelectedIndex="0"
+                         Background="Transparent">
+                    <ListBoxItem Tag="Dashboard">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="📊" FontSize="18" />
+                            <TextBlock Text="Dashboard" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="Fans">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="🌀" FontSize="18" />
+                            <TextBlock Text="Fan Control" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="Performance">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="⚡" FontSize="18" />
+                            <TextBlock Text="Performance" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="Keyboard">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="⌨️" FontSize="18" />
+                            <TextBlock Text="Keyboard" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="Settings">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock Text="⚙️" FontSize="18" />
+                            <TextBlock Text="Settings" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                </ListBox>
+            </DockPanel>
+        </Border>
+        
+        <!-- Main content area -->
+        <Border Grid.Column="1" Padding="24">
+            <ContentControl Name="ContentArea">
+                <views:DashboardView />
+            </ContentControl>
+        </Border>
+    </Grid>
+    
+</Window>

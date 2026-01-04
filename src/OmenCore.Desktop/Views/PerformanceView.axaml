@@ -1,0 +1,48 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OmenCore.Desktop.Views.PerformanceView">
+    
+    <ScrollViewer>
+        <StackPanel Spacing="16">
+            <TextBlock Text="Performance" Classes="Title" />
+            <TextBlock Text="TDP, power limits, and performance tuning" Classes="Body" />
+            
+            <Border Classes="Card" Margin="0,16,0,0">
+                <StackPanel>
+                    <TextBlock Text="Performance Mode" Classes="Subtitle" />
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,16,0,0">
+                        <Button Content="Default" Classes="Secondary" />
+                        <Button Content="Balanced" Classes="Primary" />
+                        <Button Content="Performance" Classes="Secondary" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            
+            <Border Classes="Card">
+                <StackPanel>
+                    <TextBlock Text="TDP Boost" Classes="Subtitle" />
+                    <TextBlock Text="Adjust power limits for better performance" Classes="Body" />
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,16,0,0">
+                        <Slider Name="TdpSlider" Minimum="0" Maximum="100" Value="50" />
+                        <TextBlock Grid.Column="1" Text="{Binding #TdpSlider.Value, StringFormat={}{0:0}W}" 
+                                   Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+            
+            <Border Classes="Card">
+                <StackPanel>
+                    <TextBlock Text="TCC Offset" Classes="Subtitle" />
+                    <TextBlock Text="Temperature throttling offset (0 = default, higher = earlier throttle)" Classes="Body" />
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,16,0,0">
+                        <Slider Name="TccSlider" Minimum="0" Maximum="15" Value="0" />
+                        <TextBlock Grid.Column="1" Text="{Binding #TccSlider.Value, StringFormat={}{0:0}°C}" 
+                                   Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+            
+        </StackPanel>
+    </ScrollViewer>
+    
+</UserControl>

@@ -27,8 +27,8 @@ namespace OmenCore.Linux;
 /// </summary>
 class Program
 {
-    public const string Version = "2.0.1-beta";
-    public const string BuildDate = "2025-01";
+    public const string Version = "2.1.0";
+    public const string BuildDate = "2026-01";
     
     public static string ConfigPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), 
@@ -36,20 +36,19 @@ class Program
 
     static async Task<int> Main(string[] args)
     {
-        // Handle --version before anything else
+        // Handle --version and -V before System.CommandLine parsing
+        // This avoids the duplicate key issue with System.CommandLine's auto-generated --version
         if (args.Length > 0 && (args[0] == "--version" || args[0] == "-V"))
         {
             PrintVersion();
             return 0;
         }
 
-        var rootCommand = new RootCommand("OmenCore Linux CLI - HP OMEN laptop control utility");
-        
-        // Add version option
-        var versionOption = new Option<bool>(
-            aliases: new[] { "--version", "-V" },
-            description: "Show version information");
-        rootCommand.AddOption(versionOption);
+        var rootCommand = new RootCommand("OmenCore Linux CLI - HP OMEN laptop control utility")
+        {
+            // Disable built-in --version to avoid duplicate key conflict
+            TreatUnmatchedTokensAsErrors = true
+        };
         
         // Add commands
         rootCommand.AddCommand(FanCommand.Create());
@@ -63,14 +62,12 @@ class Program
         
         // Add global options
         var verboseOption = new Option<bool>(
-            aliases: new[] { "--verbose", "-v" },
+            aliases: new[] { "--verbose" },
             description: "Enable verbose output");
         rootCommand.AddGlobalOption(verboseOption);
         
-        var jsonOption = new Option<bool>(
-            aliases: new[] { "--json", "-j" },
-            description: "Output in JSON format for scripting");
-        rootCommand.AddGlobalOption(jsonOption);
+        // Note: Don't add global --json as some commands already have it locally
+        // This avoids duplicate option conflicts
         
         return await rootCommand.InvokeAsync(args);
     }

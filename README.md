@@ -12,7 +12,7 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 - ✅ **No Sign-In Required** - Full offline operation
 - 🐧 **Cross-Platform** - Windows GUI + Linux CLI & Avalonia GUI
 
-[![Version](https://img.shields.io/badge/version-2.0.1--beta-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v2.0.1-beta)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v2.1.0)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Website](https://img.shields.io/badge/website-omencore.info-brightgreen.svg)](https://omencore.info)
@@ -397,7 +397,7 @@ OmenCore is designed to **completely replace** OMEN Gaming Hub. You can safely u
 ### Windows
 
 #### Option 1: Installer (Recommended)
-1. Download `OmenCoreSetup-2.0.1-beta.exe` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
+1. Download `OmenCoreSetup-2.1.0.exe` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
 2. Run installer as Administrator
 3. (Optional) Select "Install PawnIO driver" for advanced EC features
 4. Launch OmenCore from Start Menu or Desktop
@@ -405,7 +405,7 @@ OmenCore is designed to **completely replace** OMEN Gaming Hub. You can safely u
 6. (Optional) Use HP Bloatware Removal to clean pre-installed apps
 
 #### Option 2: Portable ZIP
-1. Download `OmenCore-2.0.1-beta-win-x64.zip` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
+1. Download `OmenCore-2.1.0-win-x64.zip` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
 2. Extract to `C:\OmenCore` (or preferred location)
 3. Right-click `OmenCore.exe` → Run as Administrator
 
@@ -424,8 +424,8 @@ echo "options ec_sys write_support=1" | sudo tee /etc/modprobe.d/ec_sys.conf
 #### Option 1: CLI Only (Recommended)
 ```bash
 # Download and extract
-wget https://github.com/theantipopau/omencore/releases/download/v2.0.1-beta/OmenCore-2.0.1-beta-linux-x64.zip
-unzip OmenCore-2.0.1-beta-linux-x64.zip
+wget https://github.com/theantipopau/omencore/releases/download/v2.1.0/OmenCore-2.1.0-linux-x64.zip
+unzip OmenCore-2.1.0-linux-x64.zip
 
 # Install
 sudo cp omencore-cli /usr/local/bin/
@@ -472,6 +472,64 @@ OmenCore includes a built-in **OGH Cleanup** tool (Settings tab):
 4. Deletes residual files from Program Files/AppData
 
 **After cleanup, OmenCore provides full fan control without OGH.**
+
+### 🗑️ Uninstalling OmenCore
+
+If you need to remove OmenCore (to troubleshoot issues or switch to another solution), follow these steps:
+
+#### Windows - Installer Version
+
+1. **Stop OmenCore** if running (right-click tray icon → Exit)
+2. **Uninstall via Control Panel:**
+   - Settings → Apps → Apps & features → Search "OmenCore" → Uninstall
+   - Or: Control Panel → Programs → Uninstall a program → OmenCore
+3. **Remove PawnIO driver** (if installed):
+   - Open Device Manager (Win+X → Device Manager)
+   - Expand "System devices" → Find "PawnIO" → Right-click → Uninstall device
+   - Check "Delete the driver software" → Uninstall
+4. **Remove WinRing0 driver** (if present):
+   - In Device Manager: System devices → "WinRing0_1_2_0" → Uninstall device
+5. **Delete remaining files** (optional):
+   - `C:\Program Files\OmenCore\` (installation folder)
+   - `%APPDATA%\OmenCore\` (user config)
+   - `%LOCALAPPDATA%\OmenCore\` (logs)
+
+#### Windows - Portable Version
+
+1. **Stop OmenCore** if running
+2. **Delete the folder** where you extracted it
+3. **Remove drivers** (same as above if you manually installed them)
+4. **Delete config/logs:**
+   - `%APPDATA%\OmenCore\`
+   - `%LOCALAPPDATA%\OmenCore\`
+
+#### Linux
+
+```bash
+# Stop daemon if running
+sudo systemctl stop omencore 2>/dev/null
+sudo systemctl disable omencore 2>/dev/null
+
+# Remove systemd service
+sudo rm /etc/systemd/system/omencore.service
+sudo systemctl daemon-reload
+
+# Remove binary
+sudo rm /usr/local/bin/omencore-cli
+sudo rm /usr/local/bin/omencore-gui  # If GUI was installed
+
+# Remove configuration
+sudo rm -rf /etc/omencore/
+rm -rf ~/.config/omencore/
+```
+
+#### After Uninstalling
+
+- **Fan control returns to default** - Your laptop's BIOS will resume automatic fan management
+- **No permanent changes** - OmenCore doesn't modify BIOS settings permanently
+- **Safe to reinstall OGH** - If desired, you can reinstall OMEN Gaming Hub from Microsoft Store
+
+> **💡 Tip:** If you're uninstalling to troubleshoot, try a clean reinstall first. Delete the config folder (`%APPDATA%\OmenCore`) before reinstalling to reset all settings.
 
 ### ⚠️ Antivirus False Positives
 

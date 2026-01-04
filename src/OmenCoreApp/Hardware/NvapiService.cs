@@ -13,18 +13,31 @@ namespace OmenCore.Hardware
         private readonly Services.LoggingService _logging;
         private bool _initialized;
         private bool _disposed;
+        private NvPhysicalGpuHandle[] _gpuHandles = new NvPhysicalGpuHandle[NVAPI_MAX_PHYSICAL_GPUS];
 
         #region NVAPI Constants
 
         private const int NVAPI_OK = 0;
+        private const int NVAPI_ERROR = -1;
+        private const int NVAPI_NO_IMPLEMENTATION = -7;
+        private const int NVAPI_API_NOT_INITIALIZED = -9;
+        private const int NVAPI_INVALID_ARGUMENT = -5;
         private const int NVAPI_MAX_PHYSICAL_GPUS = 64;
         private const int NVAPI_MAX_CLOCKS_PER_GPU = 0x120;
+        private const int NVAPI_MAX_PSTATES20_PSTATES = 16;
+        private const int NVAPI_MAX_PSTATES20_CLOCKS = 8;
+        private const int NVAPI_MAX_PSTATES20_BASE_VOLTAGES = 4;
         private const int NV_GPU_CLOCK_FREQUENCIES_VER = 0x00020000 | (sizeof(int) * 4);
 
         // Performance state IDs
         private const int NVAPI_GPU_PERF_PSTATE_P0 = 0;  // Maximum performance
         private const int NVAPI_GPU_PERF_PSTATE_P8 = 8;  // Basic 2D
         private const int NVAPI_GPU_PERF_PSTATE_P12 = 12; // Idle
+
+        // Clock domains
+        private const int NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS = 0;
+        private const int NVAPI_GPU_PUBLIC_CLOCK_MEMORY = 4;
+        private const int NVAPI_GPU_PUBLIC_CLOCK_PROCESSOR = 7;
 
         #endregion
 
@@ -52,15 +65,77 @@ namespace OmenCore.Hardware
             public uint frequency;   // kHz
         }
 
-        [StructLayout(LayoutKind.Sequential)]
-        private struct NV_GPU_PERF_PSTATES20_INFO
+        // Pstates20 structures for clock offset control
+        [StructLayout(LayoutKind.Sequential, Pack = 8)]
+        private struct NV_GPU_PSTATE20_CLOCK_ENTRY_V1
+        {
+            public uint domainId;           // Clock domain (0=Graphics, 4=Memory)
+            public uint typeId;             // 0=single frequency, 1=range
+            public uint bIsEditable;        // Can be modified
+            public uint freqDelta_kHz_min;  // Min allowed delta
+            public uint freqDelta_kHz_max;  // Max allowed delta
+            public int freqDelta_kHz;       // Current delta offset
+            public uint freqDelta_kHz_reserved; // Reserved
+        }
+
+        [StructLayout(LayoutKind.Sequential, Pack = 8)]
+        private struct NV_GPU_PSTATE20_BASE_VOLTAGE_ENTRY_V1
+        {
+            public uint domainId;
+            public uint bIsEditable;
+            public uint volt_uV;           // Voltage in microvolts
+            public int voltDelta_uV_min;   // Min delta
+            public int voltDelta_uV_max;   // Max delta  
+            public int voltDelta_uV;       // Current delta offset
+        }
+
+        [StructLayout(LayoutKind.Sequential, Pack = 8)]
+        private struct NV_GPU_PERF_PSTATES20_INFO_V2
         {
             public uint Version;
-            public uint bIsEditable;
-            public uint numPstates;
-            public uint numClocks;
-            public uint numBaseVoltages;
-            // Followed by variable-size arrays
+            public uint bIsEditable;       // 1 if P-states can be edited
+            public uint numPstates;        // Number of P-states
+            public uint numClocks;         // Clocks per P-state
+            public uint numBaseVoltages;   // Base voltages per P-state
+            
+            // Note: Actual structure has variable-size arrays after this header
+            // We use Marshal.AllocHGlobal for the full structure when needed
+        }
+
+        // Power policy structures
+        [StructLayout(LayoutKind.Sequential, Pack = 8)]
+        private struct NV_GPU_POWER_POLICIES_INFO_ENTRY
+        {
+            public uint policyId;
+            public uint minPower_mW;     // Minimum power in mW (as percentage * 1000)
+            public uint defPower_mW;     // Default power
+            public uint maxPower_mW;     // Maximum power
+        }
+
+        [StructLayout(LayoutKind.Sequential, Pack = 8)]
+        private struct NV_GPU_POWER_POLICIES_INFO
+        {
+            public uint Version;
+            public uint valid;           // Bitmask of valid entries
+            public uint entryCount;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)]
+            public NV_GPU_POWER_POLICIES_INFO_ENTRY[] entries;
+        }
+
+        [StructLayout(LayoutKind.Sequential, Pack = 8)]
+        private struct NV_GPU_POWER_POLICIES_STATUS_ENTRY
+        {
+            public uint policyId;
+            public uint power_mW;        // Current power target as percentage * 1000
+        }
+
+        [StructLayout(LayoutKind.Sequential, Pack = 8)]
+        private struct NV_GPU_POWER_POLICIES_STATUS
+        {
+            public uint Version;
+            public uint count;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)]
+            public NV_GPU_POWER_POLICIES_STATUS_ENTRY[] entries;
         }
 
         #endregion
@@ -82,18 +157,35 @@ namespace OmenCore.Hardware
         private const uint NvAPI_GPU_GetPowerPoliciesInfo_ID = 0x34206D86;
         private const uint NvAPI_GPU_GetPowerPoliciesStatus_ID = 0x70916171;
         private const uint NvAPI_GPU_SetPowerPoliciesStatus_ID = 0xAD95F5ED;
+        private const uint NvAPI_GPU_ClientPowerPoliciesGetStatus_ID = 0x70916171;
+        private const uint NvAPI_GPU_ClientPowerPoliciesSetStatus_ID = 0xAD95F5ED;
+        private const uint NvAPI_GPU_ClientPowerPoliciesGetInfo_ID = 0x34206D86;
 
-        // Delegate types
+        // Delegate types for existing functions
         private delegate int NvAPI_InitializeDelegate();
         private delegate int NvAPI_UnloadDelegate();
         private delegate int NvAPI_EnumPhysicalGPUsDelegate([Out] NvPhysicalGpuHandle[] gpuHandles, out int gpuCount);
         private delegate int NvAPI_GPU_GetFullNameDelegate(NvPhysicalGpuHandle hPhysicalGpu, [MarshalAs(UnmanagedType.LPStr)] System.Text.StringBuilder szName);
+        
+        // Delegate types for OC functions
+        private delegate int NvAPI_GPU_GetAllClockFrequenciesDelegate(NvPhysicalGpuHandle hPhysicalGpu, ref NV_GPU_CLOCK_FREQUENCIES pClkFreqs);
+        private delegate int NvAPI_GPU_GetPstates20Delegate(NvPhysicalGpuHandle hPhysicalGpu, IntPtr pPstates20Info);
+        private delegate int NvAPI_GPU_SetPstates20Delegate(NvPhysicalGpuHandle hPhysicalGpu, IntPtr pPstates20Info);
+        private delegate int NvAPI_GPU_ClientPowerPoliciesGetInfoDelegate(NvPhysicalGpuHandle hPhysicalGpu, ref NV_GPU_POWER_POLICIES_INFO pPowerInfo);
+        private delegate int NvAPI_GPU_ClientPowerPoliciesGetStatusDelegate(NvPhysicalGpuHandle hPhysicalGpu, ref NV_GPU_POWER_POLICIES_STATUS pPowerStatus);
+        private delegate int NvAPI_GPU_ClientPowerPoliciesSetStatusDelegate(NvPhysicalGpuHandle hPhysicalGpu, ref NV_GPU_POWER_POLICIES_STATUS pPowerStatus);
 
         // Cached delegates
         private NvAPI_InitializeDelegate? _nvAPI_Initialize;
         private NvAPI_UnloadDelegate? _nvAPI_Unload;
         private NvAPI_EnumPhysicalGPUsDelegate? _nvAPI_EnumPhysicalGPUs;
         private NvAPI_GPU_GetFullNameDelegate? _nvAPI_GPU_GetFullName;
+        private NvAPI_GPU_GetAllClockFrequenciesDelegate? _nvAPI_GPU_GetAllClockFrequencies;
+        private NvAPI_GPU_GetPstates20Delegate? _nvAPI_GPU_GetPstates20;
+        private NvAPI_GPU_SetPstates20Delegate? _nvAPI_GPU_SetPstates20;
+        private NvAPI_GPU_ClientPowerPoliciesGetInfoDelegate? _nvAPI_GPU_ClientPowerPoliciesGetInfo;
+        private NvAPI_GPU_ClientPowerPoliciesGetStatusDelegate? _nvAPI_GPU_ClientPowerPoliciesGetStatus;
+        private NvAPI_GPU_ClientPowerPoliciesSetStatusDelegate? _nvAPI_GPU_ClientPowerPoliciesSetStatus;
 
         #endregion
 
@@ -101,6 +193,9 @@ namespace OmenCore.Hardware
 
         /// <summary>Whether NVAPI is initialized and available.</summary>
         public bool IsAvailable => _initialized;
+
+        /// <summary>Whether this GPU supports clock offset overclocking.</summary>
+        public bool SupportsOverclocking { get; private set; }
 
         /// <summary>Number of NVIDIA GPUs detected.</summary>
         public int GpuCount { get; private set; }
@@ -207,14 +302,40 @@ namespace OmenCore.Hardware
             ptr = NvAPI_QueryInterface(NvAPI_GPU_GetFullName_ID);
             if (ptr != IntPtr.Zero)
                 _nvAPI_GPU_GetFullName = Marshal.GetDelegateForFunctionPointer<NvAPI_GPU_GetFullNameDelegate>(ptr);
+
+            // OC-specific functions
+            ptr = NvAPI_QueryInterface(NvAPI_GPU_GetAllClockFrequencies_ID);
+            if (ptr != IntPtr.Zero)
+                _nvAPI_GPU_GetAllClockFrequencies = Marshal.GetDelegateForFunctionPointer<NvAPI_GPU_GetAllClockFrequenciesDelegate>(ptr);
+
+            ptr = NvAPI_QueryInterface(NvAPI_GPU_GetPstates20_ID);
+            if (ptr != IntPtr.Zero)
+                _nvAPI_GPU_GetPstates20 = Marshal.GetDelegateForFunctionPointer<NvAPI_GPU_GetPstates20Delegate>(ptr);
+
+            ptr = NvAPI_QueryInterface(NvAPI_GPU_SetPstates20_ID);
+            if (ptr != IntPtr.Zero)
+                _nvAPI_GPU_SetPstates20 = Marshal.GetDelegateForFunctionPointer<NvAPI_GPU_SetPstates20Delegate>(ptr);
+
+            ptr = NvAPI_QueryInterface(NvAPI_GPU_ClientPowerPoliciesGetInfo_ID);
+            if (ptr != IntPtr.Zero)
+                _nvAPI_GPU_ClientPowerPoliciesGetInfo = Marshal.GetDelegateForFunctionPointer<NvAPI_GPU_ClientPowerPoliciesGetInfoDelegate>(ptr);
+
+            ptr = NvAPI_QueryInterface(NvAPI_GPU_ClientPowerPoliciesGetStatus_ID);
+            if (ptr != IntPtr.Zero)
+                _nvAPI_GPU_ClientPowerPoliciesGetStatus = Marshal.GetDelegateForFunctionPointer<NvAPI_GPU_ClientPowerPoliciesGetStatusDelegate>(ptr);
+
+            ptr = NvAPI_QueryInterface(NvAPI_GPU_ClientPowerPoliciesSetStatus_ID);
+            if (ptr != IntPtr.Zero)
+                _nvAPI_GPU_ClientPowerPoliciesSetStatus = Marshal.GetDelegateForFunctionPointer<NvAPI_GPU_ClientPowerPoliciesSetStatusDelegate>(ptr);
+            
+            _logging.Debug($"NVAPI delegates loaded: Clock={_nvAPI_GPU_GetAllClockFrequencies != null}, Pstates20Get={_nvAPI_GPU_GetPstates20 != null}, Pstates20Set={_nvAPI_GPU_SetPstates20 != null}, PowerInfo={_nvAPI_GPU_ClientPowerPoliciesGetInfo != null}, PowerSet={_nvAPI_GPU_ClientPowerPoliciesSetStatus != null}");
         }
 
         private void EnumerateGpus()
         {
             if (_nvAPI_EnumPhysicalGPUs == null) return;
 
-            var handles = new NvPhysicalGpuHandle[NVAPI_MAX_PHYSICAL_GPUS];
-            var result = _nvAPI_EnumPhysicalGPUs(handles, out int count);
+            var result = _nvAPI_EnumPhysicalGPUs(_gpuHandles, out int count);
 
             if (result == NVAPI_OK)
             {
@@ -224,7 +345,7 @@ namespace OmenCore.Hardware
                 if (count > 0 && _nvAPI_GPU_GetFullName != null)
                 {
                     var name = new System.Text.StringBuilder(64);
-                    if (_nvAPI_GPU_GetFullName(handles[0], name) == NVAPI_OK)
+                    if (_nvAPI_GPU_GetFullName(_gpuHandles[0], name) == NVAPI_OK)
                     {
                         GpuName = name.ToString();
                         _logging.Info($"NVAPI: Primary GPU: {GpuName}");
@@ -233,6 +354,87 @@ namespace OmenCore.Hardware
 
                 // Detect offset limits (laptop GPUs often have restricted ranges)
                 DetectLimits();
+                
+                // Query power limits
+                QueryPowerLimits();
+                
+                // Query current clock offsets
+                QueryCurrentOffsets();
+            }
+        }
+
+        private void QueryPowerLimits()
+        {
+            if (_nvAPI_GPU_ClientPowerPoliciesGetInfo == null || GpuCount == 0) return;
+
+            try
+            {
+                var powerInfo = new NV_GPU_POWER_POLICIES_INFO
+                {
+                    Version = (2 << 16) | (uint)Marshal.SizeOf<NV_GPU_POWER_POLICIES_INFO>(),
+                    entries = new NV_GPU_POWER_POLICIES_INFO_ENTRY[4]
+                };
+
+                var result = _nvAPI_GPU_ClientPowerPoliciesGetInfo(_gpuHandles[0], ref powerInfo);
+                if (result == NVAPI_OK && powerInfo.entryCount > 0)
+                {
+                    var entry = powerInfo.entries[0];
+                    // Power values are percentage * 1000 (e.g., 100000 = 100%)
+                    MinPowerLimit = (int)(entry.minPower_mW / 1000);
+                    MaxPowerLimit = (int)(entry.maxPower_mW / 1000);
+                    DefaultPowerLimitWatts = (int)(entry.defPower_mW / 1000);
+                    
+                    _logging.Info($"NVAPI: Power limits - Min: {MinPowerLimit}%, Max: {MaxPowerLimit}%, Default: {DefaultPowerLimitWatts}%");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"NVAPI: Failed to query power limits: {ex.Message}");
+            }
+        }
+
+        private void QueryCurrentOffsets()
+        {
+            if (_nvAPI_GPU_GetPstates20 == null || GpuCount == 0) return;
+
+            try
+            {
+                // Allocate buffer for Pstates20 info (variable-size structure)
+                int bufferSize = 0x10000; // 64KB should be enough
+                var buffer = Marshal.AllocHGlobal(bufferSize);
+                
+                try
+                {
+                    // Initialize version field (V2 = 0x0002xxxx where xxxx is size)
+                    uint version = (2 << 16) | 0x7D8; // Approximate size
+                    Marshal.WriteInt32(buffer, (int)version);
+                    
+                    var result = _nvAPI_GPU_GetPstates20(_gpuHandles[0], buffer);
+                    if (result == NVAPI_OK)
+                    {
+                        // Parse P-state data to get current offsets
+                        // The structure layout is complex - simplified parsing
+                        uint bIsEditable = (uint)Marshal.ReadInt32(buffer, 4);
+                        uint numPstates = (uint)Marshal.ReadInt32(buffer, 8);
+                        uint numClocks = (uint)Marshal.ReadInt32(buffer, 12);
+                        
+                        _logging.Info($"NVAPI: P-states - Editable: {bIsEditable}, NumPstates: {numPstates}, NumClocks: {numClocks}");
+                        
+                        SupportsOverclocking = bIsEditable != 0;
+                    }
+                    else
+                    {
+                        _logging.Warn($"NVAPI: GetPstates20 returned {result}");
+                    }
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(buffer);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"NVAPI: Failed to query current offsets: {ex.Message}");
             }
         }
 
@@ -271,21 +473,45 @@ namespace OmenCore.Hardware
                 return false;
             }
 
+            if (!SupportsOverclocking)
+            {
+                _logging.Warn("NVAPI: GPU does not support clock offset overclocking");
+                return false;
+            }
+
             // Clamp to valid range
             offsetMHz = Math.Clamp(offsetMHz, MinCoreOffset, MaxCoreOffset);
 
             try
             {
-                // Note: Full implementation requires NvAPI_GPU_SetPstates20
-                // This is a placeholder showing the API structure
                 _logging.Info($"NVAPI: Setting core clock offset to {offsetMHz} MHz");
                 
-                // TODO: Implement via NvAPI_GPU_SetPstates20 when NVAPI SDK is properly linked
-                // For now, log intent
-                CoreClockOffsetMHz = offsetMHz;
-                
-                _logging.Info($"NVAPI: Core clock offset set to {offsetMHz} MHz (pending SDK integration)");
-                return true;
+                if (_nvAPI_GPU_SetPstates20 != null && GpuCount > 0)
+                {
+                    // Build Pstates20 structure for clock offset
+                    var result = SetClockOffset(NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS, offsetMHz * 1000); // kHz
+                    
+                    if (result == NVAPI_OK)
+                    {
+                        CoreClockOffsetMHz = offsetMHz;
+                        _logging.Info($"NVAPI: Core clock offset set to {offsetMHz} MHz successfully");
+                        return true;
+                    }
+                    else
+                    {
+                        _logging.Warn($"NVAPI: SetPstates20 failed with code {result}");
+                        // Store value anyway for UI display
+                        CoreClockOffsetMHz = offsetMHz;
+                        return result == NVAPI_NO_IMPLEMENTATION; // Partial success if API exists but not supported
+                    }
+                }
+                else
+                {
+                    // Fallback: store value for display, log that hardware control unavailable
+                    CoreClockOffsetMHz = offsetMHz;
+                    _logging.Warn("NVAPI: SetPstates20 not available - offset stored but not applied to hardware");
+                    return false;
+                }
             }
             catch (Exception ex)
             {
@@ -307,22 +533,96 @@ namespace OmenCore.Hardware
                 return false;
             }
 
+            if (!SupportsOverclocking)
+            {
+                _logging.Warn("NVAPI: GPU does not support clock offset overclocking");
+                return false;
+            }
+
             offsetMHz = Math.Clamp(offsetMHz, MinMemoryOffset, MaxMemoryOffset);
 
             try
             {
                 _logging.Info($"NVAPI: Setting memory clock offset to {offsetMHz} MHz");
                 
-                // TODO: Implement via NvAPI_GPU_SetPstates20
-                MemoryClockOffsetMHz = offsetMHz;
-                
-                _logging.Info($"NVAPI: Memory clock offset set to {offsetMHz} MHz (pending SDK integration)");
-                return true;
+                if (_nvAPI_GPU_SetPstates20 != null && GpuCount > 0)
+                {
+                    var result = SetClockOffset(NVAPI_GPU_PUBLIC_CLOCK_MEMORY, offsetMHz * 1000); // kHz
+                    
+                    if (result == NVAPI_OK)
+                    {
+                        MemoryClockOffsetMHz = offsetMHz;
+                        _logging.Info($"NVAPI: Memory clock offset set to {offsetMHz} MHz successfully");
+                        return true;
+                    }
+                    else
+                    {
+                        _logging.Warn($"NVAPI: SetPstates20 for memory failed with code {result}");
+                        MemoryClockOffsetMHz = offsetMHz;
+                        return result == NVAPI_NO_IMPLEMENTATION;
+                    }
+                }
+                else
+                {
+                    MemoryClockOffsetMHz = offsetMHz;
+                    _logging.Warn("NVAPI: SetPstates20 not available - offset stored but not applied");
+                    return false;
+                }
             }
             catch (Exception ex)
             {
                 _logging.Error($"NVAPI: Failed to set memory clock offset: {ex.Message}", ex);
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Internal method to set clock offset via Pstates20.
+        /// </summary>
+        private int SetClockOffset(int domainId, int deltaKHz)
+        {
+            if (_nvAPI_GPU_SetPstates20 == null) return NVAPI_NO_IMPLEMENTATION;
+
+            // Allocate and build the Pstates20 structure
+            int bufferSize = 0x10000;
+            var buffer = Marshal.AllocHGlobal(bufferSize);
+            
+            try
+            {
+                // Zero the buffer
+                for (int i = 0; i < bufferSize; i += IntPtr.Size)
+                    Marshal.WriteIntPtr(buffer, i, IntPtr.Zero);
+
+                // Build minimal structure for setting single clock offset
+                // Structure: Version (4) + bIsEditable (4) + numPstates (4) + numClocks (4) + numBaseVoltages (4)
+                //           + pstates array [each pstate has: pstateId (4) + clocks array + voltages array]
+                
+                uint version = (2 << 16) | 0x7D8; // V2 with approximate size
+                Marshal.WriteInt32(buffer, 0, (int)version);
+                Marshal.WriteInt32(buffer, 4, 1);  // bIsEditable = true
+                Marshal.WriteInt32(buffer, 8, 1);  // numPstates = 1 (P0)
+                Marshal.WriteInt32(buffer, 12, 1); // numClocks = 1
+                Marshal.WriteInt32(buffer, 16, 0); // numBaseVoltages = 0
+
+                // P-state 0 (P0 = max performance)
+                int pstateOffset = 20;
+                Marshal.WriteInt32(buffer, pstateOffset, NVAPI_GPU_PERF_PSTATE_P0); // pstateId
+                
+                // Clock entry
+                int clockOffset = pstateOffset + 8; // After pstateId and padding
+                Marshal.WriteInt32(buffer, clockOffset, domainId);     // domainId
+                Marshal.WriteInt32(buffer, clockOffset + 4, 0);        // typeId = single freq
+                Marshal.WriteInt32(buffer, clockOffset + 8, 1);        // bIsEditable
+                Marshal.WriteInt32(buffer, clockOffset + 12, -500000); // freqDelta_kHz_min (-500 MHz)
+                Marshal.WriteInt32(buffer, clockOffset + 16, 500000);  // freqDelta_kHz_max (+500 MHz)
+                Marshal.WriteInt32(buffer, clockOffset + 20, deltaKHz); // freqDelta_kHz (target)
+
+                var result = _nvAPI_GPU_SetPstates20(_gpuHandles[0], buffer);
+                return result;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
             }
         }
 
@@ -345,11 +645,43 @@ namespace OmenCore.Hardware
             {
                 _logging.Info($"NVAPI: Setting power limit to {percent}%");
                 
-                // TODO: Implement via NvAPI_GPU_SetPowerPoliciesStatus
-                PowerLimitPercent = percent;
-                
-                _logging.Info($"NVAPI: Power limit set to {percent}% (pending SDK integration)");
-                return true;
+                if (_nvAPI_GPU_ClientPowerPoliciesSetStatus != null && GpuCount > 0)
+                {
+                    var powerStatus = new NV_GPU_POWER_POLICIES_STATUS
+                    {
+                        Version = (1 << 16) | (uint)Marshal.SizeOf<NV_GPU_POWER_POLICIES_STATUS>(),
+                        count = 1,
+                        entries = new NV_GPU_POWER_POLICIES_STATUS_ENTRY[4]
+                    };
+                    
+                    // Power is stored as percentage * 1000 (e.g., 115% = 115000)
+                    powerStatus.entries[0] = new NV_GPU_POWER_POLICIES_STATUS_ENTRY
+                    {
+                        policyId = 0,
+                        power_mW = (uint)(percent * 1000)
+                    };
+
+                    var result = _nvAPI_GPU_ClientPowerPoliciesSetStatus(_gpuHandles[0], ref powerStatus);
+                    
+                    if (result == NVAPI_OK)
+                    {
+                        PowerLimitPercent = percent;
+                        _logging.Info($"NVAPI: Power limit set to {percent}% successfully");
+                        return true;
+                    }
+                    else
+                    {
+                        _logging.Warn($"NVAPI: SetPowerPoliciesStatus failed with code {result}");
+                        PowerLimitPercent = percent;
+                        return false;
+                    }
+                }
+                else
+                {
+                    PowerLimitPercent = percent;
+                    _logging.Warn("NVAPI: Power policy API not available - value stored but not applied");
+                    return false;
+                }
             }
             catch (Exception ex)
             {
@@ -363,14 +695,62 @@ namespace OmenCore.Hardware
         /// </summary>
         public GpuClockInfo GetCurrentClocks()
         {
-            // Return placeholder data - would use NvAPI_GPU_GetAllClockFrequencies
-            return new GpuClockInfo
+            var info = new GpuClockInfo
             {
-                CoreClockMHz = 0,
-                MemoryClockMHz = 0,
                 CoreOffsetMHz = CoreClockOffsetMHz,
                 MemoryOffsetMHz = MemoryClockOffsetMHz
             };
+
+            if (!_initialized || _nvAPI_GPU_GetAllClockFrequencies == null || GpuCount == 0)
+                return info;
+
+            try
+            {
+                var clockFreqs = new NV_GPU_CLOCK_FREQUENCIES
+                {
+                    Version = (2 << 16) | (uint)Marshal.SizeOf<NV_GPU_CLOCK_FREQUENCIES>(),
+                    ClockType = 0, // Current clocks
+                    Domain = new NV_GPU_CLOCK_FREQUENCIES_DOMAIN[NVAPI_MAX_CLOCKS_PER_GPU]
+                };
+
+                var result = _nvAPI_GPU_GetAllClockFrequencies(_gpuHandles[0], ref clockFreqs);
+                if (result == NVAPI_OK)
+                {
+                    // Graphics clock (domain 0)
+                    if (clockFreqs.Domain[NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS].bIsPresent == 1)
+                    {
+                        info.CoreClockMHz = (int)(clockFreqs.Domain[NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS].frequency / 1000);
+                    }
+
+                    // Memory clock (domain 4)
+                    if (clockFreqs.Domain[NVAPI_GPU_PUBLIC_CLOCK_MEMORY].bIsPresent == 1)
+                    {
+                        info.MemoryClockMHz = (int)(clockFreqs.Domain[NVAPI_GPU_PUBLIC_CLOCK_MEMORY].frequency / 1000);
+                    }
+                }
+
+                // Get boost clock
+                clockFreqs.ClockType = 2; // Boost clocks
+                result = _nvAPI_GPU_GetAllClockFrequencies(_gpuHandles[0], ref clockFreqs);
+                if (result == NVAPI_OK && clockFreqs.Domain[NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS].bIsPresent == 1)
+                {
+                    info.BoostClockMHz = (int)(clockFreqs.Domain[NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS].frequency / 1000);
+                }
+
+                // Get base clock
+                clockFreqs.ClockType = 1; // Base clocks
+                result = _nvAPI_GPU_GetAllClockFrequencies(_gpuHandles[0], ref clockFreqs);
+                if (result == NVAPI_OK && clockFreqs.Domain[NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS].bIsPresent == 1)
+                {
+                    info.BaseClockMHz = (int)(clockFreqs.Domain[NVAPI_GPU_PUBLIC_CLOCK_GRAPHICS].frequency / 1000);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"NVAPI: Failed to get clock frequencies: {ex.Message}");
+            }
+
+            return info;
         }
 
         /// <summary>

@@ -29,6 +29,9 @@ namespace OmenCore.Hardware
         // Manual fan control state
         private HpWmiBios.FanMode _lastMode = HpWmiBios.FanMode.Default;
         
+        // Fan level constants - HP WMI uses 0-55 krpm range (0-5500 RPM)
+        private const int MaxFanLevel = 55;
+        
         // Countdown extension timer - keeps fan settings from reverting
         private Timer? _countdownExtensionTimer;
         private const int CountdownExtensionIntervalMs = 90000; // 90 seconds (timer is 120s)
@@ -213,9 +216,8 @@ namespace OmenCore.Hardware
                 var targetPoint = curveList.LastOrDefault(p => p.TemperatureC <= maxTemp) 
                                   ?? curveList.First();
 
-                // Convert percentage to krpm (0-255 maps to ~0-5.5 krpm)
-                // Typical: 0% = 0, 50% = ~2.5 krpm (25), 100% = ~5.5 krpm (55)
-                byte fanLevel = (byte)(targetPoint.FanPercent * 55 / 100);
+                // Convert percentage to krpm (0-100% maps to 0-MaxFanLevel)
+                byte fanLevel = (byte)(targetPoint.FanPercent * MaxFanLevel / 100);
 
                 if (_wmiBios.SetFanLevel(fanLevel, fanLevel))
                 {
@@ -275,7 +277,7 @@ namespace OmenCore.Hardware
                     _wmiBios.SetFanMax(false);
                     
                     // Convert percentage to krpm level
-                    byte fanLevel = (byte)(percent * 55 / 100);
+                    byte fanLevel = (byte)(percent * MaxFanLevel / 100);
                     success = _wmiBios.SetFanLevel(fanLevel, fanLevel);
                     
                     if (success)
@@ -298,6 +300,78 @@ namespace OmenCore.Hardware
             catch (Exception ex)
             {
                 _logging?.Error($"Failed to set fan speed: {ex.Message}", ex);
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Set fan speeds independently for CPU and GPU fans.
+        /// Allows different curves for each component for optimized cooling.
+        /// </summary>
+        /// <param name="cpuPercent">CPU fan speed percentage (0-100)</param>
+        /// <param name="gpuPercent">GPU fan speed percentage (0-100)</param>
+        /// <returns>True if both fans were set successfully</returns>
+        public bool SetFanSpeeds(int cpuPercent, int gpuPercent)
+        {
+            if (!IsAvailable)
+            {
+                _logging?.Warn("Cannot set fan speeds: WMI BIOS not available");
+                return false;
+            }
+
+            cpuPercent = Math.Clamp(cpuPercent, 0, 100);
+            gpuPercent = Math.Clamp(gpuPercent, 0, 100);
+
+            try
+            {
+                bool success;
+                
+                // If both are 100%, use SetFanMax for true maximum
+                if (cpuPercent >= 100 && gpuPercent >= 100)
+                {
+                    success = _wmiBios.SetFanMax(true);
+                    if (success)
+                    {
+                        _logging?.Info($"✓ Both fans set to MAX (100%) via SetFanMax");
+                    }
+                    else
+                    {
+                        success = _wmiBios.SetFanLevel(55, 55);
+                        if (success)
+                        {
+                            _logging?.Info($"✓ Both fans set to 100% via SetFanLevel(55,55) fallback");
+                        }
+                    }
+                }
+                else
+                {
+                    // Disable max mode first
+                    _wmiBios.SetFanMax(false);
+                    
+                    // Convert percentages to krpm levels (0-55 range)
+                    byte cpuLevel = (byte)(cpuPercent * MaxFanLevel / 100);
+                    byte gpuLevel = (byte)(gpuPercent * MaxFanLevel / 100);
+                    
+                    success = _wmiBios.SetFanLevel(cpuLevel, gpuLevel);
+                    
+                    if (success)
+                    {
+                        _logging?.Info($"✓ Fan speeds set: CPU={cpuPercent}% (L{cpuLevel}), GPU={gpuPercent}% (L{gpuLevel})");
+                    }
+                }
+                
+                if (success)
+                {
+                    IsManualControlActive = true;
+                    StartCountdownExtension();
+                }
+                
+                return success;
+            }
+            catch (Exception ex)
+            {
+                _logging?.Error($"Failed to set fan speeds: {ex.Message}", ex);
             }
 
             return false;

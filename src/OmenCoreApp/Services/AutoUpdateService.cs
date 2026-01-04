@@ -14,7 +14,7 @@ namespace OmenCore.Services
     /// <summary>
     /// Handles application auto-update functionality
     /// </summary>
-    public class AutoUpdateService
+    public class AutoUpdateService : IDisposable
     {
         private readonly LoggingService _logging;
         private readonly HttpClient _httpClient;
@@ -23,6 +23,7 @@ namespace OmenCore.Services
         private readonly Version _currentVersion;
         private System.Timers.Timer? _checkTimer;
         private UpdatePreferences? _preferences;
+        private bool _disposed;
         
         public event EventHandler<UpdateCheckResult>? UpdateCheckCompleted;
         public event EventHandler<UpdateDownloadProgress>? DownloadProgressChanged;
@@ -451,13 +452,6 @@ namespace OmenCore.Services
             var hashFinal = sha256Final.ComputeHash(streamFinal);
             return BitConverter.ToString(hashFinal).Replace("-", "").ToLowerInvariant();
         }
-        
-        public void Dispose()
-        {
-            _checkTimer?.Stop();
-            _checkTimer?.Dispose();
-            _httpClient?.Dispose();
-        }
 
         // Store the prerelease tag from VERSION.txt (e.g., "-beta2")
         private string _currentPrereleaseTag = string.Empty;
@@ -644,6 +638,32 @@ namespace OmenCore.Services
             }
 
             return $"{length:0.##} {units[order]}";
+        }
+        
+        /// <summary>
+        /// Dispose resources.
+        /// </summary>
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+        
+        /// <summary>
+        /// Protected dispose implementation.
+        /// </summary>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+            
+            if (disposing)
+            {
+                _checkTimer?.Stop();
+                _checkTimer?.Dispose();
+                _httpClient?.Dispose();
+            }
+            
+            _disposed = true;
         }
     }
 }

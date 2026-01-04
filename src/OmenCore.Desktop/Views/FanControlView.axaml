@@ -1,0 +1,96 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="OmenCore.Desktop.Views.FanControlView">
+    
+    <ScrollViewer>
+        <StackPanel Spacing="16">
+            
+            <!-- Header -->
+            <TextBlock Text="Fan Control" Classes="Title" />
+            <TextBlock Text="Manage fan profiles and custom curves" Classes="Body" />
+            
+            <!-- Current Status -->
+            <Border Classes="Card" Margin="0,16,0,0">
+                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto">
+                    
+                    <!-- CPU Fan -->
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="CPU Fan" Classes="Subtitle" />
+                        <TextBlock Text="-- RPM" Classes="Monospace Title" Margin="0,8,0,0" 
+                                   Name="CpuFanSpeed" Foreground="{DynamicResource OmenRedBrush}" />
+                        <ProgressBar Value="50" Maximum="100" Margin="0,8,0,0" />
+                    </StackPanel>
+                    
+                    <!-- GPU Fan -->
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="GPU Fan" Classes="Subtitle" />
+                        <TextBlock Text="-- RPM" Classes="Monospace Title" Margin="0,8,0,0" 
+                                   Name="GpuFanSpeed" Foreground="{DynamicResource OmenRedBrush}" />
+                        <ProgressBar Value="60" Maximum="100" Margin="0,8,0,0" />
+                    </StackPanel>
+                    
+                </Grid>
+            </Border>
+            
+            <!-- Fan Profiles -->
+            <Border Classes="Card">
+                <StackPanel>
+                    <TextBlock Text="Fan Profile" Classes="Subtitle" />
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,16,0,0">
+                        <Button Content="🔇 Silent" Classes="Secondary" Tag="Silent" Click="Profile_Click" />
+                        <Button Content="⚖️ Balanced" Classes="Primary" Tag="Balanced" Click="Profile_Click" />
+                        <Button Content="🎮 Gaming" Classes="Secondary" Tag="Gaming" Click="Profile_Click" />
+                        <Button Content="🚀 Max" Classes="Secondary" Tag="Max" Click="Profile_Click" />
+                    </StackPanel>
+                    <TextBlock Text="Current: Balanced" Classes="Body" Margin="0,8,0,0" Name="CurrentProfileText" />
+                </StackPanel>
+            </Border>
+            
+            <!-- Manual Control -->
+            <Border Classes="Card">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <TextBlock Text="Manual Control" Classes="Subtitle" />
+                        <ToggleSwitch Name="ManualToggle" IsCheckedChanged="ManualToggle_Changed" />
+                    </StackPanel>
+                    
+                    <StackPanel Margin="0,16,0,0" IsEnabled="{Binding #ManualToggle.IsChecked}">
+                        <TextBlock Text="CPU Fan Speed" Classes="Body" />
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Slider Name="CpuFanSlider" Minimum="0" Maximum="100" Value="50" />
+                            <TextBlock Grid.Column="1" Text="{Binding #CpuFanSlider.Value, StringFormat={}{0:0}%}" 
+                                       Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </Grid>
+                        
+                        <TextBlock Text="GPU Fan Speed" Classes="Body" Margin="0,16,0,0" />
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Slider Name="GpuFanSlider" Minimum="0" Maximum="100" Value="60" />
+                            <TextBlock Grid.Column="1" Text="{Binding #GpuFanSlider.Value, StringFormat={}{0:0}%}" 
+                                       Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </Grid>
+                        
+                        <Button Content="Apply" Classes="Primary" Margin="0,16,0,0" Click="ApplyManual_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            
+            <!-- Fan Curve (Placeholder) -->
+            <Border Classes="Card">
+                <StackPanel>
+                    <TextBlock Text="Custom Fan Curve" Classes="Subtitle" />
+                    <TextBlock Text="Coming soon - visual fan curve editor" Classes="Body" Margin="0,8,0,0" 
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <Border Height="200" Background="{DynamicResource SurfaceBrush}" CornerRadius="4" Margin="0,16,0,0">
+                        <TextBlock Text="📈 Fan Curve Graph" HorizontalAlignment="Center" VerticalAlignment="Center" 
+                                   Foreground="{DynamicResource TextSecondaryBrush}" />
+                    </Border>
+                </StackPanel>
+            </Border>
+            
+        </StackPanel>
+    </ScrollViewer>
+    
+</UserControl>

@@ -75,6 +75,7 @@ namespace OmenCore.ViewModels
         private readonly OsdService? _osdService;
         private readonly HpWmiBios? _wmiBios;
         private readonly OghServiceProxy? _oghProxy;
+        private readonly NvapiService? _nvapiService;
         private HotkeyOsdWindow? _hotkeyOsd;
         
         // Sub-ViewModels for modular UI (Lazy Loaded)
@@ -123,7 +124,8 @@ namespace OmenCore.ViewModels
                         _configService,
                         _wmiBios,
                         _oghProxy,
-                        _systemInfoService
+                        _systemInfoService,
+                        _nvapiService
                     );
                     _systemControl.PropertyChanged += (s, e) =>
                     {
@@ -169,7 +171,7 @@ namespace OmenCore.ViewModels
             {
                 if (_settings == null)
                 {
-                    _settings = new SettingsViewModel(_logging, _configService, _systemInfoService, _fanCleaningService, _biosUpdateService, _wmiBios, _omenKeyService, _osdService, _hardwareMonitoringService);
+                    _settings = new SettingsViewModel(_logging, _configService, _systemInfoService, _fanCleaningService, _biosUpdateService, _wmiBios, _omenKeyService, _osdService, _hardwareMonitoringService, _powerAutomationService);
                     
                     // Subscribe to low overhead mode changes from Settings
                     _settings.LowOverheadModeChanged += (s, enabled) =>
@@ -1101,6 +1103,9 @@ namespace OmenCore.ViewModels
             _keyboardLightingService = new KeyboardLightingService(_logging, ec, _wmiBios, _configService);
             _systemOptimizationService = new SystemOptimizationService(_logging);
             _gpuSwitchService = new GpuSwitchService(_logging);
+            
+            // Initialize NVAPI for GPU overclocking (NVIDIA GPUs only)
+            _nvapiService = new NvapiService(_logging);
             
             // Services initialized asynchronously
             InitializeServicesAsync();

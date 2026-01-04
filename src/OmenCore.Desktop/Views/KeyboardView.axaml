@@ -1,0 +1,175 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OmenCore.Desktop.Views.KeyboardView">
+    
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="20">
+            <!-- Header -->
+            <TextBlock Text="Keyboard Lighting" Classes="Title"/>
+            <TextBlock Text="Control your OMEN keyboard RGB lighting effects"
+                       Foreground="#888888" FontSize="14"/>
+            
+            <!-- Effect Selection -->
+            <Border Classes="Card">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Lighting Effect" FontWeight="SemiBold" FontSize="16"/>
+                    
+                    <WrapPanel Orientation="Horizontal">
+                        <RadioButton Content="Static" GroupName="Effect" IsChecked="True"
+                                     Margin="0,0,16,8" Name="EffectStatic"/>
+                        <RadioButton Content="Breathing" GroupName="Effect"
+                                     Margin="0,0,16,8" Name="EffectBreathing"/>
+                        <RadioButton Content="Color Cycle" GroupName="Effect"
+                                     Margin="0,0,16,8" Name="EffectCycle"/>
+                        <RadioButton Content="Wave" GroupName="Effect"
+                                     Margin="0,0,16,8" Name="EffectWave"/>
+                        <RadioButton Content="Reactive" GroupName="Effect"
+                                     Margin="0,0,16,8" Name="EffectReactive"/>
+                        <RadioButton Content="Off" GroupName="Effect"
+                                     Margin="0,0,16,8" Name="EffectOff"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+            
+            <!-- Color Selection -->
+            <Border Classes="Card">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Color" FontWeight="SemiBold" FontSize="16"/>
+                    
+                    <!-- Preset Colors -->
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Background="#FF0000" Width="40" Height="40" CornerRadius="20"
+                                Tag="#FF0000" Click="ColorPreset_Click"/>
+                        <Button Background="#FF6600" Width="40" Height="40" CornerRadius="20"
+                                Tag="#FF6600" Click="ColorPreset_Click"/>
+                        <Button Background="#FFFF00" Width="40" Height="40" CornerRadius="20"
+                                Tag="#FFFF00" Click="ColorPreset_Click"/>
+                        <Button Background="#00FF00" Width="40" Height="40" CornerRadius="20"
+                                Tag="#00FF00" Click="ColorPreset_Click"/>
+                        <Button Background="#00FFFF" Width="40" Height="40" CornerRadius="20"
+                                Tag="#00FFFF" Click="ColorPreset_Click"/>
+                        <Button Background="#0066FF" Width="40" Height="40" CornerRadius="20"
+                                Tag="#0066FF" Click="ColorPreset_Click"/>
+                        <Button Background="#9900FF" Width="40" Height="40" CornerRadius="20"
+                                Tag="#9900FF" Click="ColorPreset_Click"/>
+                        <Button Background="#FF00FF" Width="40" Height="40" CornerRadius="20"
+                                Tag="#FF00FF" Click="ColorPreset_Click"/>
+                        <Button Background="#FFFFFF" Width="40" Height="40" CornerRadius="20"
+                                Tag="#FFFFFF" Click="ColorPreset_Click"/>
+                    </StackPanel>
+                    
+                    <!-- RGB Sliders -->
+                    <StackPanel Spacing="12">
+                        <Grid ColumnDefinitions="60,*,60">
+                            <TextBlock Text="Red" VerticalAlignment="Center" Grid.Column="0"/>
+                            <Slider Name="RedSlider" Minimum="0" Maximum="255" Value="255"
+                                    Grid.Column="1" Margin="12,0"/>
+                            <TextBlock Name="RedValue" Text="255" Grid.Column="2"
+                                       VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="60,*,60">
+                            <TextBlock Text="Green" VerticalAlignment="Center" Grid.Column="0"/>
+                            <Slider Name="GreenSlider" Minimum="0" Maximum="255" Value="0"
+                                    Grid.Column="1" Margin="12,0"/>
+                            <TextBlock Name="GreenValue" Text="0" Grid.Column="2"
+                                       VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="60,*,60">
+                            <TextBlock Text="Blue" VerticalAlignment="Center" Grid.Column="0"/>
+                            <Slider Name="BlueSlider" Minimum="0" Maximum="255" Value="0"
+                                    Grid.Column="1" Margin="12,0"/>
+                            <TextBlock Name="BlueValue" Text="0" Grid.Column="2"
+                                       VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                        </Grid>
+                    </StackPanel>
+                    
+                    <!-- Color Preview -->
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <TextBlock Text="Preview:" VerticalAlignment="Center"/>
+                        <Border Name="ColorPreview" Width="100" Height="40" CornerRadius="8"
+                                Background="#FF0000" BorderBrush="#444444" BorderThickness="1"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            
+            <!-- Speed & Brightness -->
+            <Border Classes="Card">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="Effect Settings" FontWeight="SemiBold" FontSize="16"/>
+                    
+                    <StackPanel Spacing="12">
+                        <Grid ColumnDefinitions="100,*,60">
+                            <TextBlock Text="Brightness" VerticalAlignment="Center" Grid.Column="0"/>
+                            <Slider Name="BrightnessSlider" Minimum="0" Maximum="100" Value="100"
+                                    Grid.Column="1" Margin="12,0"/>
+                            <TextBlock Name="BrightnessValue" Text="100%" Grid.Column="2"
+                                   VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="100,*,60">
+                            <TextBlock Text="Speed" VerticalAlignment="Center" Grid.Column="0"/>
+                            <Slider Name="SpeedSlider" Minimum="1" Maximum="10" Value="5"
+                                    Grid.Column="1" Margin="12,0"/>
+                            <TextBlock Name="SpeedValue" Text="5" Grid.Column="2"
+                                   VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            
+            <!-- Per-Zone Control -->
+            <Border Classes="Card">
+                <StackPanel Spacing="16">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <TextBlock Text="Per-Zone Control" FontWeight="SemiBold" FontSize="16"
+                                   VerticalAlignment="Center"/>
+                        <ToggleSwitch Name="PerZoneToggle"/>
+                    </StackPanel>
+                    
+                    <TextBlock Text="Enable to set different colors for each keyboard zone"
+                               Foreground="#888888" FontSize="13"/>
+                    
+                    <!-- Zone Grid (shown when per-zone enabled) -->
+                    <Grid Name="ZoneGrid" IsVisible="False" ColumnDefinitions="*,*,*,*" RowDefinitions="Auto"
+                          Margin="0,8,0,0">
+                        <Border Grid.Column="0" Margin="4" Padding="12" CornerRadius="8"
+                                Background="#333333" BorderBrush="#FF0000" BorderThickness="2">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="Zone 1" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Left" Foreground="#888888" FontSize="12"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="1" Margin="4" Padding="12" CornerRadius="8"
+                                Background="#333333" BorderBrush="#00FF00" BorderThickness="2">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="Zone 2" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Center-Left" Foreground="#888888" FontSize="12"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="2" Margin="4" Padding="12" CornerRadius="8"
+                                Background="#333333" BorderBrush="#0066FF" BorderThickness="2">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="Zone 3" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Center-Right" Foreground="#888888" FontSize="12"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="3" Margin="4" Padding="12" CornerRadius="8"
+                                Background="#333333" BorderBrush="#FF00FF" BorderThickness="2">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="Zone 4" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Right" Foreground="#888888" FontSize="12"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </Border>
+            
+            <!-- Apply Button -->
+            <Button Content="Apply Lighting" Classes="Primary" HorizontalAlignment="Right"
+                    Click="ApplyLighting_Click" Padding="24,12"/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -22,11 +22,11 @@ namespace OmenCore.Services
         private readonly TimeSpan _baseInterval;
         private readonly TimeSpan _lowOverheadInterval;
         private CancellationTokenSource? _cts;
-        private bool _lowOverheadMode;
+        private volatile bool _lowOverheadMode; // volatile for thread-safe reads from monitor loop
         private MonitoringSample? _lastSample;
         private readonly double _changeThreshold = 0.5; // Minimum change to trigger UI update (degrees/percent)
         private readonly double _lowOverheadChangeThreshold = 3.0; // Higher threshold in low overhead mode
-        private bool _isPaused; // For S0 Modern Standby support
+        private volatile bool _isPaused; // For S0 Modern Standby support (volatile for thread-safety)
         private readonly object _pauseLock = new();
 
         public ReadOnlyObservableCollection<MonitoringSample> Samples { get; }

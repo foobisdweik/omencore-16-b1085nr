@@ -1131,6 +1131,75 @@
                                           IsChecked="{Binding KeyboardLightingEnabled}"/>
                         </Grid>
                         
+                        <!-- Ambient Lighting (Screen Color Sampling) -->
+                        <Border Background="#1A4285F4" CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="🌈 Ambient Lighting" FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock Text="Sync keyboard/peripherals with screen colors (Ambilight-style)" 
+                                                   FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    </StackPanel>
+                                    <ToggleButton Grid.Column="1" 
+                                                  Style="{StaticResource ModernToggleButton}"
+                                                  IsChecked="{Binding AmbientLightingEnabled}"/>
+                                </Grid>
+                                
+                                <!-- Saturation Slider -->
+                                <StackPanel Margin="0,8,0,0" Visibility="{Binding AmbientLightingEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Saturation:" 
+                                                   FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <Slider Grid.Column="1" 
+                                                Value="{Binding AmbientLightingSaturation, Mode=TwoWay}"
+                                                Minimum="0.5" Maximum="2.0" 
+                                                TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                                VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="2" 
+                                                   Text="{Binding AmbientLightingSaturation, StringFormat={}{0:F1}x}" 
+                                                   FontSize="12" Foreground="{StaticResource AccentBrush}"
+                                                   VerticalAlignment="Center" Margin="8,0,0,0" MinWidth="35"/>
+                                    </Grid>
+                                    
+                                    <!-- FPS Slider -->
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Update Rate:" 
+                                                   FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <Slider Grid.Column="1" 
+                                                Value="{Binding AmbientLightingFps, Mode=TwoWay}"
+                                                Minimum="10" Maximum="60" 
+                                                TickFrequency="5" IsSnapToTickEnabled="True"
+                                                VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="2" 
+                                                   Text="{Binding AmbientLightingFps, StringFormat={}{0} FPS}" 
+                                                   FontSize="12" Foreground="{StaticResource AccentBrush}"
+                                                   VerticalAlignment="Center" Margin="8,0,0,0" MinWidth="50"/>
+                                    </Grid>
+                                    
+                                    <TextBlock Text="💡 Samples colors from screen edges and applies to RGB devices" 
+                                               FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                               Margin="0,8,0,0" FontStyle="Italic"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        
                         <!-- Experimental EC Keyboard - WARNING SECTION (Always visible to help users) -->
                         <Border Background="#1AFF6B00" CornerRadius="8" Padding="16" Margin="0,8,0,12">
                             <StackPanel>

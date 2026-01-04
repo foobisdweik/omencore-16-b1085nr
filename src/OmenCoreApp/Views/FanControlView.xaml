@@ -220,6 +220,34 @@
                             <TextBlock Text="Smoothing step (ms):" VerticalAlignment="Center" Style="{StaticResource Caption}" Width="160" Margin="0,0,8,0"/>
                             <TextBox Text="{Binding SmoothingStepMs, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" Width="80" Style="{StaticResource ModernTextBox}"/>
                         </StackPanel>
+                        
+                        <!-- Independent CPU/GPU Curves Toggle -->
+                        <Border Background="{StaticResource SurfaceDarkBrush}"
+                                CornerRadius="6"
+                                Padding="12"
+                                Margin="0,12,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Independent CPU/GPU Curves" 
+                                               FontSize="12" 
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    <TextBlock Text="Control each fan based on its respective component temperature" 
+                                               Style="{StaticResource Caption}" 
+                                               FontSize="10"
+                                               TextWrapping="Wrap"
+                                               Margin="0,2,8,0"/>
+                                </StackPanel>
+                                <CheckBox Grid.Column="1" 
+                                          IsChecked="{Binding IndependentCurvesEnabled, Mode=TwoWay}" 
+                                          VerticalAlignment="Center"
+                                          ToolTip="When enabled, you can set separate fan curves for CPU and GPU based on their individual temperatures"/>
+                            </Grid>
+                        </Border>
                     </StackPanel>
                 </Grid>
             </Grid>
@@ -232,94 +260,182 @@
                 <ColumnDefinition Width="350" MinWidth="300"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Visual Fan Curve Editor -->
-            <Border Grid.Column="0" Style="{StaticResource SurfaceCard}" Padding="20" Margin="0,0,16,0">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    
-                    <!-- Header with instructions -->
-                    <StackPanel Grid.Row="0" Margin="0,0,0,16">
-                        <Grid>
-                            <TextBlock Text="VISUAL CURVE EDITOR" 
-                                       Style="{StaticResource Label}"/>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <Button Content="+ Add" 
-                                        Command="{Binding AddCurvePointCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        Width="70" Height="32"
-                                        FontSize="12"
-                                        Margin="0,0,6,0"
-                                        ToolTip="Add a new curve point (max 10 points)"/>
-                                <Button Content="− Remove" 
-                                        Command="{Binding RemoveCurvePointCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        Width="85" Height="32"
-                                        FontSize="12"
-                                        Margin="0,0,6,0"
-                                        ToolTip="Remove the last curve point (min 2 points)"/>
-                                <Button Content="↺ Reset" 
-                                        Command="{Binding ResetCurveCommand}"
-                                        Style="{StaticResource SecondaryButton}"
-                                        Width="75" Height="32"
-                                        FontSize="12"
-                                        ToolTip="Reset curve to default"/>
-                            </StackPanel>
-                        </Grid>
+            <!-- Curve Editor Container - Shows single or dual curves based on mode -->
+            <Grid Grid.Column="0" Margin="0,0,16,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <!-- Single Curve Editor (when IndependentCurvesEnabled = false) -->
+                <Border Grid.Row="0" 
+                        Style="{StaticResource SurfaceCard}" 
+                        Padding="20"
+                        Visibility="{Binding IndependentCurvesEnabled, Converter={StaticResource InverseBoolToVisibility}}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
                         
-                        <!-- Instructions -->
-                        <Border Background="#1A2A3A"
-                                BorderBrush="{StaticResource AccentBlueBrush}"
-                                BorderThickness="1"
+                        <!-- Header with instructions -->
+                        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                            <Grid>
+                                <TextBlock Text="VISUAL CURVE EDITOR" 
+                                           Style="{StaticResource Label}"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Content="+ Add" 
+                                            Command="{Binding AddCurvePointCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Width="70" Height="32"
+                                            FontSize="12"
+                                            Margin="0,0,6,0"
+                                            ToolTip="Add a new curve point (max 10 points)"/>
+                                    <Button Content="− Remove" 
+                                            Command="{Binding RemoveCurvePointCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Width="85" Height="32"
+                                            FontSize="12"
+                                            Margin="0,0,6,0"
+                                            ToolTip="Remove the last curve point (min 2 points)"/>
+                                    <Button Content="↺ Reset" 
+                                            Command="{Binding ResetCurveCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Width="75" Height="32"
+                                            FontSize="12"
+                                            ToolTip="Reset curve to default"/>
+                                </StackPanel>
+                            </Grid>
+                            
+                            <!-- Instructions -->
+                            <Border Background="#1A2A3A"
+                                    BorderBrush="{StaticResource AccentBlueBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="12"
+                                    Margin="0,12,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="💡 How to Use:" 
+                                               FontSize="11" FontWeight="SemiBold"
+                                               Foreground="{StaticResource AccentBlueBrush}"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock Style="{StaticResource Caption}" FontSize="10" TextWrapping="Wrap">
+                                        <Run Text="• Drag points to adjust temperature/fan speed mapping"/>
+                                        <LineBreak/>
+                                        <Run Text="• Click empty area to add new points"/>
+                                        <LineBreak/>
+                                        <Run Text="• Right-click a point to remove it"/>
+                                        <LineBreak/>
+                                        <Run Text="• Blue line shows current temperature (max of CPU/GPU)"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                        
+                        <!-- Interactive Curve Editor -->
+                        <controls:FanCurveEditor Grid.Row="1"
+                                                 CurvePoints="{Binding CustomFanCurve}"
+                                                 CurrentTemperature="{Binding CurrentTemperature}"
+                                                 MinHeight="280"/>
+                        
+                        <!-- Current curve points summary -->
+                        <Border Grid.Row="2" 
+                                Background="{StaticResource SurfaceDarkBrush}"
                                 CornerRadius="6"
                                 Padding="12"
-                                Margin="0,12,0,0">
-                            <StackPanel>
-                                <TextBlock Text="💡 How to Use:" 
-                                           FontSize="11" FontWeight="SemiBold"
-                                           Foreground="{StaticResource AccentBlueBrush}"
-                                           Margin="0,0,0,4"/>
-                                <TextBlock Style="{StaticResource Caption}" FontSize="10" TextWrapping="Wrap">
-                                    <Run Text="• Drag points to adjust temperature/fan speed mapping"/>
-                                    <LineBreak/>
-                                    <Run Text="• Click empty area to add new points"/>
-                                    <LineBreak/>
-                                    <Run Text="• Right-click a point to remove it"/>
-                                    <LineBreak/>
-                                    <Run Text="• Blue line shows current temperature"/>
-                                </TextBlock>
-                            </StackPanel>
+                                Margin="0,16,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Text="Current Points:"
+                                           Style="{StaticResource Caption}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,12,0"/>
+                                <ItemsControl Grid.Column="1" ItemsSource="{Binding CustomFanCurve}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{StaticResource SurfaceMediumBrush}"
+                                                    CornerRadius="4"
+                                                    Padding="8,4"
+                                                    Margin="0,0,8,4">
+                                                <TextBlock FontSize="10" Foreground="{StaticResource TextSecondaryBrush}">
+                                                    <Run Text="{Binding TemperatureC, StringFormat='{}{0}°'}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                    <Run Text="→"/>
+                                                    <Run Text="{Binding FanPercent, StringFormat='{}{0}%'}" Foreground="{StaticResource AccentBrush}"/>
+                                                </TextBlock>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Grid>
                         </Border>
-                    </StackPanel>
+                    </Grid>
+                </Border>
+                
+                <!-- Dual Curve Editors (when IndependentCurvesEnabled = true) -->
+                <Grid Grid.Row="0" 
+                      Visibility="{Binding IndependentCurvesEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
                     
-                    <!-- Interactive Curve Editor -->
-                    <controls:FanCurveEditor Grid.Row="1"
-                                             CurvePoints="{Binding CustomFanCurve}"
-                                             CurrentTemperature="{Binding CurrentTemperature}"
-                                             MinHeight="280"/>
-                    
-                    <!-- Current curve points summary -->
-                    <Border Grid.Row="2" 
-                            Background="{StaticResource SurfaceDarkBrush}"
-                            CornerRadius="6"
-                            Padding="12"
-                            Margin="0,16,0,0">
+                    <!-- CPU Fan Curve Editor -->
+                    <Border Grid.Row="0" Style="{StaticResource SurfaceCard}" Padding="16" Margin="0,0,0,8">
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0"
-                                       Text="Current Points:"
-                                       Style="{StaticResource Caption}"
-                                       FontSize="11"
-                                       FontWeight="SemiBold"
-                                       VerticalAlignment="Center"
-                                       Margin="0,0,12,0"/>
-                            <ItemsControl Grid.Column="1" ItemsSource="{Binding CustomFanCurve}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <Grid Grid.Row="0" Margin="0,0,0,8">
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Background="#1A4A7A" CornerRadius="4" Padding="8,4" Margin="0,0,8,0">
+                                        <TextBlock Text="CPU" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBlueBrush}"/>
+                                    </Border>
+                                    <TextBlock Text="FAN CURVE (by CPU temp)" 
+                                               Style="{StaticResource Label}"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Content="+" 
+                                            Command="{Binding AddCurvePointCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Width="32" Height="28"
+                                            FontSize="12"
+                                            Margin="0,0,4,0"/>
+                                    <Button Content="−" 
+                                            Command="{Binding RemoveCurvePointCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Width="32" Height="28"
+                                            FontSize="12"
+                                            Margin="0,0,4,0"/>
+                                    <Button Content="↺" 
+                                            Command="{Binding ResetCurveCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Width="32" Height="28"
+                                            FontSize="12"/>
+                                </StackPanel>
+                            </Grid>
+                            
+                            <controls:FanCurveEditor Grid.Row="1"
+                                                     CurvePoints="{Binding CustomFanCurve}"
+                                                     CurrentTemperature="{Binding CurrentCpuTemperature}"
+                                                     MinHeight="140"/>
+                            
+                            <ItemsControl Grid.Row="2" ItemsSource="{Binding CustomFanCurve}" Margin="0,8,0,0">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <WrapPanel Orientation="Horizontal"/>
@@ -328,13 +444,88 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Background="{StaticResource SurfaceMediumBrush}"
-                                                CornerRadius="4"
-                                                Padding="8,4"
-                                                Margin="0,0,8,4">
-                                            <TextBlock FontSize="10" Foreground="{StaticResource TextSecondaryBrush}">
+                                                CornerRadius="3"
+                                                Padding="6,3"
+                                                Margin="0,0,6,0">
+                                            <TextBlock FontSize="9">
                                                 <Run Text="{Binding TemperatureC, StringFormat='{}{0}°'}" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                                <Run Text="→"/>
-                                                <Run Text="{Binding FanPercent, StringFormat='{}{0}%'}" Foreground="{StaticResource AccentBrush}"/>
+                                                <Run Text="→" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                <Run Text="{Binding FanPercent, StringFormat='{}{0}%'}" Foreground="{StaticResource AccentBlueBrush}"/>
+                                            </TextBlock>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- GPU Fan Curve Editor -->
+                    <Border Grid.Row="1" Style="{StaticResource SurfaceCard}" Padding="16" Margin="0,8,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <Grid Grid.Row="0" Margin="0,0,0,8">
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Background="#1A7A4A" CornerRadius="4" Padding="8,4" Margin="0,0,8,0">
+                                        <TextBlock Text="GPU" FontSize="11" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                                    </Border>
+                                    <TextBlock Text="FAN CURVE (by GPU temp)" 
+                                               Style="{StaticResource Label}"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Content="📋" 
+                                            Command="{Binding CopyFromCpuCurveCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Width="32" Height="28"
+                                            FontSize="12"
+                                            Margin="0,0,4,0"
+                                            ToolTip="Copy CPU curve to GPU"/>
+                                    <Button Content="+" 
+                                            Command="{Binding AddGpuCurvePointCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Width="32" Height="28"
+                                            FontSize="12"
+                                            Margin="0,0,4,0"/>
+                                    <Button Content="−" 
+                                            Command="{Binding RemoveGpuCurvePointCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Width="32" Height="28"
+                                            FontSize="12"
+                                            Margin="0,0,4,0"/>
+                                    <Button Content="↺" 
+                                            Command="{Binding ResetGpuCurveCommand}"
+                                            Style="{StaticResource SecondaryButton}"
+                                            Width="32" Height="28"
+                                            FontSize="12"/>
+                                </StackPanel>
+                            </Grid>
+                            
+                            <controls:FanCurveEditor Grid.Row="1"
+                                                     CurvePoints="{Binding GpuFanCurve}"
+                                                     CurrentTemperature="{Binding CurrentGpuTemperature}"
+                                                     MinHeight="140"/>
+                            
+                            <ItemsControl Grid.Row="2" ItemsSource="{Binding GpuFanCurve}" Margin="0,8,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{StaticResource SurfaceMediumBrush}"
+                                                CornerRadius="3"
+                                                Padding="6,3"
+                                                Margin="0,0,6,0">
+                                            <TextBlock FontSize="9">
+                                                <Run Text="{Binding TemperatureC, StringFormat='{}{0}°'}" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                <Run Text="→" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                <Run Text="{Binding FanPercent, StringFormat='{}{0}%'}" Foreground="{StaticResource SuccessBrush}"/>
                                             </TextBlock>
                                         </Border>
                                     </DataTemplate>
@@ -343,7 +534,7 @@
                         </Grid>
                     </Border>
                 </Grid>
-            </Border>
+            </Grid>
 
             <!-- Thermal and Fan Telemetry - Stacked vertically -->
             <Grid Grid.Column="1">

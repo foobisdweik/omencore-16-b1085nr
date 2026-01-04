@@ -22,6 +22,7 @@ namespace OmenCore.ViewModels
         private readonly HpWmiBios? _wmiBios;
         private readonly OghServiceProxy? _oghProxy;
         private readonly SystemInfoService? _systemInfoService;
+        private readonly NvapiService? _nvapiService;
         private IMsrAccess? _msrAccess;  // Changed from WinRing0MsrAccess to IMsrAccess
 
         private PerformanceMode? _selectedPerformanceMode;
@@ -628,6 +629,8 @@ namespace OmenCore.ViewModels
         public ICommand ApplyUndervoltCommand { get; }
         public ICommand ResetUndervoltCommand { get; }
         public ICommand CleanupOmenHubCommand { get; }
+        public ICommand ApplyGpuOcCommand { get; }
+        public ICommand ResetGpuOcCommand { get; }
 
         public SystemControlViewModel(
             UndervoltService undervoltService, 
@@ -639,7 +642,8 @@ namespace OmenCore.ViewModels
             ConfigurationService configService,
             HpWmiBios? wmiBios = null,
             OghServiceProxy? oghProxy = null,
-            SystemInfoService? systemInfoService = null)
+            SystemInfoService? systemInfoService = null,
+            NvapiService? nvapiService = null)
         {
             _undervoltService = undervoltService;
             _performanceModeService = performanceModeService;
@@ -651,6 +655,10 @@ namespace OmenCore.ViewModels
             _wmiBios = wmiBios;
             _oghProxy = oghProxy;
             _systemInfoService = systemInfoService;
+            _nvapiService = nvapiService;
+
+            // Initialize GPU OC if available
+            InitializeGpuOc();
 
             _undervoltService.StatusChanged += (s, status) => 
             {
@@ -674,6 +682,8 @@ namespace OmenCore.ViewModels
             CreateRestorePointCommand = new AsyncRelayCommand(_ => CreateRestorePointAsync());
             SwitchGpuModeCommand = new AsyncRelayCommand(_ => SwitchGpuModeAsync());
             ApplyGpuPowerBoostCommand = new RelayCommand(_ => ApplyGpuPowerBoost(), _ => GpuPowerBoostAvailable);
+            ApplyGpuOcCommand = new RelayCommand(_ => ApplyGpuOc(), _ => GpuOcAvailable);
+            ResetGpuOcCommand = new RelayCommand(_ => ResetGpuOc(), _ => GpuOcAvailable);
             ApplyTccOffsetCommand = new RelayCommand(_ => ApplyTccOffset(), _ => TccStatus.IsSupported);
             ResetTccOffsetCommand = new RelayCommand(_ => ResetTccOffset(), _ => TccStatus.IsSupported);
 
@@ -744,10 +754,11 @@ namespace OmenCore.ViewModels
 
 
             
-            // Load undervolt preferences from config
-            var undervoltPrefs = _configService.Config.Undervolt;
-            RequestedCoreOffset = undervoltPrefs.DefaultOffset.CoreMv;
-            RequestedCacheOffset = undervoltPrefs.DefaultOffset.CacheMv;
+            // Load undervolt preferences from config (with null safety)
+            var undervoltPrefs = _configService.Config.Undervolt ?? new UndervoltPreferences();
+            var defaultOffset = undervoltPrefs.DefaultOffset ?? new UndervoltOffset();
+            RequestedCoreOffset = defaultOffset.CoreMv;
+            RequestedCacheOffset = defaultOffset.CacheMv;
             EnablePerCoreUndervolt = undervoltPrefs.EnablePerCoreUndervolt;
             RequestedPerCoreOffsets = undervoltPrefs.PerCoreOffsetsMv?.Clone() as int?[];
             RespectExternalUndervolt = undervoltPrefs.RespectExternalControllers;
@@ -937,25 +948,84 @@ namespace OmenCore.ViewModels
         
         private void ApplyTccOffset()
         {
-            if (_msrAccess == null || !TccStatus.IsSupported)
+            if (_msrAccess == null)
+            {
+                _logging.Warn("Cannot apply TCC offset: MSR access not available (install PawnIO or disable Secure Boot)");
+                System.Windows.MessageBox.Show(
+                    "TCC offset cannot be applied - MSR access not available.\n\n" +
+                    "This requires either:\n" +
+                    "• PawnIO driver installed (pawnio.eu)\n" +
+                    "• Secure Boot disabled with WinRing0\n\n" +
+                    "Without MSR access, CPU temperature limits cannot be modified.",
+                    "TCC Offset Unavailable",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
                 return;
+            }
+            
+            if (!TccStatus.IsSupported)
+            {
+                _logging.Warn("TCC offset not supported on this CPU");
+                return;
+            }
                 
             try
             {
+                // Read current value before change
+                var offsetBefore = _msrAccess.ReadTccOffset();
+                
+                // Apply the new offset
                 _msrAccess.SetTccOffset(RequestedTccOffset);
-                var newLimit = TccStatus.TjMax - RequestedTccOffset;
-                _logging.Info($"TCC offset set to {RequestedTccOffset}°C (effective limit: {newLimit}°C)");
                 
-                // Save to config for persistence across reboots
-                SaveTccOffsetToConfig(RequestedTccOffset);
+                // Read back to verify write succeeded
+                var offsetAfter = _msrAccess.ReadTccOffset();
+                var newLimit = TccStatus.TjMax - offsetAfter;
                 
-                // Refresh status
-                var currentOffset = _msrAccess.ReadTccOffset();
-                TccStatus = TccOffsetStatus.CreateSupported(TccStatus.TjMax, currentOffset);
+                if (offsetAfter == RequestedTccOffset)
+                {
+                    _logging.Info($"✓ TCC offset applied: {offsetAfter}°C (effective limit: {newLimit}°C)");
+                    
+                    // Save to config for persistence across reboots
+                    SaveTccOffsetToConfig(RequestedTccOffset);
+                    
+                    // Update status
+                    TccStatus = TccOffsetStatus.CreateSupported(TccStatus.TjMax, offsetAfter);
+                }
+                else if (offsetAfter == offsetBefore)
+                {
+                    _logging.Warn($"× TCC offset write failed - value unchanged at {offsetBefore}°C. " +
+                                  "This may indicate HVCI/Secure Boot is blocking MSR writes.");
+                    System.Windows.MessageBox.Show(
+                        $"TCC offset could not be changed - the value remained at {offsetBefore}°C.\n\n" +
+                        "This usually means:\n" +
+                        "• Hyper-V/HVCI (Core Isolation) is blocking MSR writes\n" +
+                        "• Secure Boot is preventing kernel-mode access\n\n" +
+                        "To fix:\n" +
+                        "1. Open Windows Security → Device Security → Core Isolation\n" +
+                        "2. Disable 'Memory Integrity'\n" +
+                        "3. Restart your computer\n\n" +
+                        "Or use Intel XTU which has a signed driver.",
+                        "TCC Offset Write Failed",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Warning);
+                }
+                else
+                {
+                    _logging.Warn($"⚠ TCC offset partially applied: requested {RequestedTccOffset}°C, " +
+                                  $"actual {offsetAfter}°C (was {offsetBefore}°C)");
+                    // Still update UI with actual value
+                    TccStatus = TccOffsetStatus.CreateSupported(TccStatus.TjMax, offsetAfter);
+                }
             }
             catch (Exception ex)
             {
                 _logging.Error($"Failed to apply TCC offset: {ex.Message}", ex);
+                System.Windows.MessageBox.Show(
+                    $"Failed to apply TCC offset: {ex.Message}\n\n" +
+                    "Ensure you have MSR access via PawnIO or WinRing0.",
+                    "TCC Offset Error",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
             }
         }
         
@@ -1214,6 +1284,213 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
             }
         }
         
+        #region GPU Overclocking (NVAPI)
+        
+        /// <summary>
+        /// Initialize GPU overclocking via NVAPI.
+        /// </summary>
+        private void InitializeGpuOc()
+        {
+            if (_nvapiService == null)
+            {
+                GpuOcAvailable = false;
+                GpuOcStatus = "NVAPI not available";
+                return;
+            }
+            
+            try
+            {
+                if (_nvapiService.Initialize())
+                {
+                    GpuOcAvailable = _nvapiService.SupportsOverclocking;
+                    
+                    // Set limits from the service
+                    GpuCoreOffsetMin = _nvapiService.MinCoreOffset;
+                    GpuCoreOffsetMax = _nvapiService.MaxCoreOffset;
+                    GpuMemoryOffsetMin = _nvapiService.MinMemoryOffset;
+                    GpuMemoryOffsetMax = _nvapiService.MaxMemoryOffset;
+                    GpuPowerLimitMin = _nvapiService.MinPowerLimit;
+                    GpuPowerLimitMax = _nvapiService.MaxPowerLimit;
+                    
+                    // Get current values
+                    GpuCoreClockOffset = _nvapiService.CoreClockOffsetMHz;
+                    GpuMemoryClockOffset = _nvapiService.MemoryClockOffsetMHz;
+                    GpuPowerLimitPercent = _nvapiService.PowerLimitPercent;
+                    
+                    if (GpuOcAvailable)
+                    {
+                        GpuOcStatus = $"✓ {_nvapiService.GpuName} - Ready";
+                        _logging.Info($"GPU OC initialized: {_nvapiService.GpuName}, Supports OC: {_nvapiService.SupportsOverclocking}");
+                        
+                        // Restore saved OC settings from config
+                        RestoreGpuOcFromConfig();
+                    }
+                    else
+                    {
+                        GpuOcStatus = $"{_nvapiService.GpuName} - Overclocking not supported";
+                        _logging.Info($"GPU detected but OC not supported: {_nvapiService.GpuName}");
+                    }
+                }
+                else
+                {
+                    GpuOcAvailable = false;
+                    GpuOcStatus = "NVIDIA GPU not detected";
+                }
+            }
+            catch (Exception ex)
+            {
+                GpuOcAvailable = false;
+                GpuOcStatus = $"Initialization failed: {ex.Message}";
+                _logging.Error($"GPU OC initialization failed: {ex.Message}", ex);
+            }
+            
+            // Notify UI of limit changes
+            OnPropertyChanged(nameof(GpuCoreOffsetMin));
+            OnPropertyChanged(nameof(GpuCoreOffsetMax));
+            OnPropertyChanged(nameof(GpuMemoryOffsetMin));
+            OnPropertyChanged(nameof(GpuMemoryOffsetMax));
+            OnPropertyChanged(nameof(GpuPowerLimitMin));
+            OnPropertyChanged(nameof(GpuPowerLimitMax));
+        }
+        
+        /// <summary>
+        /// Apply GPU clock offsets and power limit.
+        /// </summary>
+        private void ApplyGpuOc()
+        {
+            if (_nvapiService == null || !GpuOcAvailable)
+            {
+                GpuOcStatus = "GPU overclocking not available";
+                return;
+            }
+            
+            bool coreSuccess = true;
+            bool memSuccess = true;
+            bool powerSuccess = true;
+            
+            try
+            {
+                // Apply core clock offset
+                if (GpuCoreClockOffset != 0 || _nvapiService.CoreClockOffsetMHz != 0)
+                {
+                    coreSuccess = _nvapiService.SetCoreClockOffset(GpuCoreClockOffset);
+                    _logging.Info($"GPU core clock offset {(coreSuccess ? "applied" : "failed")}: {GpuCoreClockOffset} MHz");
+                }
+                
+                // Apply memory clock offset
+                if (GpuMemoryClockOffset != 0 || _nvapiService.MemoryClockOffsetMHz != 0)
+                {
+                    memSuccess = _nvapiService.SetMemoryClockOffset(GpuMemoryClockOffset);
+                    _logging.Info($"GPU memory clock offset {(memSuccess ? "applied" : "failed")}: {GpuMemoryClockOffset} MHz");
+                }
+                
+                // Apply power limit
+                if (GpuPowerLimitPercent != 100 || _nvapiService.PowerLimitPercent != 100)
+                {
+                    powerSuccess = _nvapiService.SetPowerLimit(GpuPowerLimitPercent);
+                    _logging.Info($"GPU power limit {(powerSuccess ? "applied" : "failed")}: {GpuPowerLimitPercent}%");
+                }
+                
+                // Update status
+                if (coreSuccess && memSuccess && powerSuccess)
+                {
+                    GpuOcStatus = $"✓ Applied: Core {GpuCoreClockOffsetText}, Mem {GpuMemoryClockOffsetText}, Power {GpuPowerLimitText}";
+                    SaveGpuOcToConfig();
+                }
+                else
+                {
+                    var failures = new System.Collections.Generic.List<string>();
+                    if (!coreSuccess) failures.Add("core");
+                    if (!memSuccess) failures.Add("memory");
+                    if (!powerSuccess) failures.Add("power");
+                    GpuOcStatus = $"⚠ Partial: {string.Join(", ", failures)} failed - API may be restricted";
+                }
+            }
+            catch (Exception ex)
+            {
+                GpuOcStatus = $"Error: {ex.Message}";
+                _logging.Error($"GPU OC apply failed: {ex.Message}", ex);
+            }
+        }
+        
+        /// <summary>
+        /// Reset GPU clock offsets and power limit to defaults.
+        /// </summary>
+        private void ResetGpuOc()
+        {
+            GpuCoreClockOffset = 0;
+            GpuMemoryClockOffset = 0;
+            GpuPowerLimitPercent = 100;
+            
+            if (_nvapiService != null && GpuOcAvailable)
+            {
+                _nvapiService.SetCoreClockOffset(0);
+                _nvapiService.SetMemoryClockOffset(0);
+                _nvapiService.SetPowerLimit(100);
+            }
+            
+            GpuOcStatus = "Reset to defaults (Core: 0 MHz, Memory: 0 MHz, Power: 100%)";
+            SaveGpuOcToConfig();
+            _logging.Info("GPU OC reset to defaults");
+        }
+        
+        /// <summary>
+        /// Save GPU OC settings to config for persistence.
+        /// </summary>
+        private void SaveGpuOcToConfig()
+        {
+            try
+            {
+                var config = _configService.Config;
+                if (config.GpuOc == null)
+                    config.GpuOc = new GpuOcSettings();
+                
+                config.GpuOc.CoreClockOffsetMHz = GpuCoreClockOffset;
+                config.GpuOc.MemoryClockOffsetMHz = GpuMemoryClockOffset;
+                config.GpuOc.PowerLimitPercent = GpuPowerLimitPercent;
+                config.GpuOc.ApplyOnStartup = true; // Default to reapply
+                
+                _configService.Save(config);
+                _logging.Info($"GPU OC settings saved: Core={GpuCoreClockOffset}, Mem={GpuMemoryClockOffset}, Power={GpuPowerLimitPercent}%");
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to save GPU OC settings: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Restore GPU OC settings from config on startup.
+        /// </summary>
+        private void RestoreGpuOcFromConfig()
+        {
+            try
+            {
+                var config = _configService.Config;
+                if (config.GpuOc != null && config.GpuOc.ApplyOnStartup)
+                {
+                    GpuCoreClockOffset = config.GpuOc.CoreClockOffsetMHz;
+                    GpuMemoryClockOffset = config.GpuOc.MemoryClockOffsetMHz;
+                    GpuPowerLimitPercent = config.GpuOc.PowerLimitPercent;
+                    
+                    _logging.Info($"GPU OC settings restored from config: Core={GpuCoreClockOffset}, Mem={GpuMemoryClockOffset}, Power={GpuPowerLimitPercent}%");
+                    
+                    // Apply restored settings after a short delay
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(2000); // Wait for GPU to be fully ready
+                        App.Current?.Dispatcher?.Invoke(() => ApplyGpuOc());
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to restore GPU OC settings: {ex.Message}");
+            }
+        }
+        
+        #endregion
+        
         /// <summary>
         /// Reapply saved performance mode on startup.
         /// Throws an exception if the operation fails, enabling retry logic.
@@ -1349,31 +1626,49 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
 
         private async Task ApplyUndervoltAsync()
         {
-            await ExecuteWithLoadingAsync(async () =>
+            try
             {
-                var offset = new UndervoltOffset
+                await ExecuteWithLoadingAsync(async () =>
                 {
-                    CoreMv = RequestedCoreOffset,
-                    CacheMv = RequestedCacheOffset
-                };
+                    var offset = new UndervoltOffset
+                    {
+                        CoreMv = RequestedCoreOffset,
+                        CacheMv = RequestedCacheOffset
+                    };
 
-                // Add per-core offsets if enabled
-                if (EnablePerCoreUndervolt && RequestedPerCoreOffsets != null)
-                {
-                    offset.PerCoreOffsetsMv = RequestedPerCoreOffsets;
-                }
+                    // Add per-core offsets if enabled
+                    if (EnablePerCoreUndervolt && RequestedPerCoreOffsets != null)
+                    {
+                        offset.PerCoreOffsetsMv = RequestedPerCoreOffsets;
+                    }
 
-                await _undervoltService.ApplyAsync(offset);
+                    await _undervoltService.ApplyAsync(offset);
 
-                // Save undervolt preferences to config
-                var config = _configService.Config;
-                config.Undervolt.DefaultOffset.CoreMv = RequestedCoreOffset;
-                config.Undervolt.DefaultOffset.CacheMv = RequestedCacheOffset;
-                config.Undervolt.EnablePerCoreUndervolt = EnablePerCoreUndervolt;
-                config.Undervolt.PerCoreOffsetsMv = RequestedPerCoreOffsets?.Clone() as int?[];
-                config.Undervolt.RespectExternalControllers = RespectExternalUndervolt;
-                _configService.Save(config);
-            }, "Applying undervolt settings...");
+                    // Save undervolt preferences to config (with null safety)
+                    var config = _configService.Config;
+                    config.Undervolt ??= new UndervoltPreferences();
+                    config.Undervolt.DefaultOffset ??= new UndervoltOffset();
+                    config.Undervolt.DefaultOffset.CoreMv = RequestedCoreOffset;
+                    config.Undervolt.DefaultOffset.CacheMv = RequestedCacheOffset;
+                    config.Undervolt.EnablePerCoreUndervolt = EnablePerCoreUndervolt;
+                    config.Undervolt.PerCoreOffsetsMv = RequestedPerCoreOffsets?.Clone() as int?[];
+                    config.Undervolt.RespectExternalControllers = RespectExternalUndervolt;
+                    _configService.Save(config);
+                }, "Applying undervolt settings...");
+            }
+            catch (Exception ex)
+            {
+                _logging.Error($"Failed to apply undervolt: {ex.Message}", ex);
+                System.Windows.MessageBox.Show(
+                    $"Failed to apply undervolt settings:\n\n{ex.Message}\n\n" +
+                    "This may be caused by:\n" +
+                    "• MSR access blocked (install PawnIO or disable Secure Boot)\n" +
+                    "• HVCI/Core Isolation enabled\n" +
+                    "• Unsupported CPU",
+                    "Undervolt Failed",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+            }
         }
 
         private async Task ApplyUndervoltPresetAsync(object? parameter)

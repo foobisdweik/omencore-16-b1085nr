@@ -29,6 +29,7 @@ namespace OmenCore.ViewModels
         private readonly OsdService? _osdService;
         private readonly HardwareMonitoringService? _hardwareMonitoringService;
         private readonly Hardware.HpWmiBios? _wmiBios;
+        private readonly PowerAutomationService? _powerAutomationService;
         
         private bool _startWithWindows;
         private bool _startMinimized;
@@ -88,7 +89,8 @@ namespace OmenCore.ViewModels
             Hardware.HpWmiBios? wmiBios = null,
             OmenKeyService? omenKeyService = null,
             OsdService? osdService = null,
-            HardwareMonitoringService? hardwareMonitoringService = null)
+            HardwareMonitoringService? hardwareMonitoringService = null,
+            PowerAutomationService? powerAutomationService = null)
         {
             _logging = logging;
             _configService = configService;
@@ -100,6 +102,7 @@ namespace OmenCore.ViewModels
             _omenKeyService = omenKeyService;
             _osdService = osdService;
             _hardwareMonitoringService = hardwareMonitoringService;
+            _powerAutomationService = powerAutomationService;
 
             // Load saved settings
             LoadSettings();
@@ -252,6 +255,13 @@ namespace OmenCore.ViewModels
                     _powerAutomationEnabled = value;
                     OnPropertyChanged();
                     SaveSettings();
+                    
+                    // Sync with PowerAutomationService at runtime
+                    if (_powerAutomationService != null)
+                    {
+                        _powerAutomationService.IsEnabled = value;
+                        _logging.Info($"PowerAutomationService.IsEnabled synced to {value}");
+                    }
                 }
             }
         }
@@ -266,6 +276,12 @@ namespace OmenCore.ViewModels
                     _acFanPreset = value;
                     OnPropertyChanged();
                     SaveSettings();
+                    
+                    // Sync with PowerAutomationService at runtime
+                    if (_powerAutomationService != null)
+                    {
+                        _powerAutomationService.AcFanPreset = value;
+                    }
                 }
             }
         }
@@ -280,6 +296,12 @@ namespace OmenCore.ViewModels
                     _acPerformanceMode = value;
                     OnPropertyChanged();
                     SaveSettings();
+                    
+                    // Sync with PowerAutomationService at runtime
+                    if (_powerAutomationService != null)
+                    {
+                        _powerAutomationService.AcPerformanceMode = value;
+                    }
                 }
             }
         }
@@ -294,6 +316,12 @@ namespace OmenCore.ViewModels
                     _batteryFanPreset = value;
                     OnPropertyChanged();
                     SaveSettings();
+                    
+                    // Sync with PowerAutomationService at runtime
+                    if (_powerAutomationService != null)
+                    {
+                        _powerAutomationService.BatteryFanPreset = value;
+                    }
                 }
             }
         }
@@ -308,6 +336,12 @@ namespace OmenCore.ViewModels
                     _batteryPerformanceMode = value;
                     OnPropertyChanged();
                     SaveSettings();
+                    
+                    // Sync with PowerAutomationService at runtime
+                    if (_powerAutomationService != null)
+                    {
+                        _powerAutomationService.BatteryPerformanceMode = value;
+                    }
                 }
             }
         }
@@ -559,6 +593,56 @@ namespace OmenCore.ViewModels
                 if (_config.Features.PowerAutomationEnabled != value)
                 {
                     _config.Features.PowerAutomationEnabled = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+        
+        public bool AmbientLightingEnabled
+        {
+            get => _config.AmbientLighting?.Enabled ?? false;
+            set
+            {
+                if (_config.AmbientLighting == null) _config.AmbientLighting = new AmbientLightingSettings();
+                if (_config.AmbientLighting.Enabled != value)
+                {
+                    _config.AmbientLighting.Enabled = value;
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+        
+        public float AmbientLightingSaturation
+        {
+            get => _config.AmbientLighting?.SaturationBoost ?? 1.2f;
+            set
+            {
+                if (_config.AmbientLighting == null) _config.AmbientLighting = new AmbientLightingSettings();
+                if (Math.Abs(_config.AmbientLighting.SaturationBoost - value) > 0.01f)
+                {
+                    _config.AmbientLighting.SaturationBoost = Math.Clamp(value, 0.5f, 2.0f);
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+        
+        public int AmbientLightingFps
+        {
+            get
+            {
+                var interval = _config.AmbientLighting?.UpdateIntervalMs ?? 33;
+                return interval > 0 ? 1000 / interval : 30;
+            }
+            set
+            {
+                if (_config.AmbientLighting == null) _config.AmbientLighting = new AmbientLightingSettings();
+                var newInterval = value > 0 ? 1000 / value : 33;
+                if (_config.AmbientLighting.UpdateIntervalMs != newInterval)
+                {
+                    _config.AmbientLighting.UpdateIntervalMs = Math.Clamp(newInterval, 16, 200);
                     OnPropertyChanged();
                     SaveSettings();
                 }
@@ -1098,22 +1182,60 @@ namespace OmenCore.ViewModels
         {
             try
             {
-                if (_wmiBios != null)
+                if (_wmiBios == null)
                 {
-                    // Set battery care mode via WMI BIOS
-                    // When enabled: limit charging to 80%
-                    // When disabled: allow full charge to 100%
-                    _wmiBios.SetBatteryCareMode(enabled);
-                    _logging.Info($"Battery charge limit: {(enabled ? "Enabled 80% limit via WMI" : "Disabled (full charge) via WMI")}");
+                    _logging.Warn("Cannot apply battery charge limit: WMI BIOS not available");
+                    System.Windows.MessageBox.Show(
+                        "Battery charge limit cannot be set - HP WMI BIOS interface not available.\n\n" +
+                        "This feature requires HP OMEN/Victus laptop with WMI BIOS support.",
+                        "Battery Care Unavailable",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Warning);
+                    return;
+                }
+                
+                // Set battery care mode via WMI BIOS
+                // When enabled: limit charging to 80%
+                // When disabled: allow full charge to 100%
+                bool success = _wmiBios.SetBatteryCareMode(enabled);
+                
+                if (success)
+                {
+                    // Verify by reading back the setting
+                    var currentMode = _wmiBios.GetBatteryCareMode();
+                    if (currentMode == enabled)
+                    {
+                        _logging.Info($"✓ Battery charge limit: {(enabled ? "Enabled 80% limit" : "Disabled (full charge)")}");
+                    }
+                    else
+                    {
+                        _logging.Warn($"⚠ Battery charge limit command succeeded but verification failed. " +
+                                      $"Requested: {(enabled ? "80%" : "100%")}, Current: {(currentMode == true ? "80%" : currentMode == false ? "100%" : "unknown")}");
+                    }
                 }
                 else
                 {
-                    _logging.Warn("Cannot apply battery charge limit: WMI BIOS not available");
+                    _logging.Warn("Battery charge limit WMI command returned failure");
+                    System.Windows.MessageBox.Show(
+                        "Battery charge limit command failed.\n\n" +
+                        "This may indicate:\n" +
+                        "• Your laptop model doesn't support this feature\n" +
+                        "• The HP BIOS needs an update\n" +
+                        "• AC adapter is not connected\n\n" +
+                        "Try toggling the setting in OMEN Gaming Hub to compare behavior.",
+                        "Battery Care Failed",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Warning);
                 }
             }
             catch (Exception ex)
             {
                 _logging.Error($"Failed to apply battery charge limit: {ex.Message}", ex);
+                System.Windows.MessageBox.Show(
+                    $"Failed to apply battery charge limit: {ex.Message}",
+                    "Battery Care Error",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
             }
         }
 

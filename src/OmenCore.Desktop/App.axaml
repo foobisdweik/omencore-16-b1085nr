@@ -1,0 +1,21 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="OmenCore.Desktop.App"
+             RequestedThemeVariant="Dark">
+    
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://OmenCore.Desktop/Styles/ModernTheme.axaml" />
+    </Application.Styles>
+    
+    <Application.Resources>
+        <!-- Global resources -->
+        <SolidColorBrush x:Key="OmenRedBrush">#C41E3A</SolidColorBrush>
+        <SolidColorBrush x:Key="OmenRedDarkBrush">#8B0000</SolidColorBrush>
+        <SolidColorBrush x:Key="BackgroundBrush">#1A1A1A</SolidColorBrush>
+        <SolidColorBrush x:Key="SurfaceBrush">#252525</SolidColorBrush>
+        <SolidColorBrush x:Key="CardBrush">#2D2D2D</SolidColorBrush>
+        <SolidColorBrush x:Key="TextPrimaryBrush">#FFFFFF</SolidColorBrush>
+        <SolidColorBrush x:Key="TextSecondaryBrush">#B0B0B0</SolidColorBrush>
+    </Application.Resources>
+</Application>

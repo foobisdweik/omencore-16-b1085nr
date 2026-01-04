@@ -153,7 +153,7 @@ Notes: Initial asset folders and placeholder images created. Next: gather real d
 - Initial provider wiring implemented (`IRgbProvider`, `RgbManager`). Providers registered in priority order: **Corsair → Logitech → Razer → SystemGeneric**.
 - **Corsair**: `CorsairRgbProvider` added; supports `color:#RRGGBB` and `preset:<name>`; unit tests added and passing. Added direct HID improvements: retries, heuristics, diagnostics, failed-device tracking, and **full-device keyboard writes for K70/K95/K100**, plus a **K100 per-key payload stub** so many keyboards can be controlled without iCUE and we have a path to per-key features. A Settings toggle (`CorsairDisableIcueFallback`) and corresponding tests were added to allow users to opt into HID-only mode.
 - **Logitech**: `LogitechRgbProvider` implements `color:#RRGGBB@<brightness>` and `breathing:#RRGGBB@<speed>`; unit tests added and passing.
-- **Razer**: Basic `RazerRgbProvider` wraps `RazerService` for Synapse-aware behavior (placeholder for Chroma SDK integration).
+- **Razer**: Full `RazerRgbProvider` with Chroma SDK REST API integration for static, breathing, spectrum, and wave effects.
 - **SystemGeneric**: `RgbNetSystemProvider` added (experimental) using RGB.NET; initialization and basic color application validated in tests.
 - Added unit tests for providers and Corsair HID helpers; all related provider and HID tests pass locally (see `OmenCoreApp.Tests/TestResults/test_results.trx`).
 

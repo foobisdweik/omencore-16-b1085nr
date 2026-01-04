@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using OmenCore.Models;
@@ -5,7 +6,7 @@ using OmenCore.Services;
 
 namespace OmenCore.ViewModels
 {
-    public class DashboardViewModel : ViewModelBase
+    public class DashboardViewModel : ViewModelBase, IDisposable
     {
         private readonly HardwareMonitoringService _monitoringService;
         private readonly ObservableCollection<ThermalSample> _thermalSamples = new();
@@ -13,6 +14,7 @@ namespace OmenCore.ViewModels
         private bool _monitoringLowOverhead;
         private string _currentPerformanceMode = "Auto";
         private string _currentFanMode = "Auto";
+        private bool _disposed;
 
         public ReadOnlyObservableCollection<MonitoringSample> MonitoringSamples => _monitoringService.Samples;
         public ObservableCollection<ThermalSample> ThermalSamples => _thermalSamples;
@@ -140,6 +142,30 @@ namespace OmenCore.ViewModels
                     _thermalSamples.RemoveAt(0);
                 }
             });
+        }
+        
+        /// <summary>
+        /// Dispose resources and unsubscribe from events.
+        /// </summary>
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+        
+        /// <summary>
+        /// Protected dispose implementation.
+        /// </summary>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+            
+            if (disposing)
+            {
+                _monitoringService.SampleUpdated -= OnSampleUpdated;
+            }
+            
+            _disposed = true;
         }
     }
 }

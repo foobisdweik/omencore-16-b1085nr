@@ -28,8 +28,12 @@ namespace OmenCore.Services
         private readonly ObservableCollection<FanTelemetry> _fanTelemetry = new();
         private CancellationTokenSource? _cts;
 
-        // Active fan curve for continuous application (OmenMon-style)
-        private List<FanCurvePoint>? _activeCurve;
+        // Active fan curves for continuous application (OmenMon-style)
+        // Now supports separate CPU and GPU curves for independent fan control
+        private List<FanCurvePoint>? _activeCurve;      // Legacy: unified curve (maps to both)
+        private List<FanCurvePoint>? _cpuCurve;         // CPU-specific curve
+        private List<FanCurvePoint>? _gpuCurve;         // GPU-specific curve
+        private bool _independentCurvesEnabled = false; // When true, use separate curves
         private FanPreset? _activePreset;
         private bool _curveEnabled = false;
         private readonly object _curveLock = new();
@@ -47,6 +51,8 @@ namespace OmenCore.Services
         private DateTime _lastCurveUpdate = DateTime.MinValue;
         private DateTime _lastCurveForceRefresh = DateTime.MinValue;
         private int _lastAppliedFanPercent = -1;
+        private int _lastAppliedCpuFanPercent = -1;      // For independent curves
+        private int _lastAppliedGpuFanPercent = -1;      // For independent curves
 
         // Smoothing / transition settings (configurable)
         private bool _smoothingEnabled = true;
@@ -73,7 +79,10 @@ namespace OmenCore.Services
         // Lowered thresholds based on user feedback - fans were spinning up too late
         private const double ThermalProtectionThreshold = 80.0; // °C - start ramping fans (was 90)
         private const double ThermalEmergencyThreshold = 88.0;  // °C - max fans immediately (was 95)
-        private bool _thermalProtectionActive = false;
+        private volatile bool _thermalProtectionActive = false;
+        
+        // Fan level constants - HP WMI uses 0-55 krpm range
+        private const int MaxFanLevel = 55;
         private bool _thermalProtectionEnabled = true; // Can be disabled in settings
         
         // Hysteresis state
@@ -93,8 +102,23 @@ namespace OmenCore.Services
         
         /// <summary>
         /// Whether a custom fan curve is actively being applied.
+        /// Thread-safe read of curve state.
         /// </summary>
-        public bool IsCurveActive => _curveEnabled && _activeCurve != null;
+        public bool IsCurveActive
+        {
+            get
+            {
+                lock (_curveLock)
+                {
+                    return _curveEnabled && (_activeCurve != null || (_cpuCurve != null && _gpuCurve != null));
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Whether independent CPU/GPU curves are being used.
+        /// </summary>
+        public bool IndependentCurvesEnabled => _independentCurvesEnabled;
         
         /// <summary>
         /// The currently active preset name, if any.
@@ -304,9 +328,38 @@ namespace OmenCore.Services
             {
                 _curveEnabled = false;
                 _activeCurve = null;
+                _cpuCurve = null;
+                _gpuCurve = null;
+                _independentCurvesEnabled = false;
                 _lastAppliedFanPercent = -1;
+                _lastAppliedCpuFanPercent = -1;
+                _lastAppliedGpuFanPercent = -1;
             }
         }
+        
+        /// <summary>
+        /// Enable independent CPU and GPU fan curves.
+        /// </summary>
+        /// <param name="cpuCurve">The fan curve to use for CPU temperature</param>
+        /// <param name="gpuCurve">The fan curve to use for GPU temperature</param>
+        public void EnableIndependentCurves(List<FanCurvePoint> cpuCurve, List<FanCurvePoint> gpuCurve)
+        {
+            lock (_curveLock)
+            {
+                _cpuCurve = cpuCurve.OrderBy(p => p.TemperatureC).ToList();
+                _gpuCurve = gpuCurve.OrderBy(p => p.TemperatureC).ToList();
+                _activeCurve = null; // Clear single curve mode
+                _activePreset = null;
+                _curveEnabled = true;
+                _independentCurvesEnabled = true;
+                _lastCurveUpdate = DateTime.MinValue; // Force immediate update
+                _lastAppliedCpuFanPercent = -1;
+                _lastAppliedGpuFanPercent = -1;
+            }
+            
+            _logging.Info($"Independent fan curves enabled - CPU: {_cpuCurve.Count} points, GPU: {_gpuCurve.Count} points");
+        }
+        
         /// <summary>
         /// Configure smoothing settings programmatically.
         /// </summary>
@@ -527,7 +580,12 @@ namespace OmenCore.Services
             // Skip curve application if thermal protection is active
             if (_thermalProtectionActive)
                 return Task.CompletedTask;
-            if (!_curveEnabled || _activeCurve == null || !FanWritesAvailable)
+            
+            // Check if curves are available
+            bool hasSingleCurve = _activeCurve != null;
+            bool hasIndependentCurves = _independentCurvesEnabled && _cpuCurve != null && _gpuCurve != null;
+            
+            if (!_curveEnabled || (!hasSingleCurve && !hasIndependentCurves) || !FanWritesAvailable)
                 return Task.CompletedTask;
 
             // Only update curve every CurveUpdateIntervalMs
@@ -541,6 +599,13 @@ namespace OmenCore.Services
             
             if (timeSinceLastUpdate < CurveUpdateIntervalMs && !forceRefresh && !immediate)
                 return Task.CompletedTask;
+                
+            // Route to appropriate curve handler
+            if (hasIndependentCurves)
+            {
+                return ApplyIndependentCurvesAsync(cpuTemp, gpuTemp, immediate, forceRefresh, now);
+            }
+            
             lock (_curveLock)
             {
                 if (_activeCurve == null)
@@ -612,8 +677,8 @@ namespace OmenCore.Services
                     // Force refresh combats BIOS countdown timer that may have reset fan control
                     if (targetFanPercent != _lastAppliedFanPercent || forceRefresh)
                     {
-                        // Convert percentage to krpm (0-100% maps to 0-55 krpm)
-                        byte fanLevel = (byte)(targetFanPercent * 55 / 100);
+                        // Convert percentage to krpm (0-100% maps to 0-MaxFanLevel krpm)
+                        byte fanLevel = (byte)(targetFanPercent * MaxFanLevel / 100);
                         
                         // If smoothing disabled or this is a force refresh or we have no previous applied value, just set directly
                         if (!_smoothingEnabled || _lastAppliedFanPercent < 0 || forceRefresh)
@@ -652,6 +717,85 @@ namespace OmenCore.Services
                 }
             }
 
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Apply independent CPU and GPU fan curves based on their respective temperatures.
+        /// </summary>
+        private Task ApplyIndependentCurvesAsync(double cpuTemp, double gpuTemp, bool immediate, bool forceRefresh, DateTime now)
+        {
+            lock (_curveLock)
+            {
+                if (_cpuCurve == null || _gpuCurve == null)
+                    return Task.CompletedTask;
+                    
+                try
+                {
+                    // Evaluate CPU curve against CPU temperature
+                    var cpuTargetPoint = _cpuCurve.LastOrDefault(p => p.TemperatureC <= cpuTemp) 
+                                         ?? _cpuCurve.FirstOrDefault();
+                    
+                    // Evaluate GPU curve against GPU temperature
+                    var gpuTargetPoint = _gpuCurve.LastOrDefault(p => p.TemperatureC <= gpuTemp) 
+                                         ?? _gpuCurve.FirstOrDefault();
+                    
+                    if (cpuTargetPoint == null || gpuTargetPoint == null)
+                        return Task.CompletedTask;
+                    
+                    int cpuFanPercent = cpuTargetPoint.FanPercent;
+                    int gpuFanPercent = gpuTargetPoint.FanPercent;
+                    
+                    // Check if either fan needs updating
+                    bool cpuChanged = cpuFanPercent != _lastAppliedCpuFanPercent;
+                    bool gpuChanged = gpuFanPercent != _lastAppliedGpuFanPercent;
+                    
+                    if (!cpuChanged && !gpuChanged && !forceRefresh && !immediate)
+                    {
+                        _lastCurveUpdate = now;
+                        return Task.CompletedTask;
+                    }
+                    
+                    // Apply using the dual fan speed method
+                    if (_fanController is WmiFanController wmiFanController)
+                    {
+                        if (wmiFanController.SetFanSpeeds(cpuFanPercent, gpuFanPercent))
+                        {
+                            _lastAppliedCpuFanPercent = cpuFanPercent;
+                            _lastAppliedGpuFanPercent = gpuFanPercent;
+                            _lastCurveUpdate = now;
+                            
+                            if (forceRefresh)
+                            {
+                                _lastCurveForceRefresh = now;
+                                _logging.Info($"Independent curves force-refreshed - CPU: {cpuFanPercent}% @ {cpuTemp:F1}°C, GPU: {gpuFanPercent}% @ {gpuTemp:F1}°C");
+                            }
+                            else
+                            {
+                                _logging.Info($"Independent curves applied - CPU: {cpuFanPercent}% @ {cpuTemp:F1}°C, GPU: {gpuFanPercent}% @ {gpuTemp:F1}°C");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Fallback for non-WMI controllers: use max of both targets
+                        int maxPercent = Math.Max(cpuFanPercent, gpuFanPercent);
+                        if (_fanController.SetFanSpeed(maxPercent))
+                        {
+                            _lastAppliedFanPercent = maxPercent;
+                            _lastAppliedCpuFanPercent = cpuFanPercent;
+                            _lastAppliedGpuFanPercent = gpuFanPercent;
+                            _lastCurveUpdate = now;
+                            _logging.Info($"Independent curves (fallback mode): {maxPercent}% - CPU target: {cpuFanPercent}%, GPU target: {gpuFanPercent}%");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logging.Warn($"Failed to apply independent fan curves: {ex.Message}");
+                }
+            }
+            
             return Task.CompletedTask;
         }
 

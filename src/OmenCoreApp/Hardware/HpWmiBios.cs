@@ -16,12 +16,19 @@ namespace OmenCore.Hardware
     /// 
     /// NOTE: 2023+ OMEN models (13th gen Intel and newer) require periodic "heartbeat"
     /// WMI queries to keep fan control unlocked.
+    /// 
+    /// This class uses a singleton pattern to avoid multiple heartbeat timers.
     /// </summary>
     public class HpWmiBios : IDisposable
     {
         private readonly LoggingService? _logging;
         private bool _isAvailable;
         private bool _disposed;
+        
+        // Singleton instance tracking
+        private static HpWmiBios? _sharedInstance;
+        private static readonly object _instanceLock = new();
+        private static int _instanceCount = 0;
         
         // CIM session for WMI access (same as OmenMon)
         private CimSession? _cimSession;
@@ -255,14 +262,32 @@ namespace OmenCore.Hardware
         
         /// <summary>
         /// Start the heartbeat timer to keep WMI commands working on 2023+ models.
+        /// Only one heartbeat timer runs globally, even if multiple HpWmiBios instances exist.
         /// </summary>
         public void StartHeartbeat()
         {
             if (_heartbeatEnabled || !_isAvailable) return;
             
-            _heartbeatTimer = new Timer(HeartbeatCallback, null, HeartbeatIntervalMs, HeartbeatIntervalMs);
-            _heartbeatEnabled = true;
-            _logging?.Info($"✓ WMI BIOS heartbeat started (every {HeartbeatIntervalMs/1000}s)");
+            lock (_instanceLock)
+            {
+                // Track this instance
+                _instanceCount++;
+                
+                // Only start heartbeat timer once globally
+                if (_sharedInstance == null)
+                {
+                    _sharedInstance = this;
+                    _heartbeatTimer = new Timer(HeartbeatCallback, null, HeartbeatIntervalMs, HeartbeatIntervalMs);
+                    _heartbeatEnabled = true;
+                    _logging?.Info($"✓ WMI BIOS heartbeat started (every {HeartbeatIntervalMs/1000}s)");
+                }
+                else
+                {
+                    // Another instance already has heartbeat running - just mark as enabled
+                    _heartbeatEnabled = true;
+                    _logging?.Debug($"WMI BIOS heartbeat already running (instance #{_instanceCount})");
+                }
+            }
         }
         
         /// <summary>
@@ -270,10 +295,20 @@ namespace OmenCore.Hardware
         /// </summary>
         public void StopHeartbeat()
         {
-            _heartbeatTimer?.Dispose();
-            _heartbeatTimer = null;
-            _heartbeatEnabled = false;
-            _logging?.Info("WMI BIOS heartbeat stopped");
+            lock (_instanceLock)
+            {
+                _heartbeatEnabled = false;
+                _instanceCount = Math.Max(0, _instanceCount - 1);
+                
+                // Only stop the actual timer if this is the shared instance and no other instances
+                if (_sharedInstance == this && _instanceCount == 0)
+                {
+                    _heartbeatTimer?.Dispose();
+                    _heartbeatTimer = null;
+                    _sharedInstance = null;
+                    _logging?.Info("WMI BIOS heartbeat stopped");
+                }
+            }
         }
         
         /// <summary>

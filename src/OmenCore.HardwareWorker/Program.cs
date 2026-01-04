@@ -26,6 +26,7 @@ class Program
     private static bool _running = true;
     private static DateTime _lastUpdate = DateTime.MinValue;
     private static int _parentProcessId = -1;
+    private static readonly Dictionary<string, DateTime> _lastErrorLog = new(); // Rate-limit error logging
 
     static async Task Main(string[] args)
     {
@@ -261,8 +262,30 @@ class Program
                 }
                 catch (Exception ex)
                 {
-                    // Log but continue with other hardware
-                    File.AppendAllText(GetLogPath(), $"[{DateTime.Now:O}] Error updating {hardware.Name}: {ex.Message}\n");
+                    // Filter out known benign errors
+                    var isDisposedError = ex is ObjectDisposedException || 
+                                          ex.Message.Contains("disposed", StringComparison.OrdinalIgnoreCase) ||
+                                          ex.Message.Contains("SafeFileHandle", StringComparison.OrdinalIgnoreCase);
+                    
+                    // Only log non-disposed errors, or disposed errors once per hardware per hour
+                    var errorKey = $"{hardware.Name}:{ex.GetType().Name}";
+                    var shouldLog = !isDisposedError;
+                    
+                    if (isDisposedError)
+                    {
+                        // Rate-limit disposed errors (drives going to sleep is normal)
+                        if (!_lastErrorLog.TryGetValue(errorKey, out var lastLog) || 
+                            DateTime.Now - lastLog > TimeSpan.FromHours(1))
+                        {
+                            _lastErrorLog[errorKey] = DateTime.Now;
+                            shouldLog = true;
+                        }
+                    }
+                    
+                    if (shouldLog)
+                    {
+                        File.AppendAllText(GetLogPath(), $"[{DateTime.Now:O}] Error updating {hardware.Name}: {ex.Message}\n");
+                    }
                 }
             }
             

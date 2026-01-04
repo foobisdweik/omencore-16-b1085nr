@@ -47,6 +47,9 @@ namespace OmenCore.Services
 
         // HP OMEN-specific scan codes (varies by model)
         private static readonly int[] OmenScanCodes = { 0xE045, 0xE046, 0x0046, 0x009D };
+        
+        // Excluded scan codes (Calculator, standard media keys that conflict)
+        private static readonly int[] ExcludedScanCodes = { 0x0021 }; // Calculator key scan code
 
         #region Win32 API
 
@@ -523,21 +526,33 @@ namespace OmenCore.Services
 
         private bool IsOmenKey(uint vkCode, uint scanCode)
         {
+            // First, exclude known non-OMEN keys that share VK codes
+            foreach (var excludedScan in ExcludedScanCodes)
+            {
+                if (scanCode == excludedScan)
+                {
+                    _logging.Debug($"Excluded scan code 0x{scanCode:X4} (Calculator/media key) - NOT OMEN key");
+                    return false;
+                }
+            }
+            
             // Check virtual key codes commonly used for OMEN key
             if (vkCode == VK_LAUNCH_APP2)
             {
-                // This is a common key for OEM application launch
-                // We need to verify it's the OMEN key specifically
-                // by checking the scan code
+                // VK_LAUNCH_APP2 is shared with Calculator key on some keyboards
+                // Only treat as OMEN key if scan code matches known OMEN scan codes
                 foreach (var omenScan in OmenScanCodes)
                 {
-                    if (scanCode == omenScan) return true;
+                    if (scanCode == omenScan)
+                    {
+                        _logging.Debug($"VK_LAUNCH_APP2 with OMEN scan code 0x{scanCode:X4} - OMEN key confirmed");
+                        return true;
+                    }
                 }
                 
-                // Also accept any scan code with VK_LAUNCH_APP2 on OMEN devices
-                // since some models use different scan codes
-                _logging.Debug($"VK_LAUNCH_APP2 with scan code: 0x{scanCode:X4} - treating as OMEN key");
-                return true;
+                // Log unrecognized scan codes for debugging (but don't treat as OMEN key)
+                _logging.Debug($"VK_LAUNCH_APP2 with unknown scan code: 0x{scanCode:X4} - NOT treated as OMEN key (may be Calculator)");
+                return false;
             }
 
             // Some OMEN models use a dedicated virtual key

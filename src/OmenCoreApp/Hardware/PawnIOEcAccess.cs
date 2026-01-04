@@ -59,7 +59,10 @@ namespace OmenCore.Hardware
         private static readonly HashSet<ushort> AllowedWriteAddresses = new()
         {
             // Fan control registers (HP Omen typical addresses)
-            0x2E, // Fan control override
+            0x2C, // Fan 1 set speed % (XSS1) - OmenMon-style, newer models
+            0x2D, // Fan 2 set speed % (XSS2) - OmenMon-style, newer models
+            0x2E, // Fan 1 speed % (legacy)
+            0x2F, // Fan 2 speed % (legacy)
             0x34, // Thermal policy
             0x35, // Thermal policy extend
             0x44, // Fan 1 duty cycle

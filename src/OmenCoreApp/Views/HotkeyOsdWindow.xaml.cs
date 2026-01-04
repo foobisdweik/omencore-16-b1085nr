@@ -45,16 +45,18 @@ namespace OmenCore.Views
             // Update accent color based on mode
             UpdateAccentColor(modeName);
             
-            // Position window (bottom-right of primary screen)
-            PositionWindow();
-            
-            // Show and animate in
+            // Show the window first (required for accurate size measurement)
             Opacity = 0;
             Show();
-            AnimateIn();
             
-            // Start dismiss timer
-            _dismissTimer.Start();
+            // Use Dispatcher to position after layout is complete
+            // This ensures ActualWidth/ActualHeight are properly calculated
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
+            {
+                PositionWindow();
+                AnimateIn();
+                _dismissTimer.Start();
+            });
         }
 
         private void PositionWindow()
@@ -65,10 +67,18 @@ namespace OmenCore.Views
             // Update layout to get actual size
             UpdateLayout();
             
+            // Get actual dimensions (fallback to reasonable defaults if not yet measured)
+            var width = ActualWidth > 0 ? ActualWidth : 300;
+            var height = ActualHeight > 0 ? ActualHeight : 100;
+            
             // Position in bottom-right corner with padding
             const double padding = 24;
-            Left = workArea.Right - ActualWidth - padding;
-            Top = workArea.Bottom - ActualHeight - padding;
+            Left = workArea.Right - width - padding;
+            Top = workArea.Bottom - height - padding;
+            
+            // Ensure window is within screen bounds (safety check)
+            if (Left < workArea.Left) Left = workArea.Left + padding;
+            if (Top < workArea.Top) Top = workArea.Top + padding;
         }
 
         private string GetModeIcon(string category, string modeName)
