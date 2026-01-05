@@ -12,7 +12,7 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 - ✅ **No Sign-In Required** - Full offline operation
 - 🐧 **Cross-Platform** - Windows GUI + Linux CLI & Avalonia GUI
 
-[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v2.1.0)
+[![Version](https://img.shields.io/badge/version-2.1.1-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v2.1.1)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Website](https://img.shields.io/badge/website-omencore.info-brightgreen.svg)](https://omencore.info)
@@ -20,6 +20,19 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 [![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C.svg?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=XH8CKYF8T7EBU&no_recurring=0&item_name=Thank+you+for+your+generous+donation%2C+this+will+allow+me+to+continue+developing+my+programs.&currency_code=AUD)
 
 ![OmenCore Screenshot](docs/screenshots/main-window.png)
+
+---
+
+## 🆕 What's New in v2.1.1
+
+### 🔧 Bug Fixes
+- **OMEN Max 2025 Fan RPM** - Fixed 0% RPM display on OMEN Max 16/17 (2025) with RTX 50-series
+- **Tray Minimize Fix** - "Minimize to tray on close" no longer makes app unresponsive
+- **Performance Mode Reset** - Performance/Cool modes now maintain TDP properly
+- **Fan Curve Temps** - Fixed stale CPU temperature readings
+- **Linux CLI** - Now included in releases (`omencore-linux.tar.gz`)
+
+Full changelog: [CHANGELOG_v2.1.1.md](docs/CHANGELOG_v2.1.1.md)
 
 ---
 
@@ -437,7 +450,7 @@ OmenCore is designed to **completely replace** OMEN Gaming Hub. You can safely u
 ### Windows
 
 #### Option 1: Installer (Recommended)
-1. Download `OmenCoreSetup-2.1.0.exe` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
+1. Download `OmenCoreSetup-2.1.1.exe` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
 2. Run installer as Administrator
 3. (Optional) Select "Install PawnIO driver" for advanced EC features
 4. Launch OmenCore from Start Menu or Desktop
@@ -445,7 +458,7 @@ OmenCore is designed to **completely replace** OMEN Gaming Hub. You can safely u
 6. (Optional) Use HP Bloatware Removal to clean pre-installed apps
 
 #### Option 2: Portable ZIP
-1. Download `OmenCore-2.1.0-win-x64.zip` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
+1. Download `OmenCore-2.1.1-win-x64.zip` from [Releases](https://github.com/theantipopau/omencore/releases/latest)
 2. Extract to `C:\OmenCore` (or preferred location)
 3. Right-click `OmenCore.exe` → Run as Administrator
 
@@ -464,8 +477,8 @@ echo "options ec_sys write_support=1" | sudo tee /etc/modprobe.d/ec_sys.conf
 #### Option 1: CLI Only (Recommended)
 ```bash
 # Download and extract
-wget https://github.com/theantipopau/omencore/releases/download/v2.1.0/OmenCore-2.1.0-linux-x64.zip
-unzip OmenCore-2.1.0-linux-x64.zip
+wget https://github.com/theantipopau/omencore/releases/download/v2.1.1/omencore-linux-2.1.1.tar.gz
+tar -xzf omencore-linux-2.1.1.tar.gz
 
 # Install
 sudo cp omencore-cli /usr/local/bin/
