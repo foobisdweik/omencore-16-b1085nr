@@ -422,6 +422,19 @@ namespace OmenCore.Hardware
             {
                 _lastMode = fanMode;
                 IsManualControlActive = false;
+                
+                // Start/stop countdown extension to prevent BIOS from reverting
+                // Performance and Cool modes need extension; Default lets BIOS take over
+                if (fanMode == HpWmiBios.FanMode.Default || fanMode == HpWmiBios.FanMode.LegacyDefault)
+                {
+                    StopCountdownExtension();
+                }
+                else
+                {
+                    // Performance/Cool modes need countdown extension to maintain TDP settings
+                    StartCountdownExtension();
+                }
+                
                 _logging?.Info($"✓ Performance mode set: {modeName} → {fanMode}");
                 return true;
             }

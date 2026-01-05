@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
     
     steps:
@@ -39,6 +39,77 @@ jobs:
         if (-not (Test-Path $installer)) {
           throw "Expected installer was not created: $installer"
         }
+        
+    - name: Upload Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-artifacts
+        path: |
+          artifacts/OmenCore-${{ steps.version.outputs.value }}-win-x64.zip
+          artifacts/OmenCoreSetup-${{ steps.version.outputs.value }}.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Read VERSION
+      id: version
+      run: |
+        version=$(head -1 VERSION.txt | tr -d '\r\n ')
+        echo "value=$version" >> $GITHUB_OUTPUT
+
+    - name: Build Linux CLI
+      run: |
+        mkdir -p artifacts
+        cd src/OmenCore.Linux
+        dotnet publish -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o ../../publish/linux-x64
+
+    - name: Package Linux artifacts
+      run: |
+        cd publish/linux-x64
+        # Rename binary to expected name
+        mv OmenCore.Linux omencore-cli 2>/dev/null || true
+        chmod +x omencore-cli
+        cd ..
+        tar -czvf ../artifacts/omencore-linux.tar.gz -C linux-x64 .
+        
+    - name: Upload Linux artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-artifacts
+        path: artifacts/omencore-linux.tar.gz
+
+  release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Read VERSION
+      id: version
+      run: |
+        version=$(head -1 VERSION.txt | tr -d '\r\n ')
+        echo "value=$version" >> $GITHUB_OUTPUT
+        
+    - name: Download Windows artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: windows-artifacts
+        path: artifacts
+        
+    - name: Download Linux artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-artifacts
+        path: artifacts
       
     - name: Create Release
       uses: softprops/action-gh-release@v1
@@ -46,21 +117,25 @@ jobs:
         files: |
           artifacts/OmenCore-${{ steps.version.outputs.value }}-win-x64.zip
           artifacts/OmenCoreSetup-${{ steps.version.outputs.value }}.exe
+          artifacts/omencore-linux.tar.gz
         body: |
           ## OmenCore ${{ github.ref_name }}
           
-          Download the installer or portable ZIP package.
+          ### Downloads
+          - **Windows Installer**: `OmenCoreSetup-${{ steps.version.outputs.value }}.exe` (recommended)
+          - **Windows Portable**: `OmenCore-${{ steps.version.outputs.value }}-win-x64.zip`
+          - **Linux CLI**: `omencore-linux.tar.gz`
           
-          **Features:**
+          ### Features
           - Advanced fan curve control
           - CPU undervolting
           - RGB lighting profiles
           - Corsair/Logitech device integration
           - Hardware monitoring
           
-          **System Requirements:**
-          - Windows 10/11 (x64)
-          - .NET 8 Runtime (included)
+          ### System Requirements
+          - **Windows**: Windows 10/11 (x64), .NET 8 Runtime (included)
+          - **Linux**: x64, kernel modules: `ec_sys` (write_support=1), `hp-wmi`
           - HP Omen laptop (recommended)
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -8,6 +8,8 @@ namespace OmenCore.Views
 {
     public partial class MainWindow : Window
     {
+        private bool _forceClose = false; // Flag for actual shutdown vs hide-to-tray
+        
         public MainWindow(MainViewModel viewModel)
         {
             InitializeComponent();
@@ -19,6 +21,16 @@ namespace OmenCore.Views
             
             // Apply Stay on Top setting from config
             Topmost = App.Configuration.Config.StayOnTop;
+        }
+        
+        /// <summary>
+        /// Forces the window to close completely (for app shutdown).
+        /// Call this from tray menu "Exit" or app shutdown.
+        /// </summary>
+        public void ForceClose()
+        {
+            _forceClose = true;
+            Close();
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -36,7 +48,21 @@ namespace OmenCore.Views
         private void MainWindow_Closing(object? sender, CancelEventArgs e)
         {
             _ = sender;
-            _ = e;
+            
+            // Check if we should minimize to tray instead of closing
+            bool minimizeToTray = App.Configuration.Config.Monitoring?.MinimizeToTrayOnClose ?? true;
+            
+            if (minimizeToTray && !_forceClose)
+            {
+                // Cancel the close and hide to tray instead
+                e.Cancel = true;
+                Hide();
+                ShowInTaskbar = false;
+                App.Logging.Debug("Window hidden to tray (close cancelled)");
+                return;
+            }
+            
+            // Actual close - clean up
             SystemParameters.StaticPropertyChanged -= SystemParametersOnStaticPropertyChanged;
             (DataContext as MainViewModel)?.Dispose();
         }
@@ -103,8 +129,21 @@ namespace OmenCore.Views
         {
             _ = sender;
             _ = e;
-            // Hide to tray on close button (user can exit from tray menu)
-            Hide();
+            
+            // Check if we should minimize to tray or actually close
+            bool minimizeToTray = App.Configuration.Config.Monitoring?.MinimizeToTrayOnClose ?? true;
+            
+            if (minimizeToTray)
+            {
+                // Hide to tray on close button
+                Hide();
+                ShowInTaskbar = false;
+            }
+            else
+            {
+                // Actually close the application
+                App.Current?.Shutdown();
+            }
         }
     }
 }

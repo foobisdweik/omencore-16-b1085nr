@@ -331,6 +331,9 @@ namespace OmenCore
             var mainWindow = MainWindow;
             if (mainWindow != null)
             {
+                // Restore taskbar visibility when showing from tray
+                mainWindow.ShowInTaskbar = true;
+                
                 if (!mainWindow.IsVisible)
                 {
                     mainWindow.Show();
