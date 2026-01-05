@@ -34,7 +34,7 @@ namespace OmenCore.ViewModels
         private bool _startWithWindows;
         private bool _startMinimized;
         private bool _minimizeToTrayOnClose = true;
-        private int _pollingIntervalMs = 1500;
+        private int _pollingIntervalMs = 2000;
         private int _historyCount = 120;
         private bool _lowOverheadMode;
         private bool _autoCheckUpdates = true;
@@ -1973,7 +1973,7 @@ namespace OmenCore.ViewModels
             try
             {
                 // Reset all settings to defaults
-                PollingIntervalMs = 1500;
+                PollingIntervalMs = 2000;
                 HistoryCount = 120;
                 LowOverheadMode = false;
                 StartMinimized = false;

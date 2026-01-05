@@ -108,7 +108,7 @@ namespace OmenCore.Services
 
             config.Monitoring = new MonitoringPreferences
             {
-                PollIntervalMs = 1500,
+                PollIntervalMs = 2000,
                 HistoryCount = 120,
                 LowOverheadMode = false
             };

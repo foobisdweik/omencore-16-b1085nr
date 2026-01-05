@@ -47,7 +47,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Worker mode:** Requests fresh sample from HardwareWorker with 500ms timeout
 - **Files changed:** `LibreHardwareMonitorImpl.cs`
 
+#### 🚫 OMEN Desktop Detection and Blocking (CRITICAL)
+- **Issue:** OmenCore was causing severe issues on OMEN Desktop PCs (30L, 35L, 40L, 45L):
+  - Only one fan detected on startup
+  - All fans stop spinning
+  - Fans disappear from BIOS (listed as 'inactive' in OGH)
+  - Requires CMOS reset to restore functionality
+- **Root Cause:** Desktop OMEN systems use completely different thermal management hardware than laptops. WMI commands designed for laptop EC/BIOS write to inappropriate addresses on desktop motherboards, corrupting fan controller configuration.
+- **Fix:** Added critical desktop detection at app startup:
+  - Detects OMEN Desktop models by name (25L, 30L, 35L, 40L, 45L, Obelisk)
+  - Detects desktop chassis types via Win32_SystemEnclosure
+  - Shows error dialog explaining incompatibility
+  - Prevents app startup to protect hardware
+- **Files changed:** `App.xaml.cs`
+- **Note:** OmenCore is designed for **OMEN LAPTOPS ONLY**. Desktop support may come in future for RGB-only control.
+
 ### Changed
+
+#### ⚡ Reduced Default Polling Interval (Performance)
+- **Change:** Lowered default hardware polling from 1500ms to 2000ms
+- **Benefit:** Reduces CPU overhead and UI sluggishness, especially on newer hardware (RTX 50-series)
+- **Impact:** Slightly less frequent monitoring updates, but significantly smoother UI
+- **Files changed:** `DefaultConfiguration.cs`, `SettingsViewModel.cs`
+- **Note:** Users can still customize interval in Settings > Monitoring
+
+#### 🎯 Quick Popup as Default Tray Action
+- **Change:** Left-click on tray icon now shows quick popup instead of full window
+- **Behavior:** 
+  - **Left-click:** Quick popup with temps, fan speeds, and mode buttons (G-Helper style)
+  - **Double-click:** Open full dashboard window
+  - **Right-click:** Context menu
+- **Benefit:** Faster access to status and controls without opening full UI
+- **Files changed:** `App.xaml.cs`
 
 #### 🐧 Linux Release Workflow
 - **Improvement:** GitHub release workflow now builds and includes Linux CLI
@@ -57,16 +88,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known Issues
 
+#### ⚠️ Keyboard RGB Not Working on Some Models
+- **Reported:** Model xd0015ax shows no keyboard RGB functionality
+- **Suspected Cause:** Model-specific SDK support missing or different RGB API
+- **Status:** Under investigation
+- **Workaround:** Use OMEN Gaming Hub for keyboard RGB control
+
 #### ⚠️ System Stuttering on OMEN Max 16 (RTX 5080)
 - **Reported:** Some users with OMEN Max 16 (Ryzen AI 9 370 + RTX 5080) experience system-wide stuttering (~1.2 second intervals) when OmenCore is running
 - **Suspected Cause:** LibreHardwareMonitor polling issues with new RTX 50-series GPUs
-- **Workaround:** Enable "Low Overhead Mode" in Settings to reduce polling frequency
+- **Workaround:** Enable "Low Overhead Mode" in Settings or increase polling interval to 3000-5000ms
 - **Status:** Under investigation
 
-#### ⚠️ Desktop OMEN 30L Limited Support
-- **Reported:** OMEN Desktop 30L GT13-1xxx has limited feature support
-- **Status:** Performance modes may not function on desktop models; OmenCore is primarily designed for OMEN laptops
-- **Workaround:** Continue using OMEN Gaming Hub for desktop systems
+#### ⚠️ OMEN Desktop Systems NOT SUPPORTED
+- **Critical:** OMEN Desktop PCs (25L, 30L, 35L, 40L, 45L) are **NOT compatible** with OmenCore
+- **Risk:** Running on desktops can corrupt BIOS fan controller settings, requiring CMOS reset
+- **Protection:** App now blocks startup on detected desktop systems with error message
+- **Status:** Desktop support may be added in future for RGB-only control (no fan control)
 
 ---
 
@@ -78,4 +116,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Checksums (SHA256)
 
-*To be filled after build*
+```
+OmenCoreSetup-2.1.1.exe:        4AC115DF7BEF7EB8503C79C3B9C456FF844BC18BA76D92102BCA05FBC7F355B5
+OmenCore-2.1.1-win-x64.zip:     DC2114D3E62C9EF16F9607D5FBA78F1CE986AEBAE7F162284E3C663774922C24
+omencore-linux-2.1.1.tar.gz:    8D269CBAE840C7B0D3BDB615637BE535141D8AC11CCC2097548EE2AB6581C238
+```

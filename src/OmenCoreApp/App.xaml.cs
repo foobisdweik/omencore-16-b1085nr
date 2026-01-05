@@ -81,6 +81,28 @@ namespace OmenCore
                 Logging.Info($"Command line arguments: {string.Join(" ", e.Args)}");
             }
 
+            // CRITICAL: Check for desktop systems and block startup
+            if (IsOmenDesktop())
+            {
+                Logging.Error("CRITICAL: OMEN Desktop PC detected - OmenCore is NOT compatible with desktop systems");
+                MessageBox.Show(
+                    "⚠️ CRITICAL WARNING ⚠️\n\n" +
+                    "OMEN Desktop PC Detected!\n\n" +
+                    "OmenCore is designed for OMEN LAPTOPS ONLY and is NOT compatible with OMEN Desktop systems (25L, 30L, 35L, 40L, 45L).\n\n" +
+                    "Running OmenCore on a desktop PC can:\n" +
+                    "• Cause fans to stop spinning\n" +
+                    "• Corrupt BIOS fan controller settings\n" +
+                    "• Require CMOS reset to recover\n\n" +
+                    "Desktop thermal management uses completely different hardware interfaces than laptops.\n\n" +
+                    "For OMEN Desktop RGB control only, please contact the developer.\n\n" +
+                    "Application will now exit.",
+                    "OMEN Desktop Not Supported",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                Shutdown();
+                return;
+            }
+
             // Check for WinRing0 driver availability
             CheckDriverStatus();
 
@@ -180,13 +202,77 @@ namespace OmenCore
             }
         }
 
+        /// <summary>
+        /// Detect if this is an OMEN Desktop PC (NOT laptop).
+        /// Desktop systems use different thermal management and fan control is incompatible.
+        /// </summary>
+        private bool IsOmenDesktop()
+        {
+            try
+            {
+                using var searcher = new System.Management.ManagementObjectSearcher(
+                    "SELECT * FROM Win32_ComputerSystem");
+                
+                foreach (var obj in searcher.Get())
+                {
+                    var manufacturer = obj["Manufacturer"]?.ToString() ?? "";
+                    var model = obj["Model"]?.ToString() ?? "";
+                    
+                    // Check for HP manufacturer
+                    if (!manufacturer.Contains("HP", StringComparison.OrdinalIgnoreCase) &&
+                        !manufacturer.Contains("Hewlett", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                    
+                    // Check for known desktop models
+                    if (model.Contains("25L", StringComparison.OrdinalIgnoreCase) ||
+                        model.Contains("30L", StringComparison.OrdinalIgnoreCase) ||
+                        model.Contains("35L", StringComparison.OrdinalIgnoreCase) ||
+                        model.Contains("40L", StringComparison.OrdinalIgnoreCase) ||
+                        model.Contains("45L", StringComparison.OrdinalIgnoreCase) ||
+                        model.Contains("Obelisk", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Logging.Info($"Desktop detection: {manufacturer} {model}");
+                        return true;
+                    }
+                }
+                
+                // Also check chassis type to be sure
+                using var chassisSearcher = new System.Management.ManagementObjectSearcher(
+                    "SELECT ChassisTypes FROM Win32_SystemEnclosure");
+                
+                foreach (var obj in chassisSearcher.Get())
+                {
+                    if (obj["ChassisTypes"] is ushort[] chassisTypes && chassisTypes.Length > 0)
+                    {
+                        var chassis = chassisTypes[0];
+                        // Desktop chassis types: 3=Desktop, 4=LowProfileDesktop, 5=PizzaBox, 
+                        // 6=MiniTower, 7=Tower, 13=AllInOne, 15=SpaceSaving
+                        if (chassis == 3 || chassis == 4 || chassis == 5 || chassis == 6 || 
+                            chassis == 7 || chassis == 13 || chassis == 15)
+                        {
+                            Logging.Info($"Desktop chassis type detected: {chassis}");
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logging.Warn($"Desktop detection failed: {ex.Message}");
+            }
+            
+            return false;
+        }
+
         private void InitializeTrayIcon()
         {
             _trayIcon = new TaskbarIcon
             {
                 IconSource = new System.Windows.Media.Imaging.BitmapImage(
                     new Uri("pack://application:,,,/Assets/OmenCore.ico")),
-                ToolTipText = "OmenCore - Gaming Laptop Control\n\nLeft-click: Open Dashboard\nMiddle-click: Quick Popup\nRight-click: Menu"
+                ToolTipText = "OmenCore - Gaming Laptop Control\n\nLeft-click: Quick Popup\nDouble-click: Open Dashboard\nRight-click: Menu"
             };
             
             // Retry tray icon visibility after boot (Windows sometimes fails to show icons during login)
@@ -195,8 +281,9 @@ namespace OmenCore
             var configService = _serviceProvider?.GetService<ConfigurationService>();
             _trayIconService = new TrayIconService(_trayIcon, ShowMainWindow, () => Shutdown(), configService);
             TrayIcon = _trayIconService; // Expose for static access (e.g., SettingsViewModel)
-            _trayIcon.TrayLeftMouseUp += (s, e) => ShowMainWindow();
-            _trayIcon.TrayMiddleMouseUp += (s, e) => _trayIconService?.ShowQuickPopup();
+            _trayIcon.TrayLeftMouseUp += (s, e) => _trayIconService?.ShowQuickPopup(); // Quick popup like G-Helper
+            _trayIcon.TrayLeftMouseDown += (s, e) => { }; // Handle double-click below
+            _trayIcon.TrayMouseDoubleClick += (s, e) => ShowMainWindow(); // Full window on double-click
 
             // Wire up to MainViewModel for monitoring updates and tray actions
             var mainViewModel = _serviceProvider?.GetRequiredService<MainViewModel>();
