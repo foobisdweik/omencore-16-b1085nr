@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.2] - 2026-01-06
+
+### 🐛 Bug Fixes
+- **Temperature Freeze** - Fixed CPU/GPU temps freezing when storage drives go to sleep
+- **OMEN Max V2 Detection** - Added model-name-based V2 thermal policy detection for OMEN Max 2025+ models
+
+### 📋 Details
+See [CHANGELOG_v2.1.2.md](docs/CHANGELOG_v2.1.2.md) for full details.
+
+---
+
+## [2.1.1] - 2026-01-05
+
+### 🐛 Bug Fixes
+- **Desktop Detection** - Block startup on OMEN Desktop (25L/30L/35L/40L/45L) to prevent BIOS corruption
+- **Fan Speed Reset** - Fixed fans resetting to auto when starting games/stress tests
+- **Quick Popup** - G-Helper style - left-click tray for quick controls
+- **Reduced Polling** - Default 2000ms for better performance
+
+### 📋 Details
+See [CHANGELOG_v2.1.1.md](docs/CHANGELOG_v2.1.1.md) for full details.
+
+---
+
 ## [2.0.0-beta] - 2025-12-28
 
 ### 🚀 Major Architecture Changes

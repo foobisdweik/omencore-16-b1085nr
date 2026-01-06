@@ -243,7 +243,31 @@ class Program
         
         lock (_lock)
         {
-            var sample = new HardwareSample();
+            // Start with last known values to preserve data if some hardware fails
+            var sample = new HardwareSample
+            {
+                CpuTemperature = _lastSample.CpuTemperature,
+                CpuLoad = _lastSample.CpuLoad,
+                CpuPower = _lastSample.CpuPower,
+                GpuName = _lastSample.GpuName,
+                GpuTemperature = _lastSample.GpuTemperature,
+                GpuHotspot = _lastSample.GpuHotspot,
+                GpuLoad = _lastSample.GpuLoad,
+                GpuPower = _lastSample.GpuPower,
+                GpuClock = _lastSample.GpuClock,
+                GpuMemoryClock = _lastSample.GpuMemoryClock,
+                GpuVoltage = _lastSample.GpuVoltage,
+                GpuCurrent = _lastSample.GpuCurrent,
+                VramUsage = _lastSample.VramUsage,
+                VramTotal = _lastSample.VramTotal,
+                RamUsage = _lastSample.RamUsage,
+                RamTotal = _lastSample.RamTotal,
+                SsdTemperature = _lastSample.SsdTemperature,
+                BatteryCharge = _lastSample.BatteryCharge,
+                BatteryDischargeRate = _lastSample.BatteryDischargeRate,
+                IsOnAc = _lastSample.IsOnAc,
+                FanSpeeds = new Dictionary<string, double>(_lastSample.FanSpeeds)
+            };
             
             _computer.Accept(new UpdateVisitor());
             

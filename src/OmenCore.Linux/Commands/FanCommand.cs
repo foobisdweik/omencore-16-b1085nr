@@ -79,10 +79,19 @@ public static class FanCommand
         // Check EC access
         if (!ec.IsAvailable)
         {
-            PrintError("Cannot access EC. Ensure ec_sys module is loaded with write_support=1");
-            PrintHint("sudo modprobe ec_sys write_support=1");
+            PrintError("Cannot access fan control interface.");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("\nTry one of these methods:");
+            Console.WriteLine("  1. EC access (older OMEN models):  sudo modprobe ec_sys write_support=1");
+            Console.WriteLine("  2. HP-WMI (newer OMEN 2023+):      sudo modprobe hp-wmi");
+            Console.ResetColor();
             return;
         }
+        
+        // Show which access method is being used
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine($"Using access method: {ec.AccessMethod}");
+        Console.ResetColor();
         
         // Handle battery-aware mode
         if (batteryAware)

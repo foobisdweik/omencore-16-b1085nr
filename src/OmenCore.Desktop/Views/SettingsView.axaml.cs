@@ -24,7 +24,7 @@ public partial class SettingsView : UserControl
         ConfigPathText.Text = configPath;
         
         // Update version
-        VersionText.Text = "Version 2.1.1-beta";
+        VersionText.Text = "Version 2.1.2-beta";
     }
     
     private void AccentColor_Click(object? sender, RoutedEventArgs e)

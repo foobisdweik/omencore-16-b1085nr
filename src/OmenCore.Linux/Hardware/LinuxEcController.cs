@@ -8,6 +8,9 @@ namespace OmenCore.Linux.Hardware;
 ///   2. ec_sys kernel module loaded with write_support=1:
 ///      sudo modprobe ec_sys write_support=1
 /// 
+/// Alternatively uses hp-wmi driver if available (newer models):
+///   sudo modprobe hp-wmi
+/// 
 /// Register map based on omen-fan project:
 /// https://github.com/alou-S/omen-fan/blob/main/docs/probes.md
 /// </summary>
@@ -16,7 +19,14 @@ public class LinuxEcController
     // EC sysfs path
     private const string EC_PATH = "/sys/kernel/debug/ec/ec0/io";
     
-    // EC Register addresses (from omen-fan)
+    // HP-WMI paths (for newer models like OMEN 16 2023+)
+    private const string HP_WMI_PATH = "/sys/devices/platform/hp-wmi";
+    private const string HP_WMI_THERMAL = "/sys/devices/platform/hp-wmi/thermal_profile";
+    private const string HP_WMI_FAN_ALWAYS_ON = "/sys/devices/platform/hp-wmi/fan_always_on";
+    private const string HP_WMI_FAN1 = "/sys/devices/platform/hp-wmi/fan1_output";
+    private const string HP_WMI_FAN2 = "/sys/devices/platform/hp-wmi/fan2_output";
+    
+    // EC Register addresses (from omen-fan - older models OMEN 15 2020, etc.)
     private const byte REG_FAN1_SPEED_SET = 0x34;      // Fan 1 speed in units of 100 RPM
     private const byte REG_FAN2_SPEED_SET = 0x35;      // Fan 2 speed in units of 100 RPM
     private const byte REG_FAN1_SPEED_PCT = 0x2E;      // Fan 1 speed 0-100%
@@ -36,10 +46,22 @@ public class LinuxEcController
     private const byte PERF_MODE_COOL = 0x50;
     
     public bool IsAvailable { get; }
+    public bool HasEcAccess { get; }
+    public bool HasHpWmiAccess { get; }
+    public string AccessMethod { get; }
     
     public LinuxEcController()
     {
-        IsAvailable = File.Exists(EC_PATH);
+        HasEcAccess = File.Exists(EC_PATH);
+        HasHpWmiAccess = Directory.Exists(HP_WMI_PATH);
+        IsAvailable = HasEcAccess || HasHpWmiAccess;
+        
+        if (HasHpWmiAccess)
+            AccessMethod = "hp-wmi";
+        else if (HasEcAccess)
+            AccessMethod = "ec_sys";
+        else
+            AccessMethod = "none";
     }
     
     public static bool CheckRootAccess()
@@ -148,18 +170,106 @@ public class LinuxEcController
     
     /// <summary>
     /// Set fan profile.
+    /// Uses hp-wmi if available, falls back to EC.
     /// </summary>
     public bool SetFanProfile(FanProfile profile)
     {
+        // Try hp-wmi first (newer models like OMEN 16 2023+)
+        if (HasHpWmiAccess && File.Exists(HP_WMI_THERMAL))
+        {
+            return SetHpWmiThermalProfile(profile);
+        }
+        
+        // Fall back to EC register method (older models)
+        if (!HasEcAccess)
+            return false;
+            
         return profile switch
         {
-            FanProfile.Auto => SetFanState(true),
-            FanProfile.Silent => SetFanSpeedPercent(30),
-            FanProfile.Balanced => SetFanSpeedPercent(50),
-            FanProfile.Gaming => SetFanSpeedPercent(80),
-            FanProfile.Max => SetFanSpeedPercent(100),
+            FanProfile.Auto => RestoreAutoMode(),
+            FanProfile.Silent => SetManualFanSpeed(30),
+            FanProfile.Balanced => SetManualFanSpeed(50),
+            FanProfile.Gaming => SetManualFanSpeed(80),
+            FanProfile.Max => SetManualFanSpeed(100),
             _ => false
         };
+    }
+    
+    /// <summary>
+    /// Set thermal profile via hp-wmi driver (newer OMEN models).
+    /// </summary>
+    private bool SetHpWmiThermalProfile(FanProfile profile)
+    {
+        var profileValue = profile switch
+        {
+            FanProfile.Auto => "balanced",
+            FanProfile.Silent => "quiet",
+            FanProfile.Balanced => "balanced", 
+            FanProfile.Gaming => "performance",
+            FanProfile.Max => "performance",
+            _ => "balanced"
+        };
+        
+        try
+        {
+            File.WriteAllText(HP_WMI_THERMAL, profileValue);
+            
+            // For Max mode, also enable fan_always_on if available
+            if (profile == FanProfile.Max && File.Exists(HP_WMI_FAN_ALWAYS_ON))
+            {
+                File.WriteAllText(HP_WMI_FAN_ALWAYS_ON, "1");
+            }
+            else if (profile == FanProfile.Auto && File.Exists(HP_WMI_FAN_ALWAYS_ON))
+            {
+                File.WriteAllText(HP_WMI_FAN_ALWAYS_ON, "0");
+            }
+            
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    
+    /// <summary>
+    /// Restore BIOS automatic fan control via EC registers.
+    /// This resets all manual overrides and lets the BIOS control fans.
+    /// </summary>
+    public bool RestoreAutoMode()
+    {
+        // Step 1: Re-enable BIOS fan control
+        if (!WriteByte(REG_BIOS_CONTROL, 0x00))
+            return false;
+            
+        // Step 2: Enable fan state (allow BIOS to control)
+        if (!WriteByte(REG_FAN_STATE, 0x00))
+            return false;
+            
+        // Step 3: Disable fan boost
+        WriteByte(REG_FAN_BOOST, 0x00);
+        
+        // Step 4: Reset timer to allow BIOS to take over
+        WriteByte(REG_TIMER, 0x00);
+        
+        // Step 5: Clear manual fan speed registers (write 0 to let BIOS control)
+        WriteByte(REG_FAN1_SPEED_SET, 0x00);
+        WriteByte(REG_FAN2_SPEED_SET, 0x00);
+        
+        return true;
+    }
+    
+    /// <summary>
+    /// Set manual fan speed (disables BIOS control).
+    /// </summary>
+    private bool SetManualFanSpeed(int percent)
+    {
+        // First disable BIOS control to take over
+        WriteByte(REG_BIOS_CONTROL, 0x06);  // Disable BIOS control
+        WriteByte(REG_FAN_STATE, 0x02);     // Disable auto state
+        
+        // Set the speed
+        return SetFanSpeedPercent(percent);
     }
     
     /// <summary>

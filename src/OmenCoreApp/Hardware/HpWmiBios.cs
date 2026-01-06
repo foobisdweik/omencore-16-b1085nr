@@ -360,10 +360,23 @@ namespace OmenCore.Hardware
                     ThermalPolicy = (ThermalPolicyVersion)result[3];
                     _logging?.Info($"  Thermal Policy: V{(int)ThermalPolicy}");
                     
-                    // OMEN Max 2025+ detection
+                    // OMEN Max 2025+ detection - check model name as well
+                    // Some OMEN Max models report V1 but need V2 commands for fan reading
                     if (ThermalPolicy >= ThermalPolicyVersion.V2)
                     {
                         _logging?.Info($"  ✓ OMEN Max 2025+ detected (V2 thermal policy) - using enhanced fan commands");
+                    }
+                    else
+                    {
+                        // Check model name for OMEN Max which may report V1 but need V2
+                        var modelName = GetModelName();
+                        if (!string.IsNullOrEmpty(modelName) && 
+                            modelName.Contains("MAX", StringComparison.OrdinalIgnoreCase) &&
+                            modelName.Contains("OMEN", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _logging?.Info($"  ⚠️ OMEN Max detected by name but reports V1 - forcing V2 for fan commands");
+                            ThermalPolicy = ThermalPolicyVersion.V2;
+                        }
                     }
 
                     // Query fan count
@@ -1245,6 +1258,30 @@ namespace OmenCore.Hardware
             return false;
         }
         
+        #endregion
+
+        #region Helper Methods
+
+        /// <summary>
+        /// Get system model name from WMI for model-based detection.
+        /// </summary>
+        private string? GetModelName()
+        {
+            try
+            {
+                using var searcher = new System.Management.ManagementObjectSearcher("SELECT Model FROM Win32_ComputerSystem");
+                foreach (var obj in searcher.Get())
+                {
+                    return obj["Model"]?.ToString();
+                }
+            }
+            catch
+            {
+                // Ignore errors - fallback to BIOS-reported version
+            }
+            return null;
+        }
+
         #endregion
 
         public void Dispose()
