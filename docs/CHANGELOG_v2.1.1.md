@@ -47,6 +47,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Worker mode:** Requests fresh sample from HardwareWorker with 500ms timeout
 - **Files changed:** `LibreHardwareMonitorImpl.cs`
 
+#### 🌀 Fan Speed Resets to Auto Under Load
+- **Issue:** When using Max fan speed or custom fan curves, fans would reset to auto when starting a game or stress test, even though OmenCore still showed "Max" as active
+- **Root Cause:** HP BIOS is very aggressive about resetting fan control, especially when load changes trigger thermal policy adjustments. The countdown extension was only extending the timer, not re-applying the actual fan settings.
+- **Fix:** Enhanced countdown extension to actively re-apply fan settings:
+  - For Max mode: Re-applies `SetFanMax(true)` every 30 seconds
+  - For custom curves: Re-applies the last set fan percentage
+  - Reduced countdown interval from 90s to 30s for faster recovery
+  - Added `_isMaxModeActive` and `_lastManualFanPercent` tracking
+- **Files changed:** `WmiFanController.cs`
+
 #### 🚫 OMEN Desktop Detection and Blocking (CRITICAL)
 - **Issue:** OmenCore was causing severe issues on OMEN Desktop PCs (30L, 35L, 40L, 45L):
   - Only one fan detected on startup
@@ -117,7 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Checksums (SHA256)
 
 ```
-OmenCoreSetup-2.1.1.exe:        4AC115DF7BEF7EB8503C79C3B9C456FF844BC18BA76D92102BCA05FBC7F355B5
-OmenCore-2.1.1-win-x64.zip:     DC2114D3E62C9EF16F9607D5FBA78F1CE986AEBAE7F162284E3C663774922C24
-omencore-linux-2.1.1.tar.gz:    8D269CBAE840C7B0D3BDB615637BE535141D8AC11CCC2097548EE2AB6581C238
+OmenCoreSetup-2.1.1.exe:        23489E35901F9481FBCADBE96AA09F948BEC1D2FFFF902DEB4F53F8931B42BE6
+OmenCore-2.1.1-win-x64.zip:     B775F72ED440865172439AFDF429F8BF329DCD76200673E90BD52C273B955E54
+omencore-linux-2.1.1.tar.gz:    A795E34C06E7F8769D0755CDA7B259B8E7B81B50A8B49CC86759146F45C5B30F
 ```

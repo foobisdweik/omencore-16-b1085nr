@@ -28,13 +28,15 @@ namespace OmenCore.Hardware
 
         // Manual fan control state
         private HpWmiBios.FanMode _lastMode = HpWmiBios.FanMode.Default;
+        private bool _isMaxModeActive = false;  // Track if SetFanMax(true) is active
+        private int _lastManualFanPercent = -1; // Track last manual fan percentage for re-apply
         
         // Fan level constants - HP WMI uses 0-55 krpm range (0-5500 RPM)
         private const int MaxFanLevel = 55;
         
         // Countdown extension timer - keeps fan settings from reverting
         private Timer? _countdownExtensionTimer;
-        private const int CountdownExtensionIntervalMs = 90000; // 90 seconds (timer is 120s)
+        private const int CountdownExtensionIntervalMs = 30000; // 30 seconds (more aggressive to handle load changes)
         private bool _countdownExtensionEnabled = false;
         
         // Command verification tracking
@@ -123,6 +125,8 @@ namespace OmenCore.Hardware
                     {
                         _logging?.Info("✓ Max fan speed enabled - fans should ramp to 100%");
                         IsManualControlActive = true; // Mark as manual since we're forcing max
+                        _isMaxModeActive = true;      // Track max mode for countdown extension
+                        _lastManualFanPercent = 100;
                         // GPU power left unchanged - max fans is for COOLING, not more power
                         return true;
                     }
@@ -134,6 +138,8 @@ namespace OmenCore.Hardware
                         {
                             _logging?.Info("✓ Fan level set to maximum (55, 55)");
                             IsManualControlActive = true;
+                            _isMaxModeActive = true;
+                            _lastManualFanPercent = 100;
                             return true;
                         }
                     }
@@ -154,6 +160,8 @@ namespace OmenCore.Hardware
                 {
                     _lastMode = mode;
                     IsManualControlActive = false;
+                    _isMaxModeActive = false;          // Clear max mode flag
+                    _lastManualFanPercent = -1;
                     
                     // Start/stop countdown extension based on mode
                     if (isAutoPreset || mode == HpWmiBios.FanMode.Default || mode == HpWmiBios.FanMode.LegacyDefault)
@@ -289,6 +297,8 @@ namespace OmenCore.Hardware
                 if (success)
                 {
                     IsManualControlActive = true;
+                    _isMaxModeActive = percent >= 100;  // Track if we're at max
+                    _lastManualFanPercent = percent;     // Track for re-apply
                     
                     // Start countdown extension to prevent BIOS from reverting
                     // HP BIOS has a 120-second timeout that resets fan control to auto
@@ -364,6 +374,8 @@ namespace OmenCore.Hardware
                 if (success)
                 {
                     IsManualControlActive = true;
+                    _isMaxModeActive = cpuPercent >= 100 && gpuPercent >= 100;
+                    _lastManualFanPercent = Math.Max(cpuPercent, gpuPercent);
                     StartCountdownExtension();
                 }
                 
@@ -745,6 +757,8 @@ namespace OmenCore.Hardware
         
         /// <summary>
         /// Countdown extension callback - periodically extends the BIOS timer.
+        /// For Max mode, also re-applies SetFanMax(true) to ensure it stays active.
+        /// HP BIOS is aggressive about reverting fan settings, especially under load.
         /// </summary>
         private void CountdownExtensionCallback(object? state)
         {
@@ -756,7 +770,33 @@ namespace OmenCore.Hardware
                 // IsManualControlActive is set when we apply fan levels directly
                 if (IsManualControlActive || (_lastMode != HpWmiBios.FanMode.Default && _lastMode != HpWmiBios.FanMode.LegacyDefault))
                 {
-                    if (_wmiBios.ExtendFanCountdown())
+                    // For Max mode, re-apply SetFanMax(true) to ensure it stays active
+                    // This is more aggressive than just extending countdown, but necessary
+                    // because HP BIOS can reset max mode under high load conditions
+                    if (_isMaxModeActive)
+                    {
+                        if (_wmiBios.SetFanMax(true))
+                        {
+                            _logging?.Info("Fan Max mode re-applied via countdown extension");
+                        }
+                        else
+                        {
+                            _logging?.Warn("Failed to re-apply Max mode - trying fallback");
+                            // Fallback: try setting level to max
+                            _wmiBios.SetFanLevel(55, 55);
+                        }
+                    }
+                    else if (_lastManualFanPercent >= 0)
+                    {
+                        // For custom fan curves, re-apply the last set percentage
+                        // This combats BIOS resetting under load
+                        byte fanLevel = (byte)(_lastManualFanPercent * MaxFanLevel / 100);
+                        if (_wmiBios.SetFanLevel(fanLevel, fanLevel))
+                        {
+                            _logging?.Info($"Fan level re-applied: {_lastManualFanPercent}% via countdown extension");
+                        }
+                    }
+                    else if (_wmiBios.ExtendFanCountdown())
                     {
                         _logging?.Info($"Fan countdown extended (manual: {IsManualControlActive}, mode: {_lastMode})");
                     }
