@@ -496,12 +496,13 @@ class Program
         {
             try
             {
+                // CurrentUserOnly restricts the pipe to the current user session for security (audit_1 critical #2)
                 using var server = new NamedPipeServerStream(
                     PipeName,
                     PipeDirection.InOut,
                     1,
                     PipeTransmissionMode.Message,
-                    PipeOptions.Asynchronous);
+                    PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 
                 Console.WriteLine("Waiting for client connection...");
                 await server.WaitForConnectionAsync();

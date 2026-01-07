@@ -89,6 +89,75 @@ namespace OmenCore.Controls
         {
             InitializeComponent();
             Loaded += (s, e) => RenderCurve();
+            
+            // Handle mouse release when cursor leaves the chart area or releases outside a point
+            ChartCanvas.MouseLeave += ChartCanvas_MouseLeave;
+            ChartCanvas.MouseLeftButtonUp += ChartCanvas_MouseLeftButtonUp;
+            ChartCanvas.LostMouseCapture += ChartCanvas_LostMouseCapture;
+        }
+        
+        #endregion
+        
+        #region Global Mouse Handlers
+        
+        private void ChartCanvas_MouseLeave(object sender, MouseEventArgs e)
+        {
+            // Release drag when mouse leaves chart area
+            if (_isDragging)
+            {
+                ReleaseDrag();
+            }
+        }
+        
+        private void ChartCanvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            // Release drag on any mouse up in the canvas
+            if (_isDragging)
+            {
+                ReleaseDrag();
+            }
+        }
+        
+        private void ChartCanvas_LostMouseCapture(object sender, MouseEventArgs e)
+        {
+            // Release drag if mouse capture is lost
+            if (_isDragging)
+            {
+                ReleaseDrag();
+            }
+        }
+        
+        private void ReleaseDrag()
+        {
+            if (_draggedPoint != null)
+            {
+                _draggedPoint.ReleaseMouseCapture();
+            }
+            _isDragging = false;
+            _draggedPoint = null;
+            _draggedPointIndex = -1;
+            
+            HideTooltip();
+            
+            // Sort points by temperature after drag
+            if (CurvePoints != null)
+            {
+                _suppressRender = true;
+                try
+                {
+                    var sorted = CurvePoints.OrderBy(p => p.TemperatureC).ToList();
+                    CurvePoints.Clear();
+                    foreach (var p in sorted)
+                    {
+                        CurvePoints.Add(p);
+                    }
+                }
+                finally
+                {
+                    _suppressRender = false;
+                }
+                RenderCurve();
+            }
         }
         
         #endregion
@@ -545,6 +614,14 @@ namespace OmenCore.Controls
                 maxTemp = sortedPoints[currentIndex + 1].TemperatureC - 5;
             }
             
+            // Ensure minTemp doesn't exceed maxTemp (edge case when points are too close)
+            if (minTemp > maxTemp)
+            {
+                // Keep the point at its current position if constraints conflict
+                minTemp = CurvePoints[_draggedPointIndex].TemperatureC;
+                maxTemp = CurvePoints[_draggedPointIndex].TemperatureC;
+            }
+            
             temp = Math.Clamp(temp, minTemp, maxTemp);
             
             // Update the point
@@ -564,37 +641,10 @@ namespace OmenCore.Controls
         
         private void Point_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            if (_isDragging && _draggedPoint != null)
+            if (_isDragging)
             {
-                _draggedPoint.ReleaseMouseCapture();
-                _isDragging = false;
-                _draggedPoint = null;
-                _draggedPointIndex = -1;
-                
-                HideTooltip();
-                
-                // Sort points by temperature after drag
-                if (CurvePoints != null)
-                {
-                    // Suppress render during batch update to prevent visual jitter
-                    _suppressRender = true;
-                    try
-                    {
-                        var sorted = CurvePoints.OrderBy(p => p.TemperatureC).ToList();
-                        CurvePoints.Clear();
-                        foreach (var p in sorted)
-                        {
-                            CurvePoints.Add(p);
-                        }
-                    }
-                    finally
-                    {
-                        _suppressRender = false;
-                    }
-                    
-                    // Single render after batch update is complete
-                    RenderCurve();
-                }
+                ReleaseDrag();
+                e.Handled = true;
             }
         }
         

@@ -563,10 +563,20 @@ namespace OmenCore.Services
             }
             
             // Some newer OMEN models use VK_LAUNCH_APP1 (0xB6)
+            // IMPORTANT: Require OMEN-specific scan code validation to avoid false positives
+            // from Remote Desktop, media apps, and other software that uses VK_LAUNCH_APP1
             if (vkCode == VK_LAUNCH_APP1)
             {
-                _logging.Debug($"VK_LAUNCH_APP1 (0xB6) with scan code: 0x{scanCode:X4} - treating as OMEN key");
-                return true;
+                foreach (var omenScan in OmenScanCodes)
+                {
+                    if (scanCode == omenScan)
+                    {
+                        _logging.Debug($"VK_LAUNCH_APP1 (0xB6) with OMEN scan code 0x{scanCode:X4} - OMEN key confirmed");
+                        return true;
+                    }
+                }
+                _logging.Debug($"VK_LAUNCH_APP1 (0xB6) with non-OMEN scan code: 0x{scanCode:X4} - NOT treated as OMEN key (likely Remote Desktop or media app)");
+                return false;
             }
             
             // VK 157 (0x9D) - reported on some OMEN models

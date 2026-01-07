@@ -454,6 +454,41 @@ namespace OmenCore.ViewModels
         public int GpuMemoryOffsetMax { get; private set; } = 500;
         public int GpuPowerLimitMin { get; private set; } = 50;
         public int GpuPowerLimitMax { get; private set; } = 115;
+        
+        // GPU OC Profiles
+        public ObservableCollection<Models.GpuOcProfile> GpuOcProfiles { get; } = new();
+        
+        private Models.GpuOcProfile? _selectedGpuOcProfile;
+        public Models.GpuOcProfile? SelectedGpuOcProfile
+        {
+            get => _selectedGpuOcProfile;
+            set
+            {
+                if (_selectedGpuOcProfile != value)
+                {
+                    _selectedGpuOcProfile = value;
+                    OnPropertyChanged();
+                    if (value != null)
+                    {
+                        LoadGpuOcProfile(value);
+                    }
+                }
+            }
+        }
+        
+        private string _newGpuOcProfileName = "";
+        public string NewGpuOcProfileName
+        {
+            get => _newGpuOcProfileName;
+            set
+            {
+                if (_newGpuOcProfileName != value)
+                {
+                    _newGpuOcProfileName = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
 
         // CPU Power Limits (PL1/PL2)
         private int _cpuPl1Watts = 45;
@@ -631,6 +666,8 @@ namespace OmenCore.ViewModels
         public ICommand CleanupOmenHubCommand { get; }
         public ICommand ApplyGpuOcCommand { get; }
         public ICommand ResetGpuOcCommand { get; }
+        public ICommand SaveGpuOcProfileCommand { get; }
+        public ICommand DeleteGpuOcProfileCommand { get; }
 
         public SystemControlViewModel(
             UndervoltService undervoltService, 
@@ -684,8 +721,13 @@ namespace OmenCore.ViewModels
             ApplyGpuPowerBoostCommand = new RelayCommand(_ => ApplyGpuPowerBoost(), _ => GpuPowerBoostAvailable);
             ApplyGpuOcCommand = new RelayCommand(_ => ApplyGpuOc(), _ => GpuOcAvailable);
             ResetGpuOcCommand = new RelayCommand(_ => ResetGpuOc(), _ => GpuOcAvailable);
+            SaveGpuOcProfileCommand = new RelayCommand(_ => SaveGpuOcProfile(), _ => GpuOcAvailable && !string.IsNullOrWhiteSpace(NewGpuOcProfileName));
+            DeleteGpuOcProfileCommand = new RelayCommand(_ => DeleteGpuOcProfile(), _ => SelectedGpuOcProfile != null);
             ApplyTccOffsetCommand = new RelayCommand(_ => ApplyTccOffset(), _ => TccStatus.IsSupported);
             ResetTccOffsetCommand = new RelayCommand(_ => ResetTccOffset(), _ => TccStatus.IsSupported);
+            
+            // Load saved GPU OC profiles
+            LoadGpuOcProfiles();
 
             // Initialize performance modes with descriptions
             PerformanceModes.Add(new PerformanceMode { Name = "Quiet", Description = "Power saving mode - reduced fan noise, lower power limits. Best for quiet environments and light tasks." });
@@ -1486,6 +1528,183 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
             catch (Exception ex)
             {
                 _logging.Warn($"Failed to restore GPU OC settings: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Load saved GPU OC profiles from config.
+        /// </summary>
+        private void LoadGpuOcProfiles()
+        {
+            try
+            {
+                GpuOcProfiles.Clear();
+                
+                // Add default profiles
+                GpuOcProfiles.Add(new Models.GpuOcProfile 
+                { 
+                    Name = "Stock (Default)", 
+                    CoreClockOffsetMHz = 0, 
+                    MemoryClockOffsetMHz = 0, 
+                    PowerLimitPercent = 100,
+                    Description = "Factory defaults - no overclocking"
+                });
+                
+                GpuOcProfiles.Add(new Models.GpuOcProfile 
+                { 
+                    Name = "Power Saver", 
+                    CoreClockOffsetMHz = -200, 
+                    MemoryClockOffsetMHz = 0, 
+                    PowerLimitPercent = 80,
+                    Description = "Reduced power and heat for quieter operation"
+                });
+                
+                GpuOcProfiles.Add(new Models.GpuOcProfile 
+                { 
+                    Name = "Mild OC", 
+                    CoreClockOffsetMHz = 100, 
+                    MemoryClockOffsetMHz = 200, 
+                    PowerLimitPercent = 105,
+                    Description = "Safe mild overclock for extra performance"
+                });
+                
+                // Load custom profiles from config
+                var config = _configService.Config;
+                foreach (var profile in config.GpuOcProfiles)
+                {
+                    if (!GpuOcProfiles.Any(p => p.Name == profile.Name))
+                    {
+                        GpuOcProfiles.Add(profile);
+                    }
+                }
+                
+                _logging.Info($"Loaded {GpuOcProfiles.Count} GPU OC profiles ({config.GpuOcProfiles.Count} custom)");
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to load GPU OC profiles: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Load a GPU OC profile into the sliders.
+        /// </summary>
+        private void LoadGpuOcProfile(Models.GpuOcProfile profile)
+        {
+            GpuCoreClockOffset = profile.CoreClockOffsetMHz;
+            GpuMemoryClockOffset = profile.MemoryClockOffsetMHz;
+            GpuPowerLimitPercent = profile.PowerLimitPercent;
+            
+            _logging.Info($"Loaded GPU OC profile: {profile.Name} (Core: {profile.CoreClockOffsetMHz}, Mem: {profile.MemoryClockOffsetMHz}, Power: {profile.PowerLimitPercent}%)");
+            
+            // Save last selected profile
+            var config = _configService.Config;
+            config.LastGpuOcProfileName = profile.Name;
+            _configService.Save(config);
+        }
+        
+        /// <summary>
+        /// Save current GPU OC settings as a new profile.
+        /// </summary>
+        private void SaveGpuOcProfile()
+        {
+            if (string.IsNullOrWhiteSpace(NewGpuOcProfileName))
+            {
+                System.Windows.MessageBox.Show("Please enter a name for the profile.", "Profile Name Required",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+                return;
+            }
+            
+            // Check if name already exists (for built-in profiles)
+            if (GpuOcProfiles.Any(p => p.Name == NewGpuOcProfileName && 
+                (p.Name == "Stock (Default)" || p.Name == "Power Saver" || p.Name == "Mild OC")))
+            {
+                System.Windows.MessageBox.Show("Cannot overwrite built-in profiles. Please choose a different name.",
+                    "Invalid Name", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+            
+            // Remove existing profile with same name
+            var existing = GpuOcProfiles.FirstOrDefault(p => p.Name == NewGpuOcProfileName);
+            if (existing != null)
+            {
+                GpuOcProfiles.Remove(existing);
+            }
+            
+            // Create new profile
+            var profile = new Models.GpuOcProfile
+            {
+                Name = NewGpuOcProfileName,
+                CoreClockOffsetMHz = GpuCoreClockOffset,
+                MemoryClockOffsetMHz = GpuMemoryClockOffset,
+                PowerLimitPercent = GpuPowerLimitPercent,
+                Description = $"Custom profile: Core {GpuCoreClockOffsetText}, Mem {GpuMemoryClockOffsetText}, Power {GpuPowerLimitText}",
+                CreatedAt = DateTime.Now,
+                ModifiedAt = DateTime.Now
+            };
+            
+            GpuOcProfiles.Add(profile);
+            SelectedGpuOcProfile = profile;
+            
+            // Save to config
+            SaveGpuOcProfilesToConfig();
+            
+            // Clear input
+            NewGpuOcProfileName = "";
+            
+            GpuOcStatus = $"✓ Saved profile: {profile.Name}";
+            _logging.Info($"Saved GPU OC profile: {profile.Name}");
+        }
+        
+        /// <summary>
+        /// Delete the selected GPU OC profile.
+        /// </summary>
+        private void DeleteGpuOcProfile()
+        {
+            if (SelectedGpuOcProfile == null)
+                return;
+            
+            // Don't allow deleting built-in profiles
+            if (SelectedGpuOcProfile.Name == "Stock (Default)" || 
+                SelectedGpuOcProfile.Name == "Power Saver" || 
+                SelectedGpuOcProfile.Name == "Mild OC")
+            {
+                System.Windows.MessageBox.Show("Cannot delete built-in profiles.", "Delete Profile",
+                    System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+            
+            var profileName = SelectedGpuOcProfile.Name;
+            GpuOcProfiles.Remove(SelectedGpuOcProfile);
+            SelectedGpuOcProfile = GpuOcProfiles.FirstOrDefault();
+            
+            // Save to config
+            SaveGpuOcProfilesToConfig();
+            
+            GpuOcStatus = $"Deleted profile: {profileName}";
+            _logging.Info($"Deleted GPU OC profile: {profileName}");
+        }
+        
+        /// <summary>
+        /// Save custom GPU OC profiles to config.
+        /// </summary>
+        private void SaveGpuOcProfilesToConfig()
+        {
+            try
+            {
+                var config = _configService.Config;
+                
+                // Only save custom profiles (not built-in)
+                config.GpuOcProfiles = GpuOcProfiles
+                    .Where(p => p.Name != "Stock (Default)" && p.Name != "Power Saver" && p.Name != "Mild OC")
+                    .ToList();
+                
+                _configService.Save(config);
+                _logging.Info($"Saved {config.GpuOcProfiles.Count} custom GPU OC profiles to config");
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to save GPU OC profiles: {ex.Message}");
             }
         }
         

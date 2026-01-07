@@ -254,7 +254,7 @@
                             <ItemsControl ItemsSource="{Binding SystemControl.PerCoreOffsets}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Background="{StaticResource SurfaceBrush}" 
+                                        <Border Background="{StaticResource SurfaceMediumBrush}" 
                                                 CornerRadius="6" Padding="12" Margin="0,0,0,8">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>

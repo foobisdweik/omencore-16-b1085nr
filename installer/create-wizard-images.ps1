@@ -10,7 +10,7 @@ $logoPath = Join-Path (Split-Path -Parent $scriptPath) "src\OmenCoreApp\Assets\l
 # OMEN brand colors
 $omenRed = [System.Drawing.Color]::FromArgb(230, 0, 46)
 $darkGray = [System.Drawing.Color]::FromArgb(15, 17, 28)
-$mediumGray = [System.Drawing.Color]::FromArgb(25, 28, 48)
+$mediumGray = [System.Drawing.Color]::FromArgb(30, 35, 50)
 $accentCyan = [System.Drawing.Color]::FromArgb(0, 200, 200)
 $white = [System.Drawing.Color]::White
 
@@ -75,23 +75,27 @@ $coreText = "Core"
 $coreSize = $largeGraphics.MeasureString($coreText, $coreFont)
 $largeGraphics.DrawString($coreText, $coreFont, $coreBrush, (164 - $coreSize.Width) / 2, 158)
 
-# Draw version
-$versionFont = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Regular)
-$versionBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(120, 255, 255, 255))
-$versionText = "v1.4.0"
-$versionSize = $largeGraphics.MeasureString($versionText, $versionFont)
-$largeGraphics.DrawString($versionText, $versionFont, $versionBrush, (164 - $versionSize.Width) / 2, 185)
+# Draw subtle tagline instead of version (more universal - version shows in installer title bar)
+$tagFont = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Italic)
+$tagBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(150, 255, 255, 255))
+$tagText = "Control Suite"
+$tagSize = $largeGraphics.MeasureString($tagText, $tagFont)
+$largeGraphics.DrawString($tagText, $tagFont, $tagBrush, (164 - $tagSize.Width) / 2, 185)
 
 # Draw decorative line
 $linePen = New-Object System.Drawing.Pen($omenRed, 2)
-$largeGraphics.DrawLine($linePen, 30, 210, 134, 210)
+$largeGraphics.DrawLine($linePen, 30, 215, 134, 215)
 
-# Draw tagline at bottom
-$taglineFont = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Italic)
-$taglineBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(150, 255, 255, 255))
-$taglineText = "Gaming Control Suite"
-$taglineSize = $largeGraphics.MeasureString($taglineText, $taglineFont)
-$largeGraphics.DrawString($taglineText, $taglineFont, $taglineBrush, (164 - $taglineSize.Width) / 2, 280)
+# Feature highlights (replacing version-specific text)
+$featureFont = New-Object System.Drawing.Font("Segoe UI", 7, [System.Drawing.FontStyle]::Regular)
+$featureBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(180, 255, 255, 255))
+$features = @("✓ Fan Control", "✓ RGB Lighting", "✓ Performance Modes", "✓ Game Profiles")
+$featureY = 230
+foreach ($feature in $features) {
+    $featureSize = $largeGraphics.MeasureString($feature, $featureFont)
+    $largeGraphics.DrawString($feature, $featureFont, $featureBrush, (164 - $featureSize.Width) / 2, $featureY)
+    $featureY += 14
+}
 
 # Add subtle corner accents
 $accentPen = New-Object System.Drawing.Pen($accentCyan, 2)
@@ -114,14 +118,18 @@ $smallGraphics = [System.Drawing.Graphics]::FromImage($smallBmp)
 $smallGraphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
 $smallGraphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
 
-# Gradient background
+# Gradient background matching OMEN dark theme
 $smallGradient = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
     [System.Drawing.Point]::new(0, 0),
-    [System.Drawing.Point]::new(0, 58),
-    $darkGray,
-    [System.Drawing.Color]::FromArgb(8, 10, 20)
+    [System.Drawing.Point]::new(55, 58),
+    $mediumGray,
+    $darkGray
 )
 $smallGraphics.FillRectangle($smallGradient, 0, 0, 55, 58)
+
+# Subtle border accent
+$borderPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(80, $omenRed), 1)
+$smallGraphics.DrawRectangle($borderPen, 0, 0, 54, 57)
 
 # Load and draw logo centered
 if (Test-Path $logoPath) {
@@ -162,10 +170,11 @@ $omenFont.Dispose()
 $omenBrush.Dispose()
 $coreFont.Dispose()
 $coreBrush.Dispose()
-$versionFont.Dispose()
-$versionBrush.Dispose()
+$tagFont.Dispose()
+$tagBrush.Dispose()
 $linePen.Dispose()
-$taglineFont.Dispose()
-$taglineBrush.Dispose()
+$featureFont.Dispose()
+$featureBrush.Dispose()
 $accentPen.Dispose()
+$borderPen.Dispose()
 if ($smallGradient) { $smallGradient.Dispose() }

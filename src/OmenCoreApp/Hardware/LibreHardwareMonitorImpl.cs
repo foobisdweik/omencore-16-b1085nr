@@ -120,7 +120,7 @@ namespace OmenCore.Hardware
             }
         }
         
-        private async void InitializeWorker()
+        private async Task InitializeWorkerAsync()
         {
             _workerInitializing = true;
             try
@@ -140,10 +140,27 @@ namespace OmenCore.Hardware
                     InitializeComputer();
                 }
             }
+            catch (Exception ex)
+            {
+                _logger?.Invoke($"[Monitor] Worker initialization failed: {ex.Message}, falling back to in-process");
+                _useWorker = false;
+                InitializeComputer();
+            }
             finally
             {
                 _workerInitializing = false;
             }
+        }
+        
+        /// <summary>
+        /// Fire-and-forget wrapper for InitializeWorkerAsync that handles exceptions safely.
+        /// Used from constructor where we cannot await.
+        /// </summary>
+        private void InitializeWorker()
+        {
+            // Start initialization but don't block constructor
+            // Exceptions are caught and logged within InitializeWorkerAsync
+            _ = InitializeWorkerAsync();
         }
         
         /// <summary>

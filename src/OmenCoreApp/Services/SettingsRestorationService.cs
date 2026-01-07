@@ -307,6 +307,43 @@ namespace OmenCore.Services
                     RaiseSettingsRestored("FanPreset", savedPresetName, true);
                     return true;
                 }
+                
+                // Handle "Custom" - restore the saved custom curve
+                if (nameLower == "custom")
+                {
+                    var customCurve = _configService.Config.CustomFanCurve;
+                    if (customCurve != null && customCurve.Count >= 2)
+                    {
+                        var customPreset = new FanPreset
+                        {
+                            Name = "Custom (Restored)",
+                            Mode = FanMode.Manual,
+                            Curve = customCurve
+                        };
+                        _fanService.ApplyPreset(customPreset);
+                        FanPresetRestored = true;
+                        _logging.Info($"✓ Custom fan curve restored ({customCurve.Count} points)");
+                        RaiseSettingsRestored("FanPreset", "Custom", true);
+                        return true;
+                    }
+                    _logging.Warn("Custom fan curve not found or invalid in config");
+                }
+                
+                // Handle "Independent" - restore independent CPU/GPU curves
+                if (nameLower == "independent" && _configService.Config.IndependentFanCurvesEnabled)
+                {
+                    var cpuCurve = _configService.Config.CpuFanCurve;
+                    var gpuCurve = _configService.Config.GpuFanCurve;
+                    if (cpuCurve != null && cpuCurve.Count >= 2 && gpuCurve != null && gpuCurve.Count >= 2)
+                    {
+                        _fanService.EnableIndependentCurves(cpuCurve, gpuCurve);
+                        FanPresetRestored = true;
+                        _logging.Info($"✓ Independent fan curves restored (CPU: {cpuCurve.Count} points, GPU: {gpuCurve.Count} points)");
+                        RaiseSettingsRestored("FanPreset", "Independent", true);
+                        return true;
+                    }
+                    _logging.Warn("Independent fan curves not found or invalid in config");
+                }
 
                 // Fallback: attempt to apply preset by name via a generic FanPreset (use Mode=Performance as hint)
                 var fallbackPreset = new FanPreset { Name = savedPresetName, Mode = FanMode.Performance };

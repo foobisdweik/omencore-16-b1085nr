@@ -185,6 +185,26 @@ namespace OmenCore.Services
         {
             Stop();
             _cts = new CancellationTokenSource();
+            
+            // Immediately populate fan telemetry so UI shows RPM right away
+            try
+            {
+                var fanSpeeds = _fanController.ReadFanSpeeds().ToList();
+                App.Current?.Dispatcher?.Invoke(() =>
+                {
+                    _fanTelemetry.Clear();
+                    foreach (var fan in fanSpeeds)
+                    {
+                        _fanTelemetry.Add(fan);
+                    }
+                    _lastFanSpeeds = fanSpeeds.Select(f => f.Rpm).ToList();
+                });
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Could not read initial fan speeds: {ex.Message}");
+            }
+            
             _ = Task.Run(() => MonitorLoop(_cts.Token));
         }
 
@@ -243,9 +263,22 @@ namespace OmenCore.Services
                         _lastAppliedFanPercent = 100;
                     }
                 }
+                else if (nameLower.Contains("auto") || nameLower.Contains("default"))
+                {
+                    // Auto/Default mode: Let BIOS control fans completely
+                    // Don't apply any curve - this allows fans to stop at idle temps
+                    DisableCurve();
+                    _activePreset = preset;
+                    
+                    // Restore BIOS auto control - this resets fan levels to 0 and 
+                    // sets FanMode.Default so BIOS can stop fans at idle temperatures
+                    _fanController.RestoreAutoControl();
+                    
+                    _logging.Info($"✓ Preset '{preset.Name}' using BIOS auto control (fans can stop at idle)");
+                }
                 else if (preset.Curve != null && preset.Curve.Any())
                 {
-                    // Enable continuous curve application for ALL presets with curves (including Auto)
+                    // Enable continuous curve application for custom/performance presets
                     EnableCurve(preset.Curve.ToList(), preset);
                     _logging.Info($"✓ Preset '{preset.Name}' curve enabled with {preset.Curve.Count} points");
 

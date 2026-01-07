@@ -619,6 +619,64 @@
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        Margin="0,4,0,0"/>
                         </StackPanel>
+                        
+                        <!-- OC Profiles Section -->
+                        <Border Background="{StaticResource SurfaceLightBrush}"
+                                CornerRadius="8"
+                                Padding="12"
+                                Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="OC Profiles" FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+                                
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <ComboBox Grid.Column="0"
+                                              ItemsSource="{Binding GpuOcProfiles}"
+                                              SelectedItem="{Binding SelectedGpuOcProfile}"
+                                              DisplayMemberPath="Name"
+                                              Margin="0,0,8,0"/>
+                                    
+                                    <Button Grid.Column="1"
+                                            Content="🗑️"
+                                            ToolTip="Delete selected profile"
+                                            Command="{Binding DeleteGpuOcProfileCommand}"
+                                            Style="{StaticResource ModernButton}"
+                                            Padding="8,6"/>
+                                </Grid>
+                                
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <TextBox Grid.Column="0"
+                                             Text="{Binding NewGpuOcProfileName, UpdateSourceTrigger=PropertyChanged}"
+                                             Padding="8,6"
+                                             Margin="0,0,8,0">
+                                        <TextBox.Style>
+                                            <Style TargetType="TextBox">
+                                                <Setter Property="Background" Value="{StaticResource SurfaceMediumBrush}"/>
+                                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{StaticResource SurfaceLightBrush}"/>
+                                            </Style>
+                                        </TextBox.Style>
+                                    </TextBox>
+                                    
+                                    <Button Grid.Column="1"
+                                            Content="💾 Save"
+                                            ToolTip="Save current settings as new profile"
+                                            Command="{Binding SaveGpuOcProfileCommand}"
+                                            Style="{StaticResource ModernButton}"
+                                            Padding="12,6"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
 
                         <!-- Apply/Reset Buttons -->
                         <Grid>

@@ -16,6 +16,11 @@ namespace OmenCore.Models
         public double RamUsageGb { get; set; }
         public double RamTotalGb { get; set; }
         public double FanRpm { get; set; }
+        
+        // Dual fan support (v2.2)
+        public int Fan1Rpm { get; set; }
+        public int Fan2Rpm { get; set; }
+        
         public double SsdTemperatureC { get; set; }
         public double DiskUsagePercent { get; set; }
         

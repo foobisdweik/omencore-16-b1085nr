@@ -372,7 +372,10 @@ namespace OmenCore.ViewModels
                     GpuFanRpm = telemetry[1].SpeedRpm;
                 }
             }
-            catch { }
+            catch (Exception ex) 
+            { 
+                System.Diagnostics.Debug.WriteLine($"[GeneralVM] Fan speed update error: {ex.Message}"); 
+            }
         }
 
         private void UpdateTemperatures()
@@ -387,7 +390,10 @@ namespace OmenCore.ViewModels
                     GpuTemp = latest.GpuCelsius;
                 }
             }
-            catch { }
+            catch (Exception ex) 
+            { 
+                System.Diagnostics.Debug.WriteLine($"[GeneralVM] Temperature update error: {ex.Message}"); 
+            }
         }
 
         #endregion

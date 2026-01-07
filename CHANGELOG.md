@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.0] - 2026-01-07
+
+### ✨ New Features
+- **GPU OC Profiles** - Save and load GPU overclock configurations
+  - Create named profiles with core clock, memory clock, and power limit settings
+  - Quick profile switching via dropdown
+  - Profiles persist across app restarts
+  - Delete unwanted profiles with one click
+- **Fan Profile Persistence** - Custom fan curves now save automatically
+  - Custom curves persist to config file when applied
+  - Restored on app startup with "Custom" or "Independent" presets
+- **Linux Auto Mode Fix** - Improved automatic fan control restoration
+  - Full EC register reset sequence (BIOS control, fan state, boost, timer)
+  - HP-WMI driver support as fallback for newer models
+  - Proper cleanup of manual speed registers
+- **Dashboard UI Enhancements** - Improved monitoring dashboard with at-a-glance status
+  - Quick Status Bar: Fan RPMs, Performance Mode, Fan Mode, Power status
+  - Session Uptime tracking (updates every second)
+  - Peak Temperature tracking (highest CPU/GPU temps this session)
+
+### ⚡ Performance
+- **Lazy-Load Peripheral SDKs** - Corsair, Logitech, and Razer SDKs only load when explicitly enabled
+  - Faster startup for users without these peripherals
+  - Enable in Settings → Features when you have Corsair/Logitech/Razer devices
+  - Reduces memory footprint when peripherals are disabled
+
+### 🐛 Bug Fixes
+- **Fan Always On Fix** - Auto mode now properly lets BIOS control fans
+  - Fixed issue where fans never stopped even at idle/low temperatures
+  - Auto/Default presets now call RestoreAutoControl() to reset fan levels to 0
+  - BIOS can now spin down fans when system is cool (fixes Reddit report: OMEN 17 13700HX fans always running)
+- **Fan Curve Editor Crash** - Fixed `ArgumentException` when dragging points beyond chart bounds (Issue #30)
+- **Fan Curve Mouse Release** - Fixed cursor not releasing drag point when moving outside chart area or releasing mouse button
+- **Per-Core Undervolt Crash** - Fixed missing `SurfaceBrush` resource causing XAML parse exception (Issue #31)
+- **Animation Parse Error** - Fixed invalid `FanSpinStoryboard` that caused XAML parse errors on startup
+- **OMEN Key False Trigger** - Fixed window opening when launching Remote Desktop or media apps (VK_LAUNCH_APP1 scan code validation)
+
+### ⚡ Performance & Memory
+- **QuickPopup Memory Leak** - Fixed timer event handlers not unsubscribed on window close
+- **Thermal Sample Trimming** - Optimized O(n²) removal loop to single-pass calculation
+- **Exception Logging** - Added logging to 10+ empty catch blocks for better debugging
+
+### 🔍 Known Issues Under Investigation
+- **Fan Max Mode Cycling** - Fan speed cycling between high/low in Max mode (needs more logs to diagnose)
+- **dGPU Sleep Prevention** - Constant polling may prevent NVIDIA GPU sleep causing battery drain
+- **Fan Speed Throttling** - Max fan speed may decrease under heavy load (6300→5000 RPM reported)
+
+### 🔐 Security & Stability
+- **Named Pipe Security** - Added `PipeOptions.CurrentUserOnly` to prevent unauthorized IPC access
+- **Async Exception Handling** - Fixed `async void` in worker initialization for proper exception propagation
+- **Improved Logging** - Added meaningful logging to previously bare catch blocks in HardwareWorkerClient
+- **Installer Verification** - SHA256 hash verification for LibreHardwareMonitor downloads
+
+### 🎨 User Interface Improvements
+- **System Tray Menu Overhaul**
+  - Consolidated Quick Profiles with descriptive labels (e.g., "🚀 Performance — Max cooling + Performance mode")
+  - Grouped Fan Control, Power Profile, and Display under new "Advanced" submenu
+  - Monospace font for temperature/load readings for better alignment
+  - Clearer menu item descriptions throughout
+- **New Animations** - Added 5 new smooth animation presets:
+  - FadeInFast, SlideInFromBottom, ScaleIn, Breathing, FanSpin
+- **Installer Wizard Images** - Updated to feature-focused design (no hardcoded version numbers)
+
+### 📋 Details
+See [CHANGELOG_v2.2.0.md](docs/CHANGELOG_v2.2.0.md) for full details.
+
+---
+
 ## [2.1.2] - 2026-01-06
 
 ### 🐛 Bug Fixes

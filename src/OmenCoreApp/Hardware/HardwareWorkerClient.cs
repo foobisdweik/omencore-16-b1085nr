@@ -164,7 +164,8 @@ namespace OmenCore.Hardware
             try
             {
                 _pipeClient?.Dispose();
-                _pipeClient = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+                // CurrentUserOnly restricts the pipe to the current user session for security
+                _pipeClient = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 
                 using var cts = new CancellationTokenSource(ConnectionTimeoutMs);
                 await _pipeClient.ConnectAsync(cts.Token);
@@ -289,7 +290,10 @@ namespace OmenCore.Hardware
                     _workerProcess.WaitForExit(1000);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger?.Invoke($"[Worker] Failed to kill existing process: {ex.Message}");
+            }
             
             return await StartAsync();
         }
@@ -307,7 +311,10 @@ namespace OmenCore.Hardware
                     await Task.Delay(500);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger?.Invoke($"[Worker] Error sending shutdown command: {ex.Message}");
+            }
             
             try
             {
@@ -317,7 +324,10 @@ namespace OmenCore.Hardware
                     _workerProcess.WaitForExit(1000);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger?.Invoke($"[Worker] Error killing worker process: {ex.Message}");
+            }
         }
         
         public void Dispose()
@@ -327,15 +337,24 @@ namespace OmenCore.Hardware
             
             try
             {
-                // Fire and forget shutdown
+                // Fire and forget shutdown with exception handling
                 _ = Task.Run(async () =>
                 {
-                    await StopAsync();
-                    _pipeClient?.Dispose();
-                    _workerProcess?.Dispose();
+                    try
+                    {
+                        await StopAsync();
+                    }
+                    finally
+                    {
+                        _pipeClient?.Dispose();
+                        _workerProcess?.Dispose();
+                    }
                 });
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Worker] Dispose error: {ex.Message}");
+            }
         }
     }
     

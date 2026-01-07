@@ -783,7 +783,28 @@ namespace OmenCore.ViewModels
             _fanService.ApplyPreset(customPreset, ImmediateApplyOnApply);
             ActiveFanMode = "Custom";
             OnPropertyChanged(nameof(CurrentFanModeName));
-            // FanService logs success/failure, no need to duplicate
+            
+            // Save the custom curve to config for persistence across restarts
+            SaveCustomCurveToConfig();
+        }
+        
+        /// <summary>
+        /// Save the current custom curve to config for restoration on next startup.
+        /// </summary>
+        private void SaveCustomCurveToConfig()
+        {
+            try
+            {
+                var config = _configService.Config;
+                config.CustomFanCurve = CustomFanCurve.ToList();
+                config.LastFanPresetName = "Custom";
+                _configService.Save(config);
+                _logging.Info($"💾 Custom fan curve saved to config ({CustomFanCurve.Count} points)");
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to save custom curve to config: {ex.Message}");
+            }
         }
         
         /// <summary>
@@ -1147,6 +1168,43 @@ namespace OmenCore.ViewModels
             {
                 _fanService.ApplyQuietMode();
                 _logging.Info($"Manually reapplied saved preset: {saved} (Quiet)");
+                return Task.CompletedTask;
+            }
+            
+            // Handle "Custom" - restore the saved custom curve
+            if (nameLower == "custom")
+            {
+                var customCurve = _configService.Config.CustomFanCurve;
+                if (customCurve != null && customCurve.Count >= 2)
+                {
+                    // Load the curve into the UI
+                    CustomFanCurve.Clear();
+                    foreach (var point in customCurve)
+                    {
+                        CustomFanCurve.Add(new FanCurvePoint { TemperatureC = point.TemperatureC, FanPercent = point.FanPercent });
+                    }
+                    
+                    // Apply it
+                    var customPreset = new FanPreset
+                    {
+                        Name = "Custom (Restored)",
+                        Mode = FanMode.Manual,
+                        Curve = customCurve
+                    };
+                    _fanService.ApplyPreset(customPreset);
+                    ActiveFanMode = "Custom";
+                    OnPropertyChanged(nameof(CurrentFanModeName));
+                    _logging.Info($"Restored custom fan curve ({customCurve.Count} points) from config");
+                }
+                else
+                {
+                    _logging.Warn("Custom fan curve not found in config, applying default curve");
+                    CustomFanCurve.Clear();
+                    foreach (var point in GetDefaultManualCurve())
+                    {
+                        CustomFanCurve.Add(point);
+                    }
+                }
                 return Task.CompletedTask;
             }
 

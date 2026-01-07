@@ -235,28 +235,80 @@ public class LinuxEcController
     /// <summary>
     /// Restore BIOS automatic fan control via EC registers.
     /// This resets all manual overrides and lets the BIOS control fans.
+    /// 
+    /// Based on Issue #27: Auto mode not restoring correctly on some OMEN 15 2020 models.
+    /// The fix requires a more thorough EC reset sequence.
     /// </summary>
     public bool RestoreAutoMode()
     {
-        // Step 1: Re-enable BIOS fan control
-        if (!WriteByte(REG_BIOS_CONTROL, 0x00))
+        // Try hp-wmi first (newer models like OMEN 16 2023+)
+        if (HasHpWmiAccess && File.Exists(HP_WMI_THERMAL))
+        {
+            return RestoreAutoModeViaHpWmi();
+        }
+        
+        // Fall back to EC register method (older models)
+        if (!HasEcAccess)
             return false;
-            
-        // Step 2: Enable fan state (allow BIOS to control)
+        
+        // Full EC reset sequence to restore BIOS control
+        // Order matters! Some models need specific sequencing.
+        
+        // Step 1: Clear manual fan speed registers first (write 0 to let BIOS control)
+        WriteByte(REG_FAN1_SPEED_SET, 0x00);
+        WriteByte(REG_FAN2_SPEED_SET, 0x00);
+        WriteByte(REG_FAN1_SPEED_PCT, 0x00);
+        WriteByte(REG_FAN2_SPEED_PCT, 0x00);
+        
+        // Step 2: Disable fan boost
+        WriteByte(REG_FAN_BOOST, 0x00);
+        
+        // Step 3: Enable fan state (allow BIOS to control) - BEFORE enabling BIOS control
         if (!WriteByte(REG_FAN_STATE, 0x00))
             return false;
             
-        // Step 3: Disable fan boost
-        WriteByte(REG_FAN_BOOST, 0x00);
+        // Step 4: Re-enable BIOS fan control
+        if (!WriteByte(REG_BIOS_CONTROL, 0x00))
+            return false;
         
-        // Step 4: Reset timer to allow BIOS to take over
-        WriteByte(REG_TIMER, 0x00);
+        // Step 5: Reset timer to trigger BIOS to recalculate fan speeds
+        // Timer counts down from 0x78 (120); resetting to 0x78 forces BIOS to take over
+        WriteByte(REG_TIMER, 0x78);
         
-        // Step 5: Clear manual fan speed registers (write 0 to let BIOS control)
-        WriteByte(REG_FAN1_SPEED_SET, 0x00);
-        WriteByte(REG_FAN2_SPEED_SET, 0x00);
+        // Step 6: Wait briefly then verify BIOS has taken control
+        Thread.Sleep(100);
+        
+        // Double-check: write fan state again to ensure BIOS control
+        WriteByte(REG_FAN_STATE, 0x00);
         
         return true;
+    }
+    
+    /// <summary>
+    /// Restore auto mode via HP-WMI driver (newer models).
+    /// </summary>
+    private bool RestoreAutoModeViaHpWmi()
+    {
+        try
+        {
+            // Set thermal profile to balanced (auto)
+            if (File.Exists(HP_WMI_THERMAL))
+            {
+                File.WriteAllText(HP_WMI_THERMAL, "balanced");
+            }
+            
+            // Disable fan_always_on to let BIOS control
+            if (File.Exists(HP_WMI_FAN_ALWAYS_ON))
+            {
+                File.WriteAllText(HP_WMI_FAN_ALWAYS_ON, "0");
+            }
+            
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
     
     /// <summary>

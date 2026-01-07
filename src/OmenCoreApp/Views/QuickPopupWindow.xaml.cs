@@ -212,6 +212,8 @@ namespace OmenCore.Views
         protected override void OnClosed(EventArgs e)
         {
             _updateTimer.Stop();
+            _updateTimer.Tick -= UpdateDisplay;
+            // DisplayService doesn't need disposal
             base.OnClosed(e);
         }
     }

@@ -82,6 +82,16 @@ namespace OmenCore.Models
         public GpuOcSettings? GpuOc { get; set; }
         
         /// <summary>
+        /// Saved GPU overclocking profiles for quick switching.
+        /// </summary>
+        public List<GpuOcProfile> GpuOcProfiles { get; set; } = new();
+        
+        /// <summary>
+        /// Name of the last applied GPU OC profile (for UI selection).
+        /// </summary>
+        public string? LastGpuOcProfileName { get; set; }
+        
+        /// <summary>
         /// Last applied TCC (Thermal Control Circuit) offset in degrees C.
         /// Re-applied on startup to maintain CPU temperature limits.
         /// 0 = no limit (full TjMax), higher values = lower temp limit.
@@ -92,6 +102,12 @@ namespace OmenCore.Models
         /// Last applied fan preset name for restoration on startup.
         /// </summary>
         public string? LastFanPresetName { get; set; }
+        
+        /// <summary>
+        /// Custom fan curve points for unified fan control (non-independent mode).
+        /// Each point maps a temperature (°C) to a fan percentage.
+        /// </summary>
+        public List<FanCurvePoint>? CustomFanCurve { get; set; }
         
         /// <summary>
         /// Whether independent CPU/GPU fan curves are enabled.
@@ -364,5 +380,32 @@ namespace OmenCore.Models
         
         /// <summary>Reapply OC settings on application startup</summary>
         public bool ApplyOnStartup { get; set; } = false;
+    }
+    
+    /// <summary>
+    /// GPU overclocking profile for save/load functionality.
+    /// </summary>
+    public class GpuOcProfile
+    {
+        /// <summary>Profile name (user-defined)</summary>
+        public string Name { get; set; } = "Default";
+        
+        /// <summary>GPU core clock offset in MHz</summary>
+        public int CoreClockOffsetMHz { get; set; } = 0;
+        
+        /// <summary>GPU memory clock offset in MHz</summary>
+        public int MemoryClockOffsetMHz { get; set; } = 0;
+        
+        /// <summary>Power limit percentage</summary>
+        public int PowerLimitPercent { get; set; } = 100;
+        
+        /// <summary>Optional description or notes</summary>
+        public string? Description { get; set; }
+        
+        /// <summary>When this profile was created</summary>
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        
+        /// <summary>When this profile was last modified</summary>
+        public DateTime ModifiedAt { get; set; } = DateTime.Now;
     }
 }

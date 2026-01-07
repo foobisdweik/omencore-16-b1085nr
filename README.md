@@ -12,7 +12,7 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 - ✅ **No Sign-In Required** - Full offline operation
 - 🐧 **Cross-Platform** - Windows GUI + Linux CLI & Avalonia GUI
 
-[![Version](https://img.shields.io/badge/version-2.1.2-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v2.1.2)
+[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v2.2.0)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Website](https://img.shields.io/badge/website-omencore.info-brightgreen.svg)](https://omencore.info)
@@ -20,6 +20,26 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 [![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C.svg?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=XH8CKYF8T7EBU&no_recurring=0&item_name=Thank+you+for+your+generous+donation%2C+this+will+allow+me+to+continue+developing+my+programs.&currency_code=AUD)
 
 ![OmenCore Screenshot](docs/screenshots/main-window.png)
+
+---
+
+## 🆕 What's New in v2.2.0
+
+### ✨ New Features
+- **GPU OC Profiles** - Save and load named GPU overclock configurations
+- **Fan Profile Persistence** - Custom fan curves now save automatically and restore on startup
+- **Dashboard UI Enhancements** - Quick Status Bar with real-time fan RPMs, performance mode, fan mode, and power status
+- **Session Tracking** - Uptime counter and peak temperature tracking on the Monitoring dashboard
+
+### 🐛 Bug Fixes
+- **Fan Always On Fix** - Auto mode now properly lets BIOS control fans (fixes OMEN 17 13700HX fans always running)
+- **Fan Curve Editor Crash** - Fixed crash when dragging points beyond chart bounds
+- **OMEN Key False Trigger** - Fixed window opening when launching Remote Desktop or media apps
+
+### ⚡ Performance
+- **Lazy-Load Peripheral SDKs** - Corsair, Logitech, and Razer SDKs only load when explicitly enabled (faster startup)
+
+Full changelog: [CHANGELOG_v2.2.0.md](docs/CHANGELOG_v2.2.0.md)
 
 ---
 

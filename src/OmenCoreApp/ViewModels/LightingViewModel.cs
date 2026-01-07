@@ -18,8 +18,8 @@ namespace OmenCore.ViewModels
 {
     public class LightingViewModel : ViewModelBase
     {
-        private readonly CorsairDeviceService _corsairService;
-        private readonly LogitechDeviceService _logitechService;
+        private readonly CorsairDeviceService? _corsairService;
+        private readonly LogitechDeviceService? _logitechService;
         private readonly RazerService? _razerService;
         private readonly KeyboardLightingService? _keyboardLightingService;
         private readonly ConfigurationService? _configService;
@@ -45,9 +45,15 @@ namespace OmenCore.ViewModels
         private KeyboardPreset? _selectedKeyboardPreset;
         private bool _colorsLoadedFromConfig; // Track if colors were loaded from saved config
         private bool _applyKeyboardColorsOnStartup = true;
+        
+        // Empty collections for when services are not available
+        private static readonly ReadOnlyObservableCollection<CorsairDevice> _emptyCorsairDevices = 
+            new(new ObservableCollection<CorsairDevice>());
+        private static readonly ReadOnlyObservableCollection<LogitechDevice> _emptyLogitechDevices = 
+            new(new ObservableCollection<LogitechDevice>());
 
-        public ReadOnlyObservableCollection<CorsairDevice> CorsairDevices => _corsairService.Devices;
-        public ReadOnlyObservableCollection<LogitechDevice> LogitechDevices => _logitechService.Devices;
+        public ReadOnlyObservableCollection<CorsairDevice> CorsairDevices => _corsairService?.Devices ?? _emptyCorsairDevices;
+        public ReadOnlyObservableCollection<LogitechDevice> LogitechDevices => _logitechService?.Devices ?? _emptyLogitechDevices;
         public ObservableCollection<CorsairLightingPreset> CorsairLightingPresets { get; } = new();
         public ObservableCollection<KeyboardPreset> KeyboardPresets { get; } = new();
         public ICommand ApplyCorsairPresetToSystemCommand { get; }
@@ -57,6 +63,11 @@ namespace OmenCore.ViewModels
         public bool IsCorsairConnected => CorsairDevices.Count > 0;
         public bool IsLogitechConnected => LogitechDevices.Count > 0;
         public bool IsRazerConnected => _razerService?.IsAvailable ?? false;
+        
+        // Service availability for UI visibility
+        public bool IsCorsairEnabled => _corsairService != null;
+        public bool IsLogitechEnabled => _logitechService != null;
+        public bool IsRazerEnabled => _razerService != null;
         
         // Razer properties
         private readonly ObservableCollection<RazerDevice> _razerDevices = new();
@@ -498,7 +509,7 @@ namespace OmenCore.ViewModels
         public ICommand SetZone3ColorCommand { get; }
         public ICommand SetZone4ColorCommand { get; }
 
-        public LightingViewModel(CorsairDeviceService corsairService, LogitechDeviceService logitechService, LoggingService logging, KeyboardLightingService? keyboardLightingService = null, ConfigurationService? configService = null, RazerService? razerService = null, OmenCore.Services.Rgb.RgbManager? rgbManager = null)
+        public LightingViewModel(CorsairDeviceService? corsairService, LogitechDeviceService? logitechService, LoggingService logging, KeyboardLightingService? keyboardLightingService = null, ConfigurationService? configService = null, RazerService? razerService = null, OmenCore.Services.Rgb.RgbManager? rgbManager = null)
         {
             _corsairService = corsairService;
             _logitechService = logitechService;
@@ -511,13 +522,14 @@ namespace OmenCore.ViewModels
             // Load saved keyboard colors from config
             LoadKeyboardColorsFromConfig();
 
-            DiscoverCorsairCommand = new AsyncRelayCommand(async _ => await _corsairService.DiscoverAsync());
-            DiscoverCorsairDevicesCommand = new AsyncRelayCommand(async _ => await _corsairService.DiscoverAsync());
-            ApplyCorsairLightingCommand = new AsyncRelayCommand(async _ => await ApplyCorsairLightingAsync(), _ => SelectedCorsairPreset != null);
+            // Initialize Corsair commands (only functional if service is available)
+            DiscoverCorsairCommand = new AsyncRelayCommand(async _ => { if (_corsairService != null) await _corsairService.DiscoverAsync(); });
+            DiscoverCorsairDevicesCommand = new AsyncRelayCommand(async _ => { if (_corsairService != null) await _corsairService.DiscoverAsync(); });
+            ApplyCorsairLightingCommand = new AsyncRelayCommand(async _ => await ApplyCorsairLightingAsync(), _ => SelectedCorsairPreset != null && _corsairService != null);
             ApplyCorsairCustomColorCommand = new AsyncRelayCommand(async _ => await ApplyCorsairCustomColorAsync());
             ApplyCorsairDpiCommand = new AsyncRelayCommand(async _ => await ApplyCorsairDpiAsync());
             RestoreCorsairDpiCommand = new AsyncRelayCommand(async _ => await RestoreCorsairDpiAsync());
-            ApplyCorsairPresetToSystemCommand = new AsyncRelayCommand(async _ => await ApplyCorsairPresetToSystemAsync(), _ => SelectedCorsairPreset != null);
+            ApplyCorsairPresetToSystemCommand = new AsyncRelayCommand(async _ => await ApplyCorsairPresetToSystemAsync(), _ => SelectedCorsairPreset != null && _corsairService != null);
             SaveCorsairDpiProfileCommand = new AsyncRelayCommand(async _ => await SaveCorsairDpiProfileAsync());
             ApplyCorsairDpiProfileCommand = new AsyncRelayCommand(async _ => await ApplyCorsairDpiProfileAsync(), _ => SelectedCorsairDpiProfile != null);
             DeleteCorsairDpiProfileCommand = new AsyncRelayCommand(async _ => await DeleteCorsairDpiProfileAsync(), _ => SelectedCorsairDpiProfile != null);
@@ -525,9 +537,10 @@ namespace OmenCore.ViewModels
             // Sync All RGB Command
             SyncAllRgbCommand = new AsyncRelayCommand(async _ => await SyncAllRgbAsync());
             
-            DiscoverLogitechCommand = new AsyncRelayCommand(async _ => await _logitechService.DiscoverAsync());
-            DiscoverLogitechDevicesCommand = new AsyncRelayCommand(async _ => await _logitechService.DiscoverAsync());
-            ApplyLogitechColorCommand = new AsyncRelayCommand(async _ => await ApplyLogitechColorAsync(), _ => SelectedLogitechDevice != null);
+            // Initialize Logitech commands (only functional if service is available)
+            DiscoverLogitechCommand = new AsyncRelayCommand(async _ => { if (_logitechService != null) await _logitechService.DiscoverAsync(); });
+            DiscoverLogitechDevicesCommand = new AsyncRelayCommand(async _ => { if (_logitechService != null) await _logitechService.DiscoverAsync(); });
+            ApplyLogitechColorCommand = new AsyncRelayCommand(async _ => await ApplyLogitechColorAsync(), _ => SelectedLogitechDevice != null && _logitechService != null);
             LoadMacroProfileCommand = new AsyncRelayCommand(async _ => await LoadMacroProfileAsync());
             
             // Razer Commands
@@ -720,7 +733,7 @@ namespace OmenCore.ViewModels
 
         private async Task ApplyCorsairLightingAsync()
         {
-            if (SelectedCorsairPreset != null)
+            if (SelectedCorsairPreset != null && _corsairService != null)
             {
                 await ExecuteWithLoadingAsync(async () =>
                 {
@@ -754,7 +767,7 @@ namespace OmenCore.ViewModels
                 int successCount = 0;
                 
                 // Apply to Corsair devices
-                if (IsCorsairConnected && CorsairDevices.Count > 0)
+                if (_corsairService != null && IsCorsairConnected && CorsairDevices.Count > 0)
                 {
                     try
                     {
@@ -769,7 +782,7 @@ namespace OmenCore.ViewModels
                 }
                 
                 // Apply to Logitech devices (apply to each device individually)
-                if (IsLogitechConnected)
+                if (_logitechService != null && IsLogitechConnected)
                 {
                     try
                     {
@@ -845,6 +858,7 @@ namespace OmenCore.ViewModels
 
         private async Task ApplyCorsairCustomColorAsync()
         {
+            if (_corsairService == null) return;
             await ExecuteWithLoadingAsync(async () =>
             {
                 await _corsairService.ApplyLightingToAllAsync(CorsairColorHex);
@@ -878,6 +892,8 @@ namespace OmenCore.ViewModels
 
             await ExecuteWithLoadingAsync(async () =>
             {
+                if (_corsairService == null) return;
+                
                 // Log the intended stages
                 foreach (var stage in CorsairDpiStages)
                 {
@@ -940,7 +956,7 @@ namespace OmenCore.ViewModels
 
         private async Task ApplyLogitechColorAsync()
         {
-            if (SelectedLogitechDevice != null)
+            if (SelectedLogitechDevice != null && _logitechService != null)
             {
                 await ExecuteWithLoadingAsync(async () =>
                 {

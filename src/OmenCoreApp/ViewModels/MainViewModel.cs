@@ -149,7 +149,7 @@ namespace OmenCore.ViewModels
             {
                 if (_dashboard == null)
                 {
-                    _dashboard = new DashboardViewModel(_hardwareMonitoringService);
+                    _dashboard = new DashboardViewModel(_hardwareMonitoringService, _fanService);
                     // Initialize with current values (triggers creation of dependencies if needed)
                     if (SystemControl != null)
                     {
@@ -311,6 +311,12 @@ namespace OmenCore.ViewModels
         private string _appVersionLabel = "v0.0.0";
         private string _currentFanMode = "Auto";
         private string _currentPerformanceMode = "Balanced";
+        
+        // Session tracking (v2.2)
+        private readonly DateTime _sessionStartTime = DateTime.Now;
+        private double _peakCpuTemp;
+        private double _peakGpuTemp;
+        private System.Windows.Threading.DispatcherTimer? _uptimeTimer;
 
         public ObservableCollection<FanPreset> FanPresets { get; } = new();
         public ObservableCollection<FanCurvePoint> CustomFanCurve { get; } = new();
@@ -475,6 +481,21 @@ namespace OmenCore.ViewModels
                 
                 _latestMonitoringSample = value;
                 
+                // Track peak temperatures (v2.2)
+                if (value != null)
+                {
+                    if (value.CpuTemperatureC > _peakCpuTemp)
+                    {
+                        _peakCpuTemp = value.CpuTemperatureC;
+                        OnPropertyChanged(nameof(PeakCpuTemp));
+                    }
+                    if (value.GpuTemperatureC > _peakGpuTemp)
+                    {
+                        _peakGpuTemp = value.GpuTemperatureC;
+                        OnPropertyChanged(nameof(PeakGpuTemp));
+                    }
+                }
+                
                 // Notify only the specific properties that depend on monitoring data
                 OnPropertyChanged(nameof(LatestMonitoringSample));
                 OnPropertyChanged(nameof(CpuSummary));
@@ -482,6 +503,9 @@ namespace OmenCore.ViewModels
                 OnPropertyChanged(nameof(MemorySummary));
                 OnPropertyChanged(nameof(StorageSummary));
                 OnPropertyChanged(nameof(CpuClockSummary));
+                OnPropertyChanged(nameof(FanSummary));
+                OnPropertyChanged(nameof(Fan1Rpm));
+                OnPropertyChanged(nameof(Fan2Rpm));
             }
         }
         public bool MonitoringLowOverheadMode
@@ -503,6 +527,39 @@ namespace OmenCore.ViewModels
             }
         }
         public bool MonitoringGraphsVisible => !MonitoringLowOverheadMode;
+        
+        // Session tracking properties (v2.2)
+        public string SessionUptime
+        {
+            get
+            {
+                var elapsed = DateTime.Now - _sessionStartTime;
+                if (elapsed.TotalHours >= 1)
+                    return $"{(int)elapsed.TotalHours}h {elapsed.Minutes}m";
+                return $"{elapsed.Minutes}m {elapsed.Seconds}s";
+            }
+        }
+        
+        public double PeakCpuTemp => _peakCpuTemp;
+        public double PeakGpuTemp => _peakGpuTemp;
+        
+        public string FanSummary
+        {
+            get
+            {
+                var telemetry = _fanService?.FanTelemetry;
+                if (telemetry == null || telemetry.Count == 0)
+                    return "Fans: --";
+                
+                var fan1 = telemetry.Count > 0 ? telemetry[0].SpeedRpm : 0;
+                var fan2 = telemetry.Count > 1 ? telemetry[1].SpeedRpm : 0;
+                return $"CPU: {fan1} RPM • GPU: {fan2} RPM";
+            }
+        }
+        
+        public int Fan1Rpm => _fanService?.FanTelemetry?.Count > 0 ? _fanService.FanTelemetry[0].SpeedRpm : 0;
+        public int Fan2Rpm => _fanService?.FanTelemetry?.Count > 1 ? _fanService.FanTelemetry[1].SpeedRpm : 0;
+        
         public string CpuSummary => LatestMonitoringSample == null ? "CPU telemetry unavailable" : $"{LatestMonitoringSample.CpuTemperatureC:F0}°C • {LatestMonitoringSample.CpuLoadPercent:F0}% load";
         public string GpuSummary => LatestMonitoringSample == null ? "GPU telemetry unavailable" : $"{LatestMonitoringSample.GpuTemperatureC:F0}°C • {LatestMonitoringSample.GpuLoadPercent:F0}% load • {LatestMonitoringSample.GpuVramUsageMb:F0} MB VRAM";
         public string MemorySummary => LatestMonitoringSample == null ? "Memory telemetry unavailable" : $"{LatestMonitoringSample.RamUsageGb:F1} / {LatestMonitoringSample.RamTotalGb:F0} GB";
@@ -1256,6 +1313,14 @@ namespace OmenCore.ViewModels
             OnPropertyChanged(nameof(MonitoringLowOverheadMode));
             OnPropertyChanged(nameof(MonitoringGraphsVisible));
             _monitoringInitialized = true;
+            
+            // Start uptime timer for dashboard (v2.2)
+            _uptimeTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            _uptimeTimer.Tick += (s, e) => OnPropertyChanged(nameof(SessionUptime));
+            _uptimeTimer.Start();
             
             // Restore saved settings on startup (fan preset, GPU boost, TCC offset)
             _ = RestoreSettingsOnStartupAsync();
@@ -2336,66 +2401,102 @@ namespace OmenCore.ViewModels
         {
             try
             {
-                _corsairDeviceService = await CorsairDeviceService.CreateAsync(_logging);
-                _logitechDeviceService = await LogitechDeviceService.CreateAsync(_logging);
-                _razerService = new OmenCore.Razer.RazerService(_logging);
+                var features = _config.Features ?? new FeaturePreferences();
                 
-                await DiscoverCorsairDevices();
-                await DiscoverLogitechDevices();
+                // Only initialize peripheral SDKs if user has explicitly enabled them
+                // This improves startup time for users without these peripherals
+                bool corsairEnabled = features.CorsairIntegrationEnabled;
+                bool logitechEnabled = features.LogitechIntegrationEnabled;
+                bool razerEnabled = features.RazerIntegrationEnabled;
                 
-                // Initialize Lighting sub-ViewModel after async services are ready
-                if (_corsairDeviceService != null && _logitechDeviceService != null)
+                if (corsairEnabled)
                 {
-                    // Show lighting tab if:
-                    // 1. Corsair or Logitech peripheral devices are found, OR
-                    // 2. HP OMEN keyboard lighting is available, OR
-                    // 3. Razer Synapse is detected
-                    bool hasPeripherals = _corsairDeviceService.Devices.Any() || _logitechDeviceService.Devices.Any();
-                    bool hasKeyboardLighting = _keyboardLightingService?.IsAvailable ?? false;
-                    bool hasRazer = _razerService?.IsAvailable ?? false;
+                    _logging.Info("Initializing Corsair SDK (user-enabled)...");
+                    _corsairDeviceService = await CorsairDeviceService.CreateAsync(_logging);
+                    await DiscoverCorsairDevices();
+                }
+                else
+                {
+                    _logging.Info("Corsair SDK skipped (not enabled in settings)");
+                }
+                
+                if (logitechEnabled)
+                {
+                    _logging.Info("Initializing Logitech SDK (user-enabled)...");
+                    _logitechDeviceService = await LogitechDeviceService.CreateAsync(_logging);
+                    await DiscoverLogitechDevices();
+                }
+                else
+                {
+                    _logging.Info("Logitech SDK skipped (not enabled in settings)");
+                }
+                
+                if (razerEnabled)
+                {
+                    _logging.Info("Initializing Razer SDK (user-enabled)...");
+                    _razerService = new OmenCore.Razer.RazerService(_logging);
+                }
+                else
+                {
+                    _logging.Info("Razer SDK skipped (not enabled in settings)");
+                }
+                
+                // Initialize Lighting sub-ViewModel if any RGB capability is available
+                bool hasKeyboardLighting = _keyboardLightingService?.IsAvailable ?? false;
+                bool hasCorsairDevices = _corsairDeviceService?.Devices.Any() ?? false;
+                bool hasLogitechDevices = _logitechDeviceService?.Devices.Any() ?? false;
+                bool hasRazer = _razerService?.IsAvailable ?? false;
+                bool hasPeripherals = hasCorsairDevices || hasLogitechDevices;
+                
+                if (hasPeripherals || hasKeyboardLighting || hasRazer)
+                {
+                    // Initialize RGB manager and providers with priority: Corsair -> Logitech -> Razer -> SystemGeneric
+                    var rgbManager = new OmenCore.Services.Rgb.RgbManager();
                     
-                    if (hasPeripherals || hasKeyboardLighting || hasRazer)
+                    if (_corsairDeviceService != null)
                     {
-                        // Initialize RGB manager and providers with priority: Corsair -> Logitech -> Razer -> SystemGeneric
-                        var rgbManager = new OmenCore.Services.Rgb.RgbManager();
                         var corsairProvider = new OmenCore.Services.Rgb.CorsairRgbProvider(_logging, _configService);
-                        var logitechProvider = new OmenCore.Services.Rgb.LogitechRgbProvider(_logging);
                         rgbManager.RegisterProvider(corsairProvider);
+                    }
+                    
+                    if (_logitechDeviceService != null)
+                    {
+                        var logitechProvider = new OmenCore.Services.Rgb.LogitechRgbProvider(_logging);
                         rgbManager.RegisterProvider(logitechProvider);
+                    }
 
-                        if (_razerService != null)
-                        {
-                            var razerProvider = new OmenCore.Services.Rgb.RazerRgbProvider(_logging, _razerService);
-                            rgbManager.RegisterProvider(razerProvider);
-                        }
+                    if (_razerService != null)
+                    {
+                        var razerProvider = new OmenCore.Services.Rgb.RazerRgbProvider(_logging, _razerService);
+                        rgbManager.RegisterProvider(razerProvider);
+                    }
 
-                        var systemProvider = new OmenCore.Services.Rgb.SystemRgbProvider(rgbManager, _logging);
-                        rgbManager.RegisterProvider(systemProvider);
+                    var systemProvider = new OmenCore.Services.Rgb.SystemRgbProvider(rgbManager, _logging);
+                    rgbManager.RegisterProvider(systemProvider);
 
-                        await rgbManager.InitializeAllAsync();
+                    await rgbManager.InitializeAllAsync();
 
-                        Lighting = new LightingViewModel(_corsairDeviceService, _logitechDeviceService, _logging, _keyboardLightingService, _configService, _razerService, rgbManager);
-                        OnPropertyChanged(nameof(Lighting));
+                    Lighting = new LightingViewModel(_corsairDeviceService, _logitechDeviceService, _logging, _keyboardLightingService, _configService, _razerService, rgbManager);
+                    OnPropertyChanged(nameof(Lighting));
 
-                        // Apply saved keyboard colors on startup
-                        if (hasKeyboardLighting)
-                        {
-                            _ = Lighting.ApplySavedKeyboardColorsAsync();
-                        }
-                        
-                        if (hasKeyboardLighting && !hasPeripherals)
-                        {
-                            _logging.Info("Lighting sub-ViewModel initialized (keyboard lighting available)");
-                        }
-                        else
-                        {
-                            _logging.Info("Lighting sub-ViewModel initialized (devices found)");
-                        }
+                    // Apply saved keyboard colors on startup
+                    if (hasKeyboardLighting)
+                    {
+                        _ = Lighting.ApplySavedKeyboardColorsAsync();
+                    }
+                    
+                    if (hasKeyboardLighting && !hasPeripherals)
+                    {
+                        _logging.Info("Lighting sub-ViewModel initialized (keyboard lighting only)");
                     }
                     else
                     {
-                        _logging.Info("Lighting sub-ViewModel skipped (no devices or keyboard lighting found)");
+                        _logging.Info($"Lighting sub-ViewModel initialized (Corsair: {hasCorsairDevices}, Logitech: {hasLogitechDevices}, Razer: {hasRazer}, Keyboard: {hasKeyboardLighting})");
                     }
+                }
+                else
+                {
+                    _logging.Info("Lighting sub-ViewModel skipped (no RGB capabilities detected)");
                 }
             }
             catch (Exception ex)

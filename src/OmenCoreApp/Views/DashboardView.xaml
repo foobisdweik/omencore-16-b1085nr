@@ -50,6 +50,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -63,10 +64,15 @@
             
             <StackPanel Grid.Column="0">
                 <TextBlock Text="Hardware Monitoring" Style="{StaticResource Heading1}"/>
-                <TextBlock Text="Real-time performance metrics and system status" 
-                           Style="{StaticResource Caption}"
-                           Opacity="0.9"
-                           Margin="0,2,0,0"/>
+                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                    <TextBlock Text="Session: " Style="{StaticResource Caption}" Opacity="0.7"/>
+                    <TextBlock Text="{Binding SessionUptime}" Style="{StaticResource Caption}" Foreground="{StaticResource AccentBrush}"/>
+                    <TextBlock Text=" • Peak: " Style="{StaticResource Caption}" Opacity="0.7" Margin="12,0,0,0"/>
+                    <TextBlock Text="CPU " Style="{StaticResource Caption}" Opacity="0.7"/>
+                    <TextBlock Text="{Binding PeakCpuTemp, StringFormat={}{0:F0}°C}" Style="{StaticResource Caption}" Foreground="#FF6B6B"/>
+                    <TextBlock Text=" • GPU " Style="{StaticResource Caption}" Opacity="0.7" Margin="6,0,0,0"/>
+                    <TextBlock Text="{Binding PeakGpuTemp, StringFormat={}{0:F0}°C}" Style="{StaticResource Caption}" Foreground="#45C7FF"/>
+                </StackPanel>
             </StackPanel>
             
             <!-- Quick Action Buttons -->
@@ -118,8 +124,66 @@
             </Border>
         </Grid>
 
+        <!-- Quick Status Bar (v2.2) -->
+        <Border Grid.Row="1" Style="{StaticResource SurfaceCard}" Padding="16,12" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- Fan Status -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBlock Text="🌀" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <StackPanel>
+                        <TextBlock Text="FANS" Style="{StaticResource Label}" FontSize="10" Opacity="0.7"/>
+                        <TextBlock Text="{Binding FanSummary}" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"/>
+                    </StackPanel>
+                </StackPanel>
+                
+                <Border Grid.Column="1" Width="1" Background="{StaticResource BorderBrush}" Margin="16,4"/>
+                
+                <!-- Current Profile -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <TextBlock Text="⚡" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <StackPanel>
+                        <TextBlock Text="PERFORMANCE MODE" Style="{StaticResource Label}" FontSize="10" Opacity="0.7"/>
+                        <TextBlock Text="{Binding CurrentPerformanceMode}" FontSize="12" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </StackPanel>
+                
+                <Border Grid.Column="3" Width="1" Background="{StaticResource BorderBrush}" Margin="16,4"/>
+                
+                <!-- Fan Mode -->
+                <StackPanel Grid.Column="4" Orientation="Horizontal">
+                    <TextBlock Text="💨" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <StackPanel>
+                        <TextBlock Text="FAN MODE" Style="{StaticResource Label}" FontSize="10" Opacity="0.7"/>
+                        <TextBlock Text="{Binding CurrentFanMode}" FontSize="12" Foreground="#45C7FF" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </StackPanel>
+                
+                <Border Grid.Column="5" Width="1" Background="{StaticResource BorderBrush}" Margin="16,4"/>
+                
+                <!-- Power Source -->
+                <StackPanel Grid.Column="6" Orientation="Horizontal">
+                    <TextBlock Text="🔌" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <StackPanel>
+                        <TextBlock Text="POWER" Style="{StaticResource Label}" FontSize="10" Opacity="0.7"/>
+                        <TextBlock FontSize="12" Foreground="{StaticResource TextPrimaryBrush}"
+                                   Text="{Binding LatestMonitoringSample.IsOnAcPower, Converter={StaticResource BoolToYesNo}, ConverterParameter=AC|Battery, FallbackValue=--}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- Hardware Summary Cards -->
-        <Grid Grid.Row="1" Margin="0,0,0,20">
+        <Grid Grid.Row="2" Margin="0,0,0,20">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MinWidth="160"/>
                 <ColumnDefinition Width="*" MinWidth="160"/>
@@ -279,7 +343,7 @@
         </Grid>
 
         <!-- Charts (only visible when not in low overhead mode) -->
-        <Grid Grid.Row="3" Visibility="{Binding MonitoringGraphsVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+        <Grid Grid.Row="4" Visibility="{Binding MonitoringGraphsVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" MinHeight="250"/>
                 <RowDefinition Height="*" MinHeight="250"/>
@@ -424,7 +488,7 @@
         </Grid>
 
         <!-- Low Overhead Message -->
-        <Border Grid.Row="3" 
+        <Border Grid.Row="4" 
                 Style="{StaticResource SurfaceCard}" 
                 Padding="48" 
                 Visibility="{Binding MonitoringLowOverheadMode, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -454,7 +518,7 @@
         </Border>
         
             <!-- Loading Overlay -->
-            <controls:LoadingOverlay Grid.RowSpan="4" Panel.ZIndex="1000" />
+            <controls:LoadingOverlay Grid.RowSpan="5" Panel.ZIndex="1000" />
         </Grid>
     </ScrollViewer>
 </UserControl>

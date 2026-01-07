@@ -89,6 +89,15 @@
         </DoubleAnimation>
     </Storyboard>
     
+    <!-- Faster fade-in for quick transitions -->
+    <Storyboard x:Key="FadeInFastStoryboard">
+        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.15">
+            <DoubleAnimation.EasingFunction>
+                <QuadraticEase EasingMode="EaseOut"/>
+            </DoubleAnimation.EasingFunction>
+        </DoubleAnimation>
+    </Storyboard>
+    
     <!-- Slide-in from right animation -->
     <Storyboard x:Key="SlideInFromRightStoryboard">
         <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" 
@@ -100,6 +109,34 @@
         <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.25"/>
     </Storyboard>
     
+    <!-- Slide-in from bottom animation (for cards/panels) -->
+    <Storyboard x:Key="SlideInFromBottomStoryboard">
+        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" 
+                         From="20" To="0" Duration="0:0:0.25">
+            <DoubleAnimation.EasingFunction>
+                <CubicEase EasingMode="EaseOut"/>
+            </DoubleAnimation.EasingFunction>
+        </DoubleAnimation>
+        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.2"/>
+    </Storyboard>
+    
+    <!-- Scale-in animation (for popups/dialogs) -->
+    <Storyboard x:Key="ScaleInStoryboard">
+        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" 
+                         From="0.95" To="1" Duration="0:0:0.2">
+            <DoubleAnimation.EasingFunction>
+                <BackEase EasingMode="EaseOut" Amplitude="0.3"/>
+            </DoubleAnimation.EasingFunction>
+        </DoubleAnimation>
+        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" 
+                         From="0.95" To="1" Duration="0:0:0.2">
+            <DoubleAnimation.EasingFunction>
+                <BackEase EasingMode="EaseOut" Amplitude="0.3"/>
+            </DoubleAnimation.EasingFunction>
+        </DoubleAnimation>
+        <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.15"/>
+    </Storyboard>
+    
     <!-- Pulsing glow animation (for warnings/alerts) -->
     <Storyboard x:Key="PulseWarningStoryboard" RepeatBehavior="Forever">
         <DoubleAnimation Storyboard.TargetProperty="Opacity" 
@@ -108,6 +145,22 @@
                 <SineEase EasingMode="EaseInOut"/>
             </DoubleAnimation.EasingFunction>
         </DoubleAnimation>
+    </Storyboard>
+    
+    <!-- Subtle breathing animation for active indicators -->
+    <Storyboard x:Key="BreathingStoryboard" RepeatBehavior="Forever">
+        <DoubleAnimation Storyboard.TargetProperty="Opacity" 
+                         From="0.7" To="1" Duration="0:0:1.5" AutoReverse="True">
+            <DoubleAnimation.EasingFunction>
+                <SineEase EasingMode="EaseInOut"/>
+            </DoubleAnimation.EasingFunction>
+        </DoubleAnimation>
+    </Storyboard>
+    
+    <!-- Fan spinning animation (linear rotation) -->
+    <Storyboard x:Key="FanSpinStoryboard" RepeatBehavior="Forever">
+        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)" 
+                         From="0" To="360" Duration="0:0:1"/>
     </Storyboard>
     
     <!-- ==================== END ANIMATIONS ==================== -->
