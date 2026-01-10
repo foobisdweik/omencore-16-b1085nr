@@ -44,6 +44,7 @@ namespace OmenCoreApp.Tests.Services
             public void ApplyMaxCooling() { LastAppliedPreset = "Max"; LastSetPercent = 100; SetCallCount++; }
             public void ApplyAutoMode() { LastAppliedPreset = "Auto"; }
             public void ApplyQuietMode() { LastAppliedPreset = "Quiet"; }
+            public bool ResetEcToDefaults() => true;
             public void Dispose() { }
         }
 

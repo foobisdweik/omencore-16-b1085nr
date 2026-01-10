@@ -39,6 +39,7 @@ namespace OmenCoreApp.Tests.ViewModels
             public void ApplyMaxCooling() { LastSetPercent = 100; SetCallCount++; }
             public void ApplyAutoMode() { }
             public void ApplyQuietMode() { }
+            public bool ResetEcToDefaults() => true;
             public void Dispose() { }
         }
 

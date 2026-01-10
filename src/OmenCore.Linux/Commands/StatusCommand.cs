@@ -55,34 +55,31 @@ public static class StatusCommand
         
         if (jsonOutput)
         {
-            var status = new
+            var status = new SystemStatus
             {
-                ec_available = ec.IsAvailable,
-                keyboard_available = keyboard.IsAvailable,
-                temperatures = new
+                Version = Program.Version,
+                EcAvailable = ec.IsAvailable,
+                KeyboardAvailable = keyboard.IsAvailable,
+                Temperatures = new TemperatureInfo
                 {
-                    cpu = cpuTemp ?? 0,
-                    gpu = gpuTemp ?? 0
+                    Cpu = cpuTemp ?? 0,
+                    Gpu = gpuTemp ?? 0
                 },
-                fans = new
+                Fans = new FanInfo
                 {
-                    fan1_rpm = fan1Rpm,
-                    fan1_percent = fan1Pct,
-                    fan2_rpm = fan2Rpm,
-                    fan2_percent = fan2Pct
+                    Fan1Rpm = fan1Rpm,
+                    Fan1Percent = fan1Pct,
+                    Fan2Rpm = fan2Rpm,
+                    Fan2Percent = fan2Pct
                 },
-                performance = new
+                Performance = new PerformanceInfo
                 {
-                    mode = perfModeStr.ToLowerInvariant()
+                    Mode = perfModeStr.ToLowerInvariant()
                 },
-                timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             };
             
-            var json = JsonSerializer.Serialize(status, new JsonSerializerOptions 
-            { 
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-            });
+            var json = JsonSerializer.Serialize(status, LinuxJsonContext.Default.SystemStatus);
             Console.WriteLine(json);
             return;
         }

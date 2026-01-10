@@ -315,7 +315,7 @@ public static class ConfigManager
             if (File.Exists(Program.ConfigPath))
             {
                 var json = File.ReadAllText(Program.ConfigPath);
-                return JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new();
+                return JsonSerializer.Deserialize(json, LinuxJsonContext.Default.DictionaryStringString) ?? new();
             }
         }
         catch { }
@@ -327,7 +327,7 @@ public static class ConfigManager
         try
         {
             Directory.CreateDirectory(ConfigDir);
-            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(config, LinuxJsonContext.Default.DictionaryStringString);
             File.WriteAllText(Program.ConfigPath, json);
         }
         catch (Exception ex)
