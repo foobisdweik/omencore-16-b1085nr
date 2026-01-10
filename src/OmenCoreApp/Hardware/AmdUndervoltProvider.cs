@@ -203,6 +203,19 @@ namespace OmenCore.Hardware
                 case RyzenFamily.FireRange:
                     result = _smu.SendPsmu(0x7, ref args);
                     break;
+
+                case RyzenFamily.Zen1Plus:
+                case RyzenFamily.Raven:
+                case RyzenFamily.Picasso:
+                case RyzenFamily.Dali:
+                    // Older architectures don't support Curve Optimizer
+                    result = RyzenSmu.SmuStatus.UnknownCmd;
+                    break;
+
+                default:
+                    // Unknown family - try Phoenix/Rembrandt command as fallback
+                    result = _smu.SendPsmu(0x5D, ref args);
+                    break;
             }
 
             return result;

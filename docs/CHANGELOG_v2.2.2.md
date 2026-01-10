@@ -16,6 +16,12 @@ This release addresses critical temperature monitoring issues reported after v2.
 - **Cause**: Grid row conflict - two elements assigned to same row, plus unnecessary separator border
 - **Solution**: Fixed Grid row definitions and removed the 1px white separator element
 
+### AMD Ryzen Undervolt Detection (Phoenix/7040 Series)
+- **Fixed**: Ryzen 5 7640HS and other Phoenix APUs failing to apply undervolt
+- **Cause**: CPU family detection matched "Model 1" in "Model 116" causing Phoenix CPUs to be misdetected as Zen1+
+- **Solution**: Reordered family detection to check Family 25/26 models first; added fallback SMU commands for unknown families
+- **Affected CPUs**: Ryzen 7040 series (7640HS, 7840HS, etc.)
+
 ### Critical: Temperature Monitoring Freezes (#39, #40)
 **Issue:** CPU/GPU temperatures would freeze at a fixed value (e.g., 55°C, 93°C) causing:
 - Fans stuck at high RPM because the fan curve sees a constant high temperature
@@ -90,6 +96,15 @@ if (!workerSample.IsFresh || workerSample.StaleCount > 30)
 ## 🔧 Technical Details
 
 ### Files Changed
+- `OmenCoreApp/Hardware/RyzenControl.cs`
+  - Fixed CPU family detection order (check Family 25/26 before generic patterns)
+  - Phoenix/HawkPoint now correctly detected instead of falling back to Zen1Plus
+  - Made Zen1Plus detection more strict (requires Family 17)
+
+- `OmenCoreApp/Hardware/AmdUndervoltProvider.cs`
+  - Added fallback SMU command (0x5D) for unknown CPU families
+  - Added explicit handling for older architectures that don't support Curve Optimizer
+
 - `OmenCoreApp/Views/QuickPopupWindow.xaml`
   - Fixed Grid row definitions (added 7th row)
   - Moved Quick Actions to correct row
@@ -120,9 +135,9 @@ if (!workerSample.IsFresh || workerSample.StaleCount > 30)
 
 | File | SHA256 |
 |------|--------|
-| OmenCoreSetup-2.2.2.exe | `D804CAC35026B2706393296FE74DA522735CC1329A0C8EE2415CFFDD0347CE97` |
-| OmenCore-2.2.2-win-x64.zip | `778B4C58D19E9DEBC9492991F2CC1801C7825CD2CB8F4A6CB3101D8DCC63E4A3` |
-| OmenCore-2.2.2-linux-x64.zip | `68ADE210855D044C797C79AC252E89334722FF31CAE417EFD597C12CDBB8671A` |
+| OmenCoreSetup-2.2.2.exe | `B692F15A4B0C1D1F5643A2A4BCA9B8B41C995F8B54C87FD6D8A70729EAEE2D87` |
+| OmenCore-2.2.2-win-x64.zip | `F8FAFDD4D63341E29632D1CEE22AFC9000F022AF7C8540DB7501E3D4FDC8A2F1` |
+| OmenCore-2.2.2-linux-x64.zip | `83CC57C4B53C195F4B0E436F60DAD438C5DAD638EB5B0B18583C5B8C0A8DF40E` |
 
 ---
 

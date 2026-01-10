@@ -122,19 +122,7 @@ namespace OmenCore.Hardware
         /// </summary>
         private static RyzenFamily DetectFamily()
         {
-            // Zen1/+ Desktop
-            if (CpuModel.Contains("Model 1") || CpuModel.Contains("Model 8"))
-                return RyzenFamily.Zen1Plus;
-
-            // Family 23 (Zen to Zen2)
-            if (CpuModel.Contains("Family 23"))
-            {
-                if (CpuModel.Contains("Model 17")) return RyzenFamily.Raven;
-                if (CpuModel.Contains("Model 24")) return RyzenFamily.Picasso;
-                if (CpuModel.Contains("Model 32")) return RyzenFamily.Dali;
-            }
-
-            // Family 25 (Zen3)
+            // Family 25 (Zen3/Zen4 - check FIRST to avoid Model 1/8 false positives)
             if (CpuModel.Contains("Family 25"))
             {
                 if (CpuModel.Contains("Model 33")) return RyzenFamily.Vermeer;
@@ -142,24 +130,10 @@ namespace OmenCore.Hardware
                 if (CpuModel.Contains("Model 63") || CpuModel.Contains("Model 68"))
                     return RyzenFamily.Rembrandt;
                 if (CpuModel.Contains("Model 97")) return RyzenFamily.RaphaelDragonRange;
+                // Phoenix (Ryzen 7040) - Model 116/117/120 
+                if (CpuModel.Contains("Model 116") || CpuModel.Contains("Model 117") || CpuModel.Contains("Model 120"))
+                    return RyzenFamily.Phoenix;
             }
-
-            // Renoir/Lucienne detection
-            if (CpuModel.Contains("Model 96") || CpuModel.Contains("Model 104"))
-                return RyzenFamily.RenoirLucienne;
-
-            // Van Gogh (Steam Deck)
-            if (CpuModel.Contains("Model 144")) return RyzenFamily.VanGogh;
-
-            // Phoenix (Ryzen 7040)
-            if (CpuModel.Contains("Model 116") || CpuModel.Contains("Model 120"))
-                return RyzenFamily.Phoenix;
-
-            // Mendocino
-            if (CpuModel.Contains("Model 160")) return RyzenFamily.Mendocino;
-
-            // Hawk Point (Ryzen 8040)
-            if (CpuModel.Contains("Model 117")) return RyzenFamily.HawkPoint;
 
             // Family 26 (Zen5+)
             if (CpuModel.Contains("Family 26"))
@@ -169,6 +143,33 @@ namespace OmenCore.Hardware
                 if (CpuModel.Contains("Model 68") && CpuName.Contains("HX"))
                     return RyzenFamily.FireRange;
             }
+
+            // Family 23 (Zen to Zen2)
+            if (CpuModel.Contains("Family 23"))
+            {
+                if (CpuModel.Contains("Model 17")) return RyzenFamily.Raven;
+                if (CpuModel.Contains("Model 24")) return RyzenFamily.Picasso;
+                if (CpuModel.Contains("Model 32")) return RyzenFamily.Dali;
+            }
+
+            // Renoir/Lucienne detection
+            if (CpuModel.Contains("Model 96") || CpuModel.Contains("Model 104"))
+                return RyzenFamily.RenoirLucienne;
+
+            // Van Gogh (Steam Deck)
+            if (CpuModel.Contains("Model 144")) return RyzenFamily.VanGogh;
+
+            // Mendocino
+            if (CpuModel.Contains("Model 160")) return RyzenFamily.Mendocino;
+
+            // Hawk Point (Ryzen 8040) - separate check for Model 117 outside Family 25
+            if (CpuModel.Contains("Model 117")) return RyzenFamily.HawkPoint;
+
+            // Zen1/+ Desktop (check LAST - Model 1/8 pattern can match others like 116, 117, 18x)
+            if (CpuModel.Contains("Family 17") && 
+                (CpuModel.Contains("Model 1 ") || CpuModel.Contains("Model 8 ") ||
+                 CpuModel.EndsWith("Model 1") || CpuModel.EndsWith("Model 8")))
+                return RyzenFamily.Zen1Plus;
 
             return RyzenFamily.Unknown;
         }
