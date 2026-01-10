@@ -138,6 +138,14 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void Cancel()
+    {
+        // Reload settings to discard any unsaved changes
+        LoadSettings();
+        StatusMessage = "Changes discarded";
+    }
+
+    [RelayCommand]
     private void OpenGitHub()
     {
         try

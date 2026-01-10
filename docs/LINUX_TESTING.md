@@ -54,6 +54,24 @@ cd omencore-linux
 chmod +x omencore-cli
 ```
 
+### Model-Specific Notes
+
+#### OMEN 16 wf0000n1 (2023, 13700HX)
+This model uses the **hp-wmi** driver, NOT direct EC access:
+
+```bash
+# Load HP-WMI module (required for 2023+ models)
+sudo modprobe hp-wmi
+
+# Verify HP-WMI is available
+ls /sys/devices/platform/hp-wmi/
+
+# Check what's available
+cat /sys/devices/platform/hp-wmi/thermal_profile 2>/dev/null
+```
+
+If hp-wmi doesn't expose fan control, the model may need the `hp-omen-quirks` kernel parameter or a newer kernel.
+
 ### Testing Checklist
 
 - [ ] **CLI starts without errors**: `./omencore-cli --help`
@@ -218,6 +236,33 @@ mount | grep debugfs
 sudo mount -t debugfs debugfs /sys/kernel/debug
 ```
 
+### 2023+ OMEN Models (wf0000, 13700HX, etc.)
+
+Newer 2023 OMEN models use HP-WMI instead of direct EC access. The ec_sys module won't help - you need hp-wmi:
+
+```bash
+# Check if HP-WMI is loaded and what it exposes
+lsmod | grep hp_wmi
+ls -la /sys/devices/platform/hp-wmi/
+
+# If hp-wmi isn't loaded:
+sudo modprobe hp-wmi
+
+# Check what interfaces are available
+cat /sys/devices/platform/hp-wmi/thermal_profile 2>/dev/null
+
+# If thermal_profile doesn't exist, your kernel may be too old
+# Ubuntu 24.04 should have kernel 6.8+ which has good hp-wmi support
+uname -r
+```
+
+**If nothing works on your 2023 OMEN:**
+
+1. **Check kernel version**: Ubuntu 24.04 LTS ships with kernel 6.8, which should support most OMEN models
+2. **Try kernel parameter**: Add `hp_wmi.fan_support=1` to GRUB cmdline
+3. **Check BIOS version**: Some features require BIOS F.20+ 
+4. **Report your model**: We need more testing data for 2023 models
+
 ### No Temperature Readings
 
 ```bash
@@ -268,10 +313,24 @@ When reporting Linux-specific issues, please include:
 2. **Kernel version**: `uname -r`
 3. **Laptop model**: `sudo dmidecode -s system-product-name`
 4. **EC module status**: `lsmod | grep ec`
-5. **OmenCore version**: `./omencore-cli --version`
-6. **Full command output**: Include `--verbose` flag
-7. **System logs**: `sudo dmesg | tail -50`
+5. **HP-WMI status**: `ls -la /sys/devices/platform/hp-wmi/ 2>/dev/null`
+6. **OmenCore version**: `./omencore-cli --version`
+7. **Full command output**: Include `--verbose` flag
+8. **System logs**: `sudo dmesg | grep -i "hp\|omen\|wmi" | tail -30`
 
 ---
 
-*Last Updated: January 2, 2026*
+## Known Working Configurations
+
+| Model | Kernel | Distro | Access Method | Notes |
+|-------|--------|--------|---------------|-------|
+| OMEN 15 2020 | 5.15+ | Ubuntu 22.04 | ec_sys | Full support |
+| OMEN 16 2022 | 5.19+ | Fedora 38 | ec_sys | Full support |
+| OMEN 16 2023 | 6.5+ | Ubuntu 24.04 | hp-wmi | Partial (thermal only) |
+| OMEN 17 2021 | 5.15+ | Arch | ec_sys | Full support |
+
+**Help us expand this list!** Report your working configuration on Discord or GitHub.
+
+---
+
+*Last Updated: January 11, 2026*

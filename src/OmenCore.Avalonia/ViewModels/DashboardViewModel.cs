@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using OmenCore.Avalonia.Services;
+using System.Diagnostics;
 
 namespace OmenCore.Avalonia.ViewModels;
 
@@ -9,6 +11,7 @@ namespace OmenCore.Avalonia.ViewModels;
 public partial class DashboardViewModel : ObservableObject, IDisposable
 {
     private readonly IHardwareService _hardwareService;
+    private readonly Stopwatch _sessionStopwatch = Stopwatch.StartNew();
     private bool _disposed;
 
     [ObservableProperty]
@@ -24,6 +27,12 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
     private int _gpuFanRpm;
 
     [ObservableProperty]
+    private int _cpuFanPercent;
+
+    [ObservableProperty]
+    private int _gpuFanPercent;
+
+    [ObservableProperty]
     private double _cpuUsage;
 
     [ObservableProperty]
@@ -31,6 +40,9 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private double _memoryUsage;
+
+    [ObservableProperty]
+    private string _memoryUsed = "0 / 0 GB";
 
     [ObservableProperty]
     private double _powerConsumption;
@@ -42,6 +54,9 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
     private bool _isOnBattery;
 
     [ObservableProperty]
+    private string _powerSource = "AC Power";
+
+    [ObservableProperty]
     private string _cpuName = "Loading...";
 
     [ObservableProperty]
@@ -49,6 +64,27 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string _performanceMode = "Balanced";
+
+    [ObservableProperty]
+    private string _fanMode = "Auto";
+
+    [ObservableProperty]
+    private string _fanSummary = "-- / -- RPM";
+
+    [ObservableProperty]
+    private string _sessionUptime = "0:00:00";
+
+    [ObservableProperty]
+    private double _peakCpuTemp;
+
+    [ObservableProperty]
+    private double _peakGpuTemp;
+
+    [ObservableProperty]
+    private bool _isThrottling;
+
+    [ObservableProperty]
+    private string _throttlingSummary = "";
 
     // Temperature warnings
     public bool IsCpuTemperatureWarning => CpuTemperature >= 80;
@@ -62,6 +98,7 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
         _hardwareService.StatusChanged += OnStatusChanged;
         
         Initialize();
+        StartUptimeTimer();
     }
 
     private async void Initialize()
@@ -85,6 +122,18 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void StartUptimeTimer()
+    {
+        Task.Run(async () =>
+        {
+            while (!_disposed)
+            {
+                await Task.Delay(1000);
+                SessionUptime = _sessionStopwatch.Elapsed.ToString(@"h\:mm\:ss");
+            }
+        });
+    }
+
     private void OnStatusChanged(object? sender, HardwareStatus status)
     {
         UpdateStatus(status);
@@ -96,18 +145,50 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
         GpuTemperature = Math.Round(status.GpuTemperature, 1);
         CpuFanRpm = status.CpuFanRpm;
         GpuFanRpm = status.GpuFanRpm;
+        CpuFanPercent = status.CpuFanPercent;
+        GpuFanPercent = status.GpuFanPercent;
         CpuUsage = Math.Round(status.CpuUsage, 1);
         GpuUsage = Math.Round(status.GpuUsage, 1);
         MemoryUsage = Math.Round(status.MemoryUsage, 1);
+        MemoryUsed = $"{status.MemoryUsedGb:F1} / {status.MemoryTotalGb:F1} GB";
         PowerConsumption = Math.Round(status.PowerConsumption, 1);
         BatteryPercentage = status.BatteryPercentage;
         IsOnBattery = status.IsOnBattery;
+        PowerSource = status.IsOnBattery ? "Battery" : "AC Power";
+
+        // Update peak temps
+        if (CpuTemperature > PeakCpuTemp) PeakCpuTemp = CpuTemperature;
+        if (GpuTemperature > PeakGpuTemp) PeakGpuTemp = GpuTemperature;
+
+        // Update fan summary
+        FanSummary = $"{CpuFanRpm} / {GpuFanRpm} RPM";
+
+        // Check throttling
+        IsThrottling = status.IsThrottling;
+        if (IsThrottling)
+        {
+            ThrottlingSummary = status.ThrottlingReason ?? "Thermal throttling detected";
+        }
 
         // Notify temperature warning properties
         OnPropertyChanged(nameof(IsCpuTemperatureWarning));
         OnPropertyChanged(nameof(IsGpuTemperatureWarning));
         OnPropertyChanged(nameof(IsCpuTemperatureCritical));
         OnPropertyChanged(nameof(IsGpuTemperatureCritical));
+    }
+
+    [RelayCommand]
+    private async Task Refresh()
+    {
+        try
+        {
+            var status = await _hardwareService.GetStatusAsync();
+            UpdateStatus(status);
+        }
+        catch
+        {
+            // Ignore refresh errors
+        }
     }
 
     public void Dispose()

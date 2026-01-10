@@ -7,25 +7,116 @@
         <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
     </Style>
     
-    <!-- Card Style -->
+    <!-- ==================== Card Styles ==================== -->
+    
+    <!-- Standard Card -->
     <Style Selector="Border.card">
         <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
         <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Padding" Value="16" />
-        <Setter Property="Margin" Value="4" />
+        <Setter Property="Margin" Value="0,0,0,12" />
+        <Setter Property="BorderBrush" Value="#2A2A2A" />
+        <Setter Property="BorderThickness" Value="1" />
     </Style>
     
     <Style Selector="Border.card:pointerover">
-        <Setter Property="Background" Value="#252525" />
+        <Setter Property="Background" Value="#222222" />
+        <Setter Property="BorderBrush" Value="#3A3A3A" />
     </Style>
+    
+    <!-- Interactive Card with accent hover -->
+    <Style Selector="Border.cardInteractive">
+        <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="Margin" Value="0,0,0,12" />
+        <Setter Property="BorderBrush" Value="#2A2A2A" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.15" />
+                <BrushTransition Property="Background" Duration="0:0:0.15" />
+            </Transitions>
+        </Setter>
+    </Style>
+    
+    <Style Selector="Border.cardInteractive:pointerover">
+        <Setter Property="Background" Value="#222222" />
+        <Setter Property="BorderBrush" Value="{StaticResource OmenBlueBrush}" />
+    </Style>
+    
+    <!-- Surface Card (darker) -->
+    <Style Selector="Border.surfaceCard">
+        <Setter Property="Background" Value="#141414" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="BorderBrush" Value="#252525" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    
+    <!-- Stat Card -->
+    <Style Selector="Border.statCard">
+        <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="MinWidth" Value="150" />
+        <Setter Property="BorderBrush" Value="#2A2A2A" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.15" />
+            </Transitions>
+        </Setter>
+    </Style>
+    
+    <Style Selector="Border.statCard:pointerover">
+        <Setter Property="BorderBrush" Value="#444444" />
+    </Style>
+    
+    <!-- Status Card variants -->
+    <Style Selector="Border.statusCard">
+        <Setter Property="Background" Value="#141414" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="BorderBrush" Value="#2A2A2A" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    
+    <!-- Info Banner -->
+    <Style Selector="Border.infoBanner">
+        <Setter Property="Background" Value="#1A00BFFF" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="BorderBrush" Value="{StaticResource OmenBlueBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    
+    <!-- Warning Banner -->
+    <Style Selector="Border.warningBanner">
+        <Setter Property="Background" Value="#1AFF9800" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="BorderBrush" Value="#FF9800" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    
+    <!-- ==================== Button Styles ==================== -->
     
     <!-- Primary Button -->
     <Style Selector="Button.primary">
         <Setter Property="Background" Value="{StaticResource OmenBlueBrush}" />
         <Setter Property="Foreground" Value="White" />
-        <Setter Property="CornerRadius" Value="4" />
-        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="16,10" />
         <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.15" />
+            </Transitions>
+        </Setter>
     </Style>
     
     <Style Selector="Button.primary:pointerover">
@@ -36,68 +127,86 @@
         <Setter Property="Background" Value="#0099CC" />
     </Style>
     
+    <Style Selector="Button.primary:disabled">
+        <Setter Property="Background" Value="#444444" />
+        <Setter Property="Foreground" Value="#888888" />
+    </Style>
+    
     <!-- Danger Button -->
     <Style Selector="Button.danger">
         <Setter Property="Background" Value="{StaticResource OmenRedBrush}" />
         <Setter Property="Foreground" Value="White" />
-        <Setter Property="CornerRadius" Value="4" />
-        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="16,10" />
         <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.15" />
+            </Transitions>
+        </Setter>
+    </Style>
+    
+    <Style Selector="Button.danger:pointerover">
+        <Setter Property="Background" Value="#FF3355" />
     </Style>
     
     <!-- Secondary Button -->
     <Style Selector="Button.secondary">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderBrush" Value="{StaticResource OmenBlueBrush}" />
+        <Setter Property="BorderBrush" Value="#444444" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Foreground" Value="{StaticResource OmenBlueBrush}" />
-        <Setter Property="CornerRadius" Value="4" />
-        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="16,10" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.15" />
+                <BrushTransition Property="Background" Duration="0:0:0.15" />
+            </Transitions>
+        </Setter>
     </Style>
     
     <Style Selector="Button.secondary:pointerover">
-        <Setter Property="Background" Value="#1A00BFFF" />
+        <Setter Property="Background" Value="#1AFFFFFF" />
+        <Setter Property="BorderBrush" Value="{StaticResource OmenBlueBrush}" />
     </Style>
     
-    <!-- Page Header -->
-    <Style Selector="TextBlock.pageHeader">
-        <Setter Property="FontSize" Value="28" />
-        <Setter Property="FontWeight" Value="Bold" />
-        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-        <Setter Property="Margin" Value="0,0,0,8" />
+    <Style Selector="Button.secondary:pressed">
+        <Setter Property="Background" Value="#2600BFFF" />
     </Style>
     
-    <!-- Section Header -->
-    <Style Selector="TextBlock.sectionHeader">
-        <Setter Property="FontSize" Value="18" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
-        <Setter Property="Margin" Value="0,0,0,8" />
-    </Style>
-    
-    <!-- Label -->
-    <Style Selector="TextBlock.label">
-        <Setter Property="FontSize" Value="12" />
+    <!-- Ghost Button (text only) -->
+    <Style Selector="Button.ghost">
+        <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="Cursor" Value="Hand" />
     </Style>
     
-    <!-- Value -->
-    <Style Selector="TextBlock.value">
-        <Setter Property="FontSize" Value="20" />
-        <Setter Property="FontWeight" Value="SemiBold" />
+    <Style Selector="Button.ghost:pointerover">
         <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
     </Style>
     
-    <!-- Slider Style -->
-    <Style Selector="Slider">
-        <Setter Property="Minimum" Value="0" />
-        <Setter Property="Maximum" Value="100" />
+    <!-- Small Icon Button -->
+    <Style Selector="Button.iconButton">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+        <Setter Property="Padding" Value="8" />
+        <Setter Property="MinWidth" Value="32" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Cursor" Value="Hand" />
     </Style>
     
-    <!-- Toggle Switch -->
-    <Style Selector="ToggleSwitch">
+    <Style Selector="Button.iconButton:pointerover">
+        <Setter Property="Background" Value="#1AFFFFFF" />
         <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
     </Style>
+    
+    <!-- ==================== Navigation Styles ==================== -->
     
     <!-- Navigation Button -->
     <Style Selector="Button.navButton">
@@ -105,7 +214,13 @@
         <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
         <Setter Property="Padding" Value="12,10" />
         <Setter Property="HorizontalContentAlignment" Value="Left" />
-        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.15" />
+            </Transitions>
+        </Setter>
     </Style>
     
     <Style Selector="Button.navButton:pointerover">
@@ -118,13 +233,126 @@
         <Setter Property="Foreground" Value="{StaticResource OmenBlueBrush}" />
     </Style>
     
-    <!-- Stat Card -->
-    <Style Selector="Border.statCard">
-        <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
-        <Setter Property="CornerRadius" Value="8" />
-        <Setter Property="Padding" Value="16" />
-        <Setter Property="MinWidth" Value="150" />
+    <!-- Sidebar Section Header -->
+    <Style Selector="TextBlock.sidebarHeader">
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="#666666" />
+        <Setter Property="Margin" Value="12,16,12,8" />
+        <!-- Note: TextTransform not available in Avalonia - use ALL CAPS in text -->
     </Style>
+    
+    <!-- ==================== Text Styles ==================== -->
+    
+    <!-- Page Header -->
+    <Style Selector="TextBlock.pageHeader">
+        <Setter Property="FontSize" Value="28" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+    
+    <!-- Section Header -->
+    <Style Selector="TextBlock.sectionHeader">
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+    
+    <!-- Subsection Header -->
+    <Style Selector="TextBlock.subsectionHeader">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+    </Style>
+    
+    <!-- Label -->
+    <Style Selector="TextBlock.label">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+    </Style>
+    
+    <!-- Caption -->
+    <Style Selector="TextBlock.caption">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="#666666" />
+    </Style>
+    
+    <!-- Value -->
+    <Style Selector="TextBlock.value">
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+    </Style>
+    
+    <!-- Large Value -->
+    <Style Selector="TextBlock.valueLarge">
+        <Setter Property="FontSize" Value="32" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+    </Style>
+    
+    <!-- Accent Text -->
+    <Style Selector="TextBlock.accent">
+        <Setter Property="Foreground" Value="{StaticResource OmenBlueBrush}" />
+    </Style>
+    
+    <!-- Warning Text -->
+    <Style Selector="TextBlock.warning">
+        <Setter Property="Foreground" Value="#FF9800" />
+    </Style>
+    
+    <!-- Error/Critical Text -->
+    <Style Selector="TextBlock.error">
+        <Setter Property="Foreground" Value="{StaticResource OmenRedBrush}" />
+    </Style>
+    
+    <!-- Success Text -->
+    <Style Selector="TextBlock.success">
+        <Setter Property="Foreground" Value="{StaticResource OmenGreenBrush}" />
+    </Style>
+    
+    <!-- ==================== Form Controls ==================== -->
+    
+    <!-- Slider Style -->
+    <Style Selector="Slider">
+        <Setter Property="Minimum" Value="0" />
+        <Setter Property="Maximum" Value="100" />
+    </Style>
+    
+    <!-- Toggle Switch -->
+    <Style Selector="ToggleSwitch">
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+    </Style>
+    
+    <!-- ComboBox -->
+    <Style Selector="ComboBox">
+        <Setter Property="Background" Value="#252525" />
+        <Setter Property="BorderBrush" Value="#3A3A3A" />
+        <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    
+    <!-- NumericUpDown -->
+    <Style Selector="NumericUpDown">
+        <Setter Property="Background" Value="#252525" />
+        <Setter Property="BorderBrush" Value="#3A3A3A" />
+        <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    
+    <!-- TextBox -->
+    <Style Selector="TextBox">
+        <Setter Property="Background" Value="#252525" />
+        <Setter Property="BorderBrush" Value="#3A3A3A" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="10,8" />
+    </Style>
+    
+    <Style Selector="TextBox:focus">
+        <Setter Property="BorderBrush" Value="{StaticResource OmenBlueBrush}" />
+    </Style>
+    
+    <!-- ==================== Progress & Status ==================== -->
     
     <!-- Progress Bar -->
     <Style Selector="ProgressBar">
@@ -134,10 +362,39 @@
         <Setter Property="Background" Value="#333333" />
     </Style>
     
+    <!-- Thin Progress Bar -->
+    <Style Selector="ProgressBar.thin">
+        <Setter Property="Height" Value="4" />
+        <Setter Property="CornerRadius" Value="2" />
+    </Style>
+    
+    <!-- Status Indicator Dot -->
+    <Style Selector="Ellipse.statusDot">
+        <Setter Property="Width" Value="8" />
+        <Setter Property="Height" Value="8" />
+    </Style>
+    
+    <!-- ==================== Layout ==================== -->
+    
     <!-- Separator -->
     <Style Selector="Separator">
-        <Setter Property="Background" Value="#333333" />
+        <Setter Property="Background" Value="#2A2A2A" />
         <Setter Property="Margin" Value="0,12" />
+        <Setter Property="Height" Value="1" />
+    </Style>
+    
+    <!-- Vertical Separator -->
+    <Style Selector="Border.verticalSeparator">
+        <Setter Property="Width" Value="1" />
+        <Setter Property="Background" Value="#2A2A2A" />
+        <Setter Property="Margin" Value="16,4" />
+    </Style>
+    
+    <!-- ==================== Scrollbar ==================== -->
+    
+    <Style Selector="ScrollViewer">
+        <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
     </Style>
     
 </Styles>

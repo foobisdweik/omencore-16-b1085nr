@@ -14,12 +14,18 @@ public class HardwareStatus
     public double GpuTemperature { get; set; }
     public int CpuFanRpm { get; set; }
     public int GpuFanRpm { get; set; }
+    public int CpuFanPercent { get; set; }
+    public int GpuFanPercent { get; set; }
     public double CpuUsage { get; set; }
     public double GpuUsage { get; set; }
     public double MemoryUsage { get; set; }
+    public double MemoryUsedGb { get; set; }
+    public double MemoryTotalGb { get; set; }
     public double PowerConsumption { get; set; }
     public int BatteryPercentage { get; set; }
     public bool IsOnBattery { get; set; }
+    public bool IsThrottling { get; set; }
+    public string? ThrottlingReason { get; set; }
 }
 
 /// <summary>

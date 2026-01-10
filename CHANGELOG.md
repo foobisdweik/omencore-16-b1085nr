@@ -18,6 +18,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fan Diagnostics: 100% Not Max** - Setting 100% now uses SetFanMax for true maximum RPM
 - **Fan Diagnostics: UI Not Updating** - Fixed display not refreshing after test completion
 
+### 🎨 Linux GUI Overhaul
+- **Theme System** - Comprehensive new OmenTheme.axaml with 300+ style definitions
+  - Card styles: `.card`, `.cardInteractive`, `.surfaceCard`, `.statusCard`
+  - Button variants: `.primary`, `.secondary`, `.danger`, `.ghost`, `.iconButton`
+  - Text hierarchy: `.pageHeader`, `.sectionHeader`, `.subsectionHeader`, `.caption`
+  - Navigation styles with active state tracking
+  - Smooth hover transitions on interactive elements
+- **Dashboard** - Complete redesign matching Windows version
+  - Session uptime tracking with peak temperature display
+  - Quick status bar showing fans, performance mode, power source
+  - Hardware summary cards for CPU, GPU, Fans, Memory
+  - Throttling warning banner when thermal throttling detected
+- **Fan Control** - Enhanced fan curve editor
+  - Real-time status cards with centered layout
+  - Save preset and Emergency Stop buttons
+  - Hysteresis setting for curve stability
+- **System Control** - Visual performance mode selector
+  - 4-column button grid with emoji icons and descriptions
+  - Current mode indicator with accent highlight
+- **Settings** - Reorganized with card-based dark panels
+  - Section icons with emojis
+  - About section with version and GitHub link
+- **MainWindow** - Improved sidebar navigation
+  - System status panel showing Performance/Fan modes
+  - Version display and connection indicator
+  - "Linux Edition" branding
+
 ### 📝 Documentation
 - **Smart App Control** - Added workarounds for Windows 11 Smart App Control blocking installer
 

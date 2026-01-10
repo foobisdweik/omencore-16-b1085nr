@@ -5,32 +5,78 @@
     
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="/Themes/OmenTheme.axaml" />
     </Application.Styles>
     
     <Application.Resources>
-        <!-- OMEN Brand Colors -->
+        <!-- ==================== OMEN Brand Colors ==================== -->
         <Color x:Key="OmenBlue">#00BFFF</Color>
         <Color x:Key="OmenRed">#E31837</Color>
         <Color x:Key="OmenGreen">#39FF14</Color>
         <Color x:Key="OmenPurple">#9D4EDD</Color>
         <Color x:Key="OmenOrange">#FF6B35</Color>
+        <Color x:Key="OmenCyan">#00FFFF</Color>
+        <Color x:Key="OmenYellow">#FFD700</Color>
         
-        <!-- Background Colors -->
+        <!-- ==================== Background Colors ==================== -->
         <Color x:Key="DarkBackground">#0D0D0D</Color>
         <Color x:Key="CardBackground">#1A1A1A</Color>
-        <Color x:Key="CardBackgroundHover">#252525</Color>
+        <Color x:Key="CardBackgroundHover">#222222</Color>
+        <Color x:Key="SurfaceBackground">#141414</Color>
+        <Color x:Key="SurfaceBorder">#252525</Color>
         
-        <!-- Text Colors -->
+        <!-- ==================== Text Colors ==================== -->
         <Color x:Key="PrimaryText">#FFFFFF</Color>
         <Color x:Key="SecondaryText">#B0B0B0</Color>
+        <Color x:Key="TertiaryText">#666666</Color>
         <Color x:Key="AccentText">#00BFFF</Color>
         
+        <!-- ==================== Status Colors ==================== -->
+        <Color x:Key="SuccessColor">#39FF14</Color>
+        <Color x:Key="WarningColor">#FF9800</Color>
+        <Color x:Key="ErrorColor">#E31837</Color>
+        <Color x:Key="InfoColor">#00BFFF</Color>
+        
+        <!-- ==================== Temperature Colors ==================== -->
+        <Color x:Key="TempCold">#45C7FF</Color>
+        <Color x:Key="TempWarm">#FFD700</Color>
+        <Color x:Key="TempHot">#FF9800</Color>
+        <Color x:Key="TempCritical">#E31837</Color>
+        
+        <!-- ==================== Brushes ==================== -->
+        <!-- Brand -->
         <SolidColorBrush x:Key="OmenBlueBrush" Color="{StaticResource OmenBlue}" />
         <SolidColorBrush x:Key="OmenRedBrush" Color="{StaticResource OmenRed}" />
         <SolidColorBrush x:Key="OmenGreenBrush" Color="{StaticResource OmenGreen}" />
+        <SolidColorBrush x:Key="OmenPurpleBrush" Color="{StaticResource OmenPurple}" />
+        <SolidColorBrush x:Key="OmenOrangeBrush" Color="{StaticResource OmenOrange}" />
+        
+        <!-- Backgrounds -->
         <SolidColorBrush x:Key="DarkBackgroundBrush" Color="{StaticResource DarkBackground}" />
         <SolidColorBrush x:Key="CardBackgroundBrush" Color="{StaticResource CardBackground}" />
+        <SolidColorBrush x:Key="SurfaceBackgroundBrush" Color="{StaticResource SurfaceBackground}" />
+        <SolidColorBrush x:Key="SurfaceBorderBrush" Color="{StaticResource SurfaceBorder}" />
+        
+        <!-- Text -->
         <SolidColorBrush x:Key="PrimaryTextBrush" Color="{StaticResource PrimaryText}" />
         <SolidColorBrush x:Key="SecondaryTextBrush" Color="{StaticResource SecondaryText}" />
+        <SolidColorBrush x:Key="TertiaryTextBrush" Color="{StaticResource TertiaryText}" />
+        
+        <!-- Status -->
+        <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}" />
+        <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}" />
+        <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorColor}" />
+        <SolidColorBrush x:Key="InfoBrush" Color="{StaticResource InfoColor}" />
+        
+        <!-- Temperature -->
+        <SolidColorBrush x:Key="TempColdBrush" Color="{StaticResource TempCold}" />
+        <SolidColorBrush x:Key="TempWarmBrush" Color="{StaticResource TempWarm}" />
+        <SolidColorBrush x:Key="TempHotBrush" Color="{StaticResource TempHot}" />
+        <SolidColorBrush x:Key="TempCriticalBrush" Color="{StaticResource TempCritical}" />
+        
+        <!-- Accent variants -->
+        <SolidColorBrush x:Key="AccentLightBrush" Color="#33CFFF" />
+        <SolidColorBrush x:Key="AccentDarkBrush" Color="#0099CC" />
+        <SolidColorBrush x:Key="AccentTransparentBrush" Color="#2600BFFF" />
     </Application.Resources>
 </Application>

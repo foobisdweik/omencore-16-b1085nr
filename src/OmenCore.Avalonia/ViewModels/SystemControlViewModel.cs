@@ -16,6 +16,9 @@ public partial class SystemControlViewModel : ObservableObject
     private int _selectedPerformanceModeIndex;
 
     [ObservableProperty]
+    private string _currentPerformanceMode = "Balanced";
+
+    [ObservableProperty]
     private bool _isPerformanceModeChanging;
 
     // GPU Mode
@@ -51,7 +54,7 @@ public partial class SystemControlViewModel : ObservableObject
     [ObservableProperty]
     private string _statusMessage = string.Empty;
 
-    public string[] PerformanceModes { get; } = { "Quiet", "Balanced", "Performance" };
+    public string[] PerformanceModes { get; } = { "Quiet", "Balanced", "Performance", "Custom" };
     public string[] GpuModes { get; } = { "Hybrid", "Discrete", "Integrated" };
 
     public SystemControlViewModel(IHardwareService hardwareService)
@@ -71,6 +74,7 @@ public partial class SystemControlViewModel : ObservableObject
 
             var mode = await _hardwareService.GetPerformanceModeAsync();
             SelectedPerformanceModeIndex = (int)mode;
+            CurrentPerformanceMode = mode.ToString();
 
             CurrentGpuMode = await _hardwareService.GetGpuModeAsync();
         }
@@ -82,10 +86,28 @@ public partial class SystemControlViewModel : ObservableObject
 
     partial void OnSelectedPerformanceModeIndexChanged(int value)
     {
-        _ = SetPerformanceModeAsync((PerformanceMode)value);
+        _ = SetPerformanceModeByIndexAsync((PerformanceMode)value);
     }
 
-    private async Task SetPerformanceModeAsync(PerformanceMode mode)
+    [RelayCommand]
+    private async Task SetPerformanceMode(string modeName)
+    {
+        if (IsPerformanceModeChanging)
+            return;
+
+        var mode = modeName switch
+        {
+            "Quiet" => PerformanceMode.Quiet,
+            "Balanced" => PerformanceMode.Balanced,
+            "Performance" => PerformanceMode.Performance,
+            "Custom" => PerformanceMode.Custom,
+            _ => PerformanceMode.Balanced
+        };
+
+        await SetPerformanceModeByIndexAsync(mode);
+    }
+
+    private async Task SetPerformanceModeByIndexAsync(PerformanceMode mode)
     {
         if (IsPerformanceModeChanging)
             return;
@@ -95,6 +117,8 @@ public partial class SystemControlViewModel : ObservableObject
             IsPerformanceModeChanging = true;
             StatusMessage = $"Setting performance mode to {mode}...";
             await _hardwareService.SetPerformanceModeAsync(mode);
+            CurrentPerformanceMode = mode.ToString();
+            SelectedPerformanceModeIndex = (int)mode;
             StatusMessage = $"Performance mode set to {mode}";
         }
         catch (Exception ex)

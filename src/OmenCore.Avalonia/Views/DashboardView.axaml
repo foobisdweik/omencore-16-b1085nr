@@ -7,161 +7,253 @@
     <ScrollViewer>
         <StackPanel Spacing="16">
             
-            <!-- Page Header -->
-            <TextBlock Classes="pageHeader" Text="Dashboard" />
-            <TextBlock Classes="label" Text="System overview and real-time monitoring" Margin="0,-4,0,12" />
-            
-            <!-- Temperature Section -->
-            <TextBlock Classes="sectionHeader" Text="Temperatures" />
-            <UniformGrid Rows="1" Columns="2">
-                <!-- CPU Temperature -->
-                <Border Classes="statCard" Margin="0,0,8,0">
-                    <StackPanel>
-                        <TextBlock Classes="label" Text="CPU Temperature" />
-                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,0">
-                            <TextBlock Classes="value" Text="{Binding CpuTemperature, StringFormat={}{0:F1}}" />
-                            <TextBlock Classes="value" Text="°C" />
-                        </StackPanel>
-                        <ProgressBar Value="{Binding CpuTemperature}" Maximum="100" Margin="0,8,0,0">
-                            <ProgressBar.Foreground>
-                                <SolidColorBrush>
-                                    <SolidColorBrush.Color>
-                                        <MultiBinding>
-                                            <Binding Path="IsCpuTemperatureCritical" />
-                                            <Binding Path="IsCpuTemperatureWarning" />
-                                        </MultiBinding>
-                                    </SolidColorBrush.Color>
-                                </SolidColorBrush>
-                            </ProgressBar.Foreground>
-                        </ProgressBar>
-                        <TextBlock Text="{Binding CpuName}" Classes="label" Margin="0,8,0,0"
-                                   TextTrimming="CharacterEllipsis" />
+            <!-- Page Header with Session Info -->
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0">
+                    <TextBlock Classes="pageHeader" Text="Hardware Monitoring" />
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,0">
+                        <TextBlock Classes="caption" Text="Session:" />
+                        <TextBlock Classes="caption" Text="{Binding SessionUptime}" Foreground="{StaticResource OmenBlueBrush}" />
+                        <TextBlock Classes="caption" Text="•" Margin="8,0" />
+                        <TextBlock Classes="caption" Text="Peak:" />
+                        <TextBlock Classes="caption" Text="CPU" Margin="4,0,0,0" />
+                        <TextBlock Classes="caption" Text="{Binding PeakCpuTemp, StringFormat={}{0:F0}°C}" Foreground="{StaticResource OmenRedBrush}" />
+                        <TextBlock Classes="caption" Text="•" Margin="8,0" />
+                        <TextBlock Classes="caption" Text="GPU" />
+                        <TextBlock Classes="caption" Text="{Binding PeakGpuTemp, StringFormat={}{0:F0}°C}" Foreground="{StaticResource OmenBlueBrush}" />
                     </StackPanel>
-                </Border>
+                </StackPanel>
                 
-                <!-- GPU Temperature -->
-                <Border Classes="statCard" Margin="8,0,0,0">
-                    <StackPanel>
-                        <TextBlock Classes="label" Text="GPU Temperature" />
-                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,0">
-                            <TextBlock Classes="value" Text="{Binding GpuTemperature, StringFormat={}{0:F1}}" />
-                            <TextBlock Classes="value" Text="°C" />
-                        </StackPanel>
-                        <ProgressBar Value="{Binding GpuTemperature}" Maximum="100" Margin="0,8,0,0" />
-                        <TextBlock Text="{Binding GpuName}" Classes="label" Margin="0,8,0,0"
-                                   TextTrimming="CharacterEllipsis" />
-                    </StackPanel>
-                </Border>
-            </UniformGrid>
+                <Button Grid.Column="1" Classes="secondary" Content="↻ Refresh"
+                        Command="{Binding RefreshCommand}" 
+                        VerticalAlignment="Top" />
+            </Grid>
             
-            <!-- Fan Speeds Section -->
-            <TextBlock Classes="sectionHeader" Text="Fan Speeds" Margin="0,16,0,0" />
-            <UniformGrid Rows="1" Columns="2">
-                <!-- CPU Fan -->
-                <Border Classes="statCard" Margin="0,0,8,0">
-                    <StackPanel>
-                        <TextBlock Classes="label" Text="CPU Fan" />
-                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,0">
-                            <TextBlock Classes="value" Text="{Binding CpuFanRpm}" />
-                            <TextBlock Classes="value" Text="RPM" FontSize="14" VerticalAlignment="Bottom" Margin="0,0,0,2" />
+            <!-- Quick Status Bar -->
+            <Border Classes="surfaceCard" Padding="16,12">
+                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+                    <!-- Fan Status -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <TextBlock Text="🌀" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <StackPanel>
+                            <TextBlock Classes="caption" Text="FANS" />
+                            <TextBlock Text="{Binding FanSummary}" FontSize="12" Foreground="{StaticResource PrimaryTextBrush}"/>
                         </StackPanel>
                     </StackPanel>
-                </Border>
-                
-                <!-- GPU Fan -->
-                <Border Classes="statCard" Margin="8,0,0,0">
-                    <StackPanel>
-                        <TextBlock Classes="label" Text="GPU Fan" />
-                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,0">
-                            <TextBlock Classes="value" Text="{Binding GpuFanRpm}" />
-                            <TextBlock Classes="value" Text="RPM" FontSize="14" VerticalAlignment="Bottom" Margin="0,0,0,2" />
+                    
+                    <Border Grid.Column="1" Classes="verticalSeparator" />
+                    
+                    <!-- Performance Mode -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <TextBlock Text="⚡" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <StackPanel>
+                            <TextBlock Classes="caption" Text="PERFORMANCE" />
+                            <TextBlock Text="{Binding PerformanceMode}" FontSize="12" 
+                                       Foreground="{StaticResource OmenBlueBrush}" FontWeight="SemiBold"/>
                         </StackPanel>
                     </StackPanel>
-                </Border>
-            </UniformGrid>
+                    
+                    <Border Grid.Column="3" Classes="verticalSeparator" />
+                    
+                    <!-- Fan Mode -->
+                    <StackPanel Grid.Column="4" Orientation="Horizontal">
+                        <TextBlock Text="💨" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <StackPanel>
+                            <TextBlock Classes="caption" Text="FAN MODE" />
+                            <TextBlock Text="{Binding FanMode}" FontSize="12" 
+                                       Foreground="#45C7FF" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </StackPanel>
+                    
+                    <Border Grid.Column="5" Classes="verticalSeparator" />
+                    
+                    <!-- Power Source -->
+                    <StackPanel Grid.Column="6" Orientation="Horizontal">
+                        <TextBlock Text="🔌" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <StackPanel>
+                            <TextBlock Classes="caption" Text="POWER" />
+                            <TextBlock Text="{Binding PowerSource}" FontSize="12" 
+                                       Foreground="{StaticResource PrimaryTextBrush}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
             
-            <!-- System Usage Section -->
-            <TextBlock Classes="sectionHeader" Text="System Usage" Margin="0,16,0,0" />
-            <UniformGrid Rows="1" Columns="3">
-                <!-- CPU Usage -->
-                <Border Classes="statCard" Margin="0,0,8,0">
-                    <StackPanel>
-                        <TextBlock Classes="label" Text="CPU Usage" />
-                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,0">
-                            <TextBlock Classes="value" Text="{Binding CpuUsage, StringFormat={}{0:F1}}" />
-                            <TextBlock Classes="value" Text="%" FontSize="14" VerticalAlignment="Bottom" Margin="0,0,0,2" />
-                        </StackPanel>
-                        <ProgressBar Value="{Binding CpuUsage}" Maximum="100" Margin="0,8,0,0" />
-                    </StackPanel>
-                </Border>
-                
-                <!-- GPU Usage -->
-                <Border Classes="statCard" Margin="4,0">
-                    <StackPanel>
-                        <TextBlock Classes="label" Text="GPU Usage" />
-                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,0">
-                            <TextBlock Classes="value" Text="{Binding GpuUsage, StringFormat={}{0:F1}}" />
-                            <TextBlock Classes="value" Text="%" FontSize="14" VerticalAlignment="Bottom" Margin="0,0,0,2" />
-                        </StackPanel>
-                        <ProgressBar Value="{Binding GpuUsage}" Maximum="100" Margin="0,8,0,0" />
-                    </StackPanel>
-                </Border>
-                
-                <!-- Memory Usage -->
-                <Border Classes="statCard" Margin="8,0,0,0">
-                    <StackPanel>
-                        <TextBlock Classes="label" Text="Memory Usage" />
-                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,0">
-                            <TextBlock Classes="value" Text="{Binding MemoryUsage, StringFormat={}{0:F1}}" />
-                            <TextBlock Classes="value" Text="%" FontSize="14" VerticalAlignment="Bottom" Margin="0,0,0,2" />
-                        </StackPanel>
-                        <ProgressBar Value="{Binding MemoryUsage}" Maximum="100" Margin="0,8,0,0" />
-                    </StackPanel>
-                </Border>
-            </UniformGrid>
-            
-            <!-- Power Section -->
-            <TextBlock Classes="sectionHeader" Text="Power" Margin="0,16,0,0" />
-            <UniformGrid Rows="1" Columns="2">
-                <!-- Power Consumption -->
-                <Border Classes="statCard" Margin="0,0,8,0">
-                    <StackPanel>
-                        <TextBlock Classes="label" Text="Power Draw" />
-                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,0">
-                            <TextBlock Classes="value" Text="{Binding PowerConsumption, StringFormat={}{0:F0}}" />
-                            <TextBlock Classes="value" Text="W" FontSize="14" VerticalAlignment="Bottom" Margin="0,0,0,2" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-                
-                <!-- Battery -->
-                <Border Classes="statCard" Margin="8,0,0,0">
-                    <StackPanel>
-                        <TextBlock Classes="label" Text="Battery" />
-                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,0">
-                            <TextBlock Classes="value" Text="{Binding BatteryPercentage}" />
-                            <TextBlock Classes="value" Text="%" FontSize="14" VerticalAlignment="Bottom" Margin="0,0,0,2" />
-                        </StackPanel>
-                        <ProgressBar Value="{Binding BatteryPercentage}" Maximum="100" Margin="0,8,0,0" />
-                        <TextBlock Text="{Binding IsOnBattery, Converter={x:Static StringConverters.IsNotNullOrEmpty}, ConverterParameter=On Battery, FallbackValue=Plugged In}" 
-                                   Classes="label" Margin="0,8,0,0" />
-                    </StackPanel>
-                </Border>
-            </UniformGrid>
-            
-            <!-- Performance Mode -->
-            <Border Classes="card" Margin="0,16,0,0">
-                <StackPanel Orientation="Horizontal" Spacing="16">
-                    <TextBlock Text="Current Performance Mode:" 
-                               VerticalAlignment="Center"
-                               Foreground="{StaticResource SecondaryTextBrush}" />
-                    <Border Background="{StaticResource OmenBlueBrush}" 
-                            CornerRadius="4" Padding="12,6">
-                        <TextBlock Text="{Binding PerformanceMode}" 
-                                   FontWeight="SemiBold" />
-                    </Border>
+            <!-- Throttling Warning Banner (conditional) -->
+            <Border Classes="warningBanner" IsVisible="{Binding IsThrottling}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="⚠️" FontSize="14" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ThrottlingSummary, FallbackValue=System Throttling}" 
+                               FontSize="13" FontWeight="SemiBold"
+                               Foreground="#FF9800" VerticalAlignment="Center"/>
                 </StackPanel>
             </Border>
+            
+            <!-- Hardware Summary Cards -->
+            <TextBlock Classes="sectionHeader" Text="Hardware Summary" Margin="0,8,0,0" />
+            <Grid ColumnDefinitions="*,*,*,*,*" Margin="0,0,0,8">
+                
+                <!-- CPU Card -->
+                <Border Grid.Column="0" Classes="cardInteractive" Margin="0,0,8,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🔥" FontSize="18" />
+                            <TextBlock Classes="subsectionHeader" Text="CPU" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Classes="valueLarge" Text="{Binding CpuTemperature, StringFormat={}{0:F0}°}" 
+                                   Margin="0,8,0,0">
+                            <TextBlock.Foreground>
+                                <MultiBinding>
+                                    <Binding Path="IsCpuTemperatureCritical" />
+                                    <Binding Path="IsCpuTemperatureWarning" />
+                                </MultiBinding>
+                            </TextBlock.Foreground>
+                        </TextBlock>
+                        <ProgressBar Value="{Binding CpuTemperature}" Maximum="100" Classes="thin" Margin="0,8,0,0" />
+                        <TextBlock Classes="caption" Text="{Binding CpuUsage, StringFormat={}{0:F0}% usage}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+                
+                <!-- GPU Card -->
+                <Border Grid.Column="1" Classes="cardInteractive" Margin="4,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🎮" FontSize="18" />
+                            <TextBlock Classes="subsectionHeader" Text="GPU" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Classes="valueLarge" Text="{Binding GpuTemperature, StringFormat={}{0:F0}°}" 
+                                   Margin="0,8,0,0" Foreground="#45C7FF" />
+                        <ProgressBar Value="{Binding GpuTemperature}" Maximum="100" Classes="thin" Margin="0,8,0,0" />
+                        <TextBlock Classes="caption" Text="{Binding GpuUsage, StringFormat={}{0:F0}% usage}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+                
+                <!-- CPU Fan Card -->
+                <Border Grid.Column="2" Classes="cardInteractive" Margin="4,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🌀" FontSize="18" />
+                            <TextBlock Classes="subsectionHeader" Text="CPU Fan" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Classes="valueLarge" Text="{Binding CpuFanRpm}" />
+                            <TextBlock Text=" RPM" FontSize="14" VerticalAlignment="Bottom" Margin="0,0,0,4" 
+                                       Foreground="{StaticResource SecondaryTextBrush}" />
+                        </StackPanel>
+                        <ProgressBar Value="{Binding CpuFanPercent}" Maximum="100" Classes="thin" Margin="0,8,0,0" />
+                        <TextBlock Classes="caption" Text="{Binding CpuFanPercent, StringFormat={}{0:F0}%}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+                
+                <!-- GPU Fan Card -->
+                <Border Grid.Column="3" Classes="cardInteractive" Margin="4,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="🌀" FontSize="18" />
+                            <TextBlock Classes="subsectionHeader" Text="GPU Fan" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Classes="valueLarge" Text="{Binding GpuFanRpm}" />
+                            <TextBlock Text=" RPM" FontSize="14" VerticalAlignment="Bottom" Margin="0,0,0,4" 
+                                       Foreground="{StaticResource SecondaryTextBrush}" />
+                        </StackPanel>
+                        <ProgressBar Value="{Binding GpuFanPercent}" Maximum="100" Classes="thin" Margin="0,8,0,0" />
+                        <TextBlock Classes="caption" Text="{Binding GpuFanPercent, StringFormat={}{0:F0}%}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+                
+                <!-- Memory Card -->
+                <Border Grid.Column="4" Classes="cardInteractive" Margin="8,0,0,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="💾" FontSize="18" />
+                            <TextBlock Classes="subsectionHeader" Text="Memory" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Classes="valueLarge" Text="{Binding MemoryUsage, StringFormat={}{0:F0}}" />
+                            <TextBlock Text="%" FontSize="14" VerticalAlignment="Bottom" Margin="0,0,0,4" 
+                                       Foreground="{StaticResource SecondaryTextBrush}" />
+                        </StackPanel>
+                        <ProgressBar Value="{Binding MemoryUsage}" Maximum="100" Classes="thin" Margin="0,8,0,0" />
+                        <TextBlock Classes="caption" Text="{Binding MemoryUsed}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+            
+            <!-- Detailed Stats Grid -->
+            <Grid ColumnDefinitions="*,*" Margin="0,8,0,0">
+                
+                <!-- System Details -->
+                <Border Grid.Column="0" Classes="card" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Classes="sectionHeader" Text="System Details" />
+                        
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,8,0,0">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Classes="label" Text="CPU:" Margin="0,0,12,4" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding CpuName}" TextTrimming="CharacterEllipsis" />
+                            
+                            <TextBlock Grid.Row="1" Grid.Column="0" Classes="label" Text="GPU:" Margin="0,0,12,4" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding GpuName}" TextTrimming="CharacterEllipsis" />
+                            
+                            <TextBlock Grid.Row="2" Grid.Column="0" Classes="label" Text="Power:" Margin="0,0,12,4" />
+                            <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="{Binding PowerConsumption, StringFormat={}{0:F0}}" FontWeight="SemiBold" />
+                                <TextBlock Text="W" />
+                            </StackPanel>
+                            
+                            <TextBlock Grid.Row="3" Grid.Column="0" Classes="label" Text="Battery:" Margin="0,0,12,0" />
+                            <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="{Binding BatteryPercentage, StringFormat={}{0}%}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding PowerSource}" Foreground="{StaticResource SecondaryTextBrush}" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+                
+                <!-- Performance Summary -->
+                <Border Grid.Column="1" Classes="card" Margin="8,0,0,0">
+                    <StackPanel>
+                        <TextBlock Classes="sectionHeader" Text="Performance Summary" />
+                        
+                        <!-- Current Mode Badge -->
+                        <Border Background="#1A00BFFF" CornerRadius="4" Padding="12,8" Margin="0,8,0,12" 
+                                HorizontalAlignment="Left">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="⚡" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding PerformanceMode}" FontWeight="SemiBold" 
+                                           Foreground="{StaticResource OmenBlueBrush}" />
+                            </StackPanel>
+                        </Border>
+                        
+                        <!-- CPU Usage Bar -->
+                        <StackPanel Margin="0,0,0,8">
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,4">
+                                <TextBlock Classes="label" Text="CPU Usage" />
+                                <TextBlock Text="{Binding CpuUsage, StringFormat={}{0:F1}%}" FontWeight="SemiBold" />
+                            </StackPanel>
+                            <ProgressBar Value="{Binding CpuUsage}" Maximum="100" />
+                        </StackPanel>
+                        
+                        <!-- GPU Usage Bar -->
+                        <StackPanel Margin="0,0,0,8">
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,4">
+                                <TextBlock Classes="label" Text="GPU Usage" />
+                                <TextBlock Text="{Binding GpuUsage, StringFormat={}{0:F1}%}" FontWeight="SemiBold" />
+                            </StackPanel>
+                            <ProgressBar Value="{Binding GpuUsage}" Maximum="100" Foreground="#45C7FF" />
+                        </StackPanel>
+                        
+                        <!-- Memory Usage Bar -->
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,4">
+                                <TextBlock Classes="label" Text="Memory" />
+                                <TextBlock Text="{Binding MemoryUsage, StringFormat={}{0:F1}%}" FontWeight="SemiBold" />
+                            </StackPanel>
+                            <ProgressBar Value="{Binding MemoryUsage}" Maximum="100" Foreground="{StaticResource OmenGreenBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
             
         </StackPanel>
     </ScrollViewer>

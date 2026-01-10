@@ -9,76 +9,153 @@
         MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen">
     
-    <Grid ColumnDefinitions="220,*">
+    <Grid ColumnDefinitions="240,*">
         
         <!-- Navigation Sidebar -->
-        <Border Grid.Column="0" Background="#141414" Padding="12">
+        <Border Grid.Column="0" Background="#0F0F0F" Padding="0">
             <DockPanel>
-                <!-- Header -->
-                <StackPanel DockPanel.Dock="Top" Margin="0,8,0,24">
+                <!-- Header with Logo -->
+                <StackPanel DockPanel.Dock="Top" Margin="16,20,16,16" HorizontalAlignment="Center">
                     <TextBlock Text="OMENCORE" 
-                               FontSize="24" FontWeight="Bold" 
+                               FontSize="22" FontWeight="Bold" 
                                Foreground="{StaticResource OmenBlueBrush}"
-                               HorizontalAlignment="Center" />
+                               HorizontalAlignment="Center"
+                               LetterSpacing="2" />
+                    <TextBlock Text="Linux Edition" 
+                               FontSize="10"
+                               Foreground="#666666"
+                               HorizontalAlignment="Center"
+                               Margin="0,2,0,0" />
                     <TextBlock Text="{Binding ModelName}" 
                                FontSize="11"
                                Foreground="{StaticResource SecondaryTextBrush}"
                                HorizontalAlignment="Center"
-                               TextTrimming="CharacterEllipsis" />
+                               TextTrimming="CharacterEllipsis"
+                               Margin="0,8,0,0" />
                 </StackPanel>
                 
-                <!-- Status Indicator -->
-                <Border DockPanel.Dock="Bottom" 
-                        CornerRadius="4" Padding="8"
-                        Background="#1A1A1A" Margin="0,12,0,0">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
-                        <Ellipse Width="8" Height="8">
-                            <Ellipse.Fill>
-                                <SolidColorBrush Color="{Binding IsConnected, Converter={x:Static views:MainWindow.BoolToColorConverter}}" />
-                            </Ellipse.Fill>
-                        </Ellipse>
-                        <TextBlock Text="{Binding StatusText}" 
-                                   FontSize="11"
-                                   Foreground="{StaticResource SecondaryTextBrush}" />
+                <!-- System Status Panel -->
+                <Border DockPanel.Dock="Top" 
+                        Background="#141414"
+                        BorderBrush="#252525"
+                        BorderThickness="1"
+                        CornerRadius="6" 
+                        Padding="12,10"
+                        Margin="12,0,12,16">
+                    <StackPanel Spacing="8">
+                        <!-- Performance Mode -->
+                        <Grid ColumnDefinitions="Auto,*">
+                            <TextBlock Grid.Column="0" Text="⚡" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="PERFORMANCE" FontSize="8" FontWeight="SemiBold" Foreground="#666666" />
+                                <TextBlock Text="{Binding PerformanceMode, FallbackValue=Balanced}" 
+                                           FontSize="11" FontWeight="Bold" 
+                                           Foreground="{StaticResource OmenBlueBrush}" />
+                            </StackPanel>
+                        </Grid>
+                        
+                        <Rectangle Height="1" Fill="#252525" Margin="0,2" />
+                        
+                        <!-- Fan Mode -->
+                        <Grid ColumnDefinitions="Auto,*">
+                            <TextBlock Grid.Column="0" Text="🌀" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="FAN MODE" FontSize="8" FontWeight="SemiBold" Foreground="#666666" />
+                                <TextBlock Text="{Binding FanMode, FallbackValue=Auto}" 
+                                           FontSize="11" FontWeight="Bold" 
+                                           Foreground="{StaticResource PrimaryTextBrush}" />
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
                 </Border>
                 
-                <!-- Navigation Buttons -->
-                <StackPanel Spacing="4">
-                    <Button Classes="navButton" Command="{Binding NavigateToDashboardCommand}"
-                            Classes.active="{Binding CurrentPage, Converter={x:Static StringConverters.IsNotNullOrEmpty}, ConverterParameter=Dashboard}">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <TextBlock Text="📊" FontSize="16" />
-                            <TextBlock Text="Dashboard" VerticalAlignment="Center" />
+                <!-- Footer with Version and Status -->
+                <StackPanel DockPanel.Dock="Bottom" Margin="12,12">
+                    <!-- Connection Status -->
+                    <Border Background="#141414"
+                            BorderBrush="#252525"
+                            BorderThickness="1"
+                            CornerRadius="4" 
+                            Padding="10,8"
+                            Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+                            <Ellipse Width="8" Height="8">
+                                <Ellipse.Fill>
+                                    <SolidColorBrush Color="{Binding IsConnected, Converter={x:Static views:MainWindow.BoolToColorConverter}}" />
+                                </Ellipse.Fill>
+                            </Ellipse>
+                            <TextBlock Text="{Binding StatusText}" 
+                                       FontSize="11"
+                                       Foreground="{StaticResource SecondaryTextBrush}" />
                         </StackPanel>
-                    </Button>
+                    </Border>
                     
-                    <Button Classes="navButton" Command="{Binding NavigateToFanControlCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <TextBlock Text="🌀" FontSize="16" />
-                            <TextBlock Text="Fan Control" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    
-                    <Button Classes="navButton" Command="{Binding NavigateToSystemControlCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <TextBlock Text="⚡" FontSize="16" />
-                            <TextBlock Text="System Control" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-                    
-                    <Button Classes="navButton" Command="{Binding NavigateToSettingsCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <TextBlock Text="⚙️" FontSize="16" />
-                            <TextBlock Text="Settings" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
+                    <!-- Version -->
+                    <TextBlock Text="{Binding AppVersion, StringFormat=v{0}}" 
+                               FontSize="10"
+                               Foreground="#555555"
+                               HorizontalAlignment="Center" />
                 </StackPanel>
+                
+                <!-- Navigation Buttons -->
+                <ScrollViewer Margin="8,0">
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="sidebarHeader" Text="NAVIGATION" />
+                        
+                        <Button Classes="navButton" Command="{Binding NavigateToDashboardCommand}"
+                                Classes.active="{Binding IsDashboardActive}">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="📊" FontSize="16" />
+                                <TextBlock Text="Dashboard" VerticalAlignment="Center" FontSize="13" />
+                            </StackPanel>
+                        </Button>
+                        
+                        <Button Classes="navButton" Command="{Binding NavigateToFanControlCommand}"
+                                Classes.active="{Binding IsFanControlActive}">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="🌀" FontSize="16" />
+                                <TextBlock Text="Fan Control" VerticalAlignment="Center" FontSize="13" />
+                            </StackPanel>
+                        </Button>
+                        
+                        <Button Classes="navButton" Command="{Binding NavigateToSystemControlCommand}"
+                                Classes.active="{Binding IsSystemControlActive}">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="⚡" FontSize="16" />
+                                <TextBlock Text="System Control" VerticalAlignment="Center" FontSize="13" />
+                            </StackPanel>
+                        </Button>
+                        
+                        <Button Classes="navButton" Command="{Binding NavigateToSettingsCommand}"
+                                Classes.active="{Binding IsSettingsActive}">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="⚙️" FontSize="16" />
+                                <TextBlock Text="Settings" VerticalAlignment="Center" FontSize="13" />
+                            </StackPanel>
+                        </Button>
+                        
+                        <TextBlock Classes="sidebarHeader" Text="QUICK ACTIONS" Margin="12,20,12,8" />
+                        
+                        <Button Classes="navButton" Command="{Binding RefreshCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="🔄" FontSize="14" />
+                                <TextBlock Text="Refresh Sensors" VerticalAlignment="Center" FontSize="12" />
+                            </StackPanel>
+                        </Button>
+                        
+                        <Button Classes="navButton" Command="{Binding OpenGitHubCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="📦" FontSize="14" />
+                                <TextBlock Text="GitHub" VerticalAlignment="Center" FontSize="12" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </ScrollViewer>
             </DockPanel>
         </Border>
         
         <!-- Main Content Area -->
-        <Border Grid.Column="1" Background="{StaticResource DarkBackgroundBrush}" Padding="24">
+        <Border Grid.Column="1" Background="{StaticResource DarkBackgroundBrush}" Padding="24,20">
             <ContentControl Content="{Binding CurrentView}">
                 <ContentControl.DataTemplates>
                     <DataTemplate DataType="{x:Type vm:DashboardViewModel}">

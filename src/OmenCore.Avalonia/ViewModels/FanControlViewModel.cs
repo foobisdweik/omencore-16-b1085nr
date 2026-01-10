@@ -41,6 +41,12 @@ public partial class FanControlViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _linkFans = true;
 
+    [ObservableProperty]
+    private int _hysteresis = 3;
+
+    [ObservableProperty]
+    private string _statusMessage = "";
+
     public ObservableCollection<string> Presets { get; } = new();
     public ObservableCollection<FanCurvePointViewModel> CpuFanCurve { get; } = new();
     public ObservableCollection<FanCurvePointViewModel> GpuFanCurve { get; } = new();
@@ -133,6 +139,30 @@ public partial class FanControlViewModel : ObservableObject, IDisposable
     {
         SelectedPreset = "Balanced";
         LoadPreset("Balanced");
+        StatusMessage = "Reset to default fan curve";
+    }
+
+    [RelayCommand]
+    private async Task SavePreset()
+    {
+        // TODO: Implement save preset dialog
+        StatusMessage = "Save preset functionality coming soon";
+        await Task.CompletedTask;
+    }
+
+    [RelayCommand]
+    private async Task EmergencyStop()
+    {
+        try
+        {
+            await _hardwareService.SetCpuFanSpeedAsync(100);
+            await _hardwareService.SetGpuFanSpeedAsync(100);
+            StatusMessage = "Emergency stop activated - fans set to maximum";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Emergency stop failed: {ex.Message}";
+        }
     }
 
     [RelayCommand]

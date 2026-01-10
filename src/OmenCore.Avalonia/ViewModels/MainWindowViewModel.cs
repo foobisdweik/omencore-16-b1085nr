@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OmenCore.Avalonia.Services;
+using System.Diagnostics;
+using System.Reflection;
 
 namespace OmenCore.Avalonia.ViewModels;
 
@@ -27,6 +29,28 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private bool _isConnected = true;
 
+    [ObservableProperty]
+    private string _performanceMode = "Balanced";
+
+    [ObservableProperty]
+    private string _fanMode = "Auto";
+
+    [ObservableProperty]
+    private string _appVersion = "2.2.3";
+
+    // Navigation state
+    [ObservableProperty]
+    private bool _isDashboardActive = true;
+
+    [ObservableProperty]
+    private bool _isFanControlActive;
+
+    [ObservableProperty]
+    private bool _isSystemControlActive;
+
+    [ObservableProperty]
+    private bool _isSettingsActive;
+
     public DashboardViewModel DashboardVm { get; }
     public FanControlViewModel FanControlVm { get; }
     public SystemControlViewModel SystemControlVm { get; }
@@ -49,6 +73,13 @@ public partial class MainWindowViewModel : ObservableObject
 
         CurrentView = DashboardVm;
         
+        // Get version from assembly
+        var version = Assembly.GetExecutingAssembly().GetName().Version;
+        if (version != null)
+        {
+            AppVersion = $"{version.Major}.{version.Minor}.{version.Build}";
+        }
+        
         Initialize();
     }
 
@@ -61,6 +92,10 @@ public partial class MainWindowViewModel : ObservableObject
             ModelName = capabilities.ModelName;
             StatusText = "Connected";
             IsConnected = true;
+
+            // Get current modes
+            var perfMode = await _hardwareService.GetPerformanceModeAsync();
+            PerformanceMode = perfMode.ToString();
         }
         catch (Exception ex)
         {
@@ -69,11 +104,20 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    private void SetActiveNavigation(string page)
+    {
+        IsDashboardActive = page == "Dashboard";
+        IsFanControlActive = page == "Fan Control";
+        IsSystemControlActive = page == "System Control";
+        IsSettingsActive = page == "Settings";
+    }
+
     [RelayCommand]
     private void NavigateToDashboard()
     {
         CurrentView = DashboardVm;
         CurrentPage = "Dashboard";
+        SetActiveNavigation("Dashboard");
     }
 
     [RelayCommand]
@@ -81,6 +125,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         CurrentView = FanControlVm;
         CurrentPage = "Fan Control";
+        SetActiveNavigation("Fan Control");
     }
 
     [RelayCommand]
@@ -88,6 +133,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         CurrentView = SystemControlVm;
         CurrentPage = "System Control";
+        SetActiveNavigation("System Control");
     }
 
     [RelayCommand]
@@ -95,5 +141,38 @@ public partial class MainWindowViewModel : ObservableObject
     {
         CurrentView = SettingsVm;
         CurrentPage = "Settings";
+        SetActiveNavigation("Settings");
+    }
+
+    [RelayCommand]
+    private async Task Refresh()
+    {
+        try
+        {
+            StatusText = "Refreshing...";
+            var status = await _hardwareService.GetStatusAsync();
+            StatusText = "Connected";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private void OpenGitHub()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://github.com/Jeyloh/OmenCore",
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+            // Ignore errors opening browser
+        }
     }
 }

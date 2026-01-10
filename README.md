@@ -161,7 +161,17 @@ omencore-cli daemon --start
 - Arch Linux (AUR coming soon)
 - Pop!_OS 22.04+
 
-**Requirements:** `ec_sys` kernel module with `write_support=1`
+#### Linux Hardware Access Methods
+| OMEN Model | Access Method | Notes |
+|------------|---------------|-------|
+| 2020-2022 | `ec_sys` | `sudo modprobe ec_sys write_support=1` |
+| 2023+ (13700HX, etc.) | `hp-wmi` | `sudo modprobe hp-wmi` |
+
+**Requirements:** 
+- **Pre-2023 models**: `ec_sys` kernel module with `write_support=1`
+- **2023+ models**: `hp-wmi` driver (kernel 6.5+ recommended)
+
+See [LINUX_TESTING.md](docs/LINUX_TESTING.md) for detailed setup instructions.
 
 ### 🗑️ Bloatware Manager
 New comprehensive bloatware management:

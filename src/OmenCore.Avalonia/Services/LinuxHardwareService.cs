@@ -86,18 +86,28 @@ public class LinuxHardwareService : IHardwareService, IDisposable
     private static HardwareStatus GetMockStatus()
     {
         var rng = new Random();
+        var cpuFanPercent = 30 + rng.Next(0, 40);
+        var gpuFanPercent = 25 + rng.Next(0, 45);
+        var memUsed = 8.0 + rng.NextDouble() * 12;
+        var memTotal = 32.0;
         return new HardwareStatus
         {
             CpuTemperature = 45 + rng.Next(0, 20),
             GpuTemperature = 40 + rng.Next(0, 25),
             CpuFanRpm = 2000 + rng.Next(0, 1000),
             GpuFanRpm = 2500 + rng.Next(0, 1500),
+            CpuFanPercent = cpuFanPercent,
+            GpuFanPercent = gpuFanPercent,
             CpuUsage = 10 + rng.Next(0, 50),
             GpuUsage = 5 + rng.Next(0, 60),
-            MemoryUsage = 30 + rng.Next(0, 40),
+            MemoryUsage = (memUsed / memTotal) * 100,
+            MemoryUsedGb = memUsed,
+            MemoryTotalGb = memTotal,
             PowerConsumption = 25 + rng.Next(0, 50),
             BatteryPercentage = 75 + rng.Next(-20, 25),
-            IsOnBattery = false
+            IsOnBattery = false,
+            IsThrottling = false,
+            ThrottlingReason = null
         };
     }
 

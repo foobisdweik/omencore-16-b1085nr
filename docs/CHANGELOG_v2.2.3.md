@@ -1,11 +1,11 @@
-# OmenCore v2.2.3 - Fan Safety & Diagnostics Fixes
+# OmenCore v2.2.3 - Fan Safety & Diagnostics Fixes + Linux GUI Overhaul
 
 **Release Date:** January 2026  
 **Type:** Patch Release
 
 ## Summary
 
-This release addresses a critical fan safety issue where fans could drop to 0% at high temperatures, plus multiple improvements to the fan diagnostics tool.
+This release addresses a critical fan safety issue where fans could drop to 0% at high temperatures, multiple improvements to the fan diagnostics tool, and a comprehensive visual overhaul of the Linux Avalonia GUI to better match the Windows version.
 
 ---
 
@@ -45,6 +45,78 @@ At 85°C: NEW behavior → falls back to 80°C point → 80% fans ✓
 
 ---
 
+## 🎨 Linux GUI Overhaul
+
+### Theme & Styling (OmenTheme.axaml)
+- **New card styles**: `.card`, `.cardInteractive`, `.surfaceCard`, `.statusCard`
+- **Interactive card hover**: Blue accent border on hover with smooth transitions
+- **New button variants**: `.primary`, `.secondary`, `.danger`, `.ghost`, `.iconButton`
+- **Navigation styles**: `.navButton` with active state styling, `.sidebarHeader`
+- **Text hierarchy**: `.pageHeader`, `.sectionHeader`, `.subsectionHeader`, `.caption`, `.value`, `.valueLarge`
+- **Status text variants**: `.accent`, `.warning`, `.error`, `.success`
+- **Form control styling**: ComboBox, NumericUpDown, TextBox with dark theme
+- **Thin progress bar**: `.thin` variant for compact displays
+- **Layout helpers**: `.verticalSeparator`, updated Separator style
+
+### MainWindow Enhancements
+- **Redesigned sidebar**: Darker background (#0F0F0F), better spacing
+- **System status panel**: Shows current Performance Mode and Fan Mode
+- **Version display**: Shows app version in sidebar footer
+- **Connection indicator**: Color-coded status dot with text
+- **Quick actions**: Refresh Sensors and GitHub buttons
+- **Navigation tracking**: Active state properly highlights current page
+- **"Linux Edition" branding**: Distinguishes from Windows version
+
+### Dashboard Overhaul
+- **Quick status bar**: Fan summary, Performance Mode, Fan Mode, Power source in one row
+- **Session tracking**: Session uptime timer, peak CPU/GPU temperatures
+- **Throttling banner**: Warning banner when thermal throttling detected
+- **Hardware summary cards**: 5-column grid with CPU, GPU, CPU Fan, GPU Fan, Memory
+- **Interactive cards**: Hover effects on stat cards
+- **Large value display**: Temperature shown as large °C values
+- **Thin progress bars**: Compact utilization indicators
+- **System details panel**: CPU/GPU names, power draw, battery status
+- **Performance summary panel**: Usage bars with colored indicators
+
+### Fan Control Improvements
+- **Emoji icons**: Visual icons for temperature, fans, settings
+- **Real-time status cards**: 4-column grid with centered content
+- **Preset section**: Improved layout with Load and Save buttons
+- **Curve controls card**: Toggle switches for enable/link, hysteresis setting
+- **Redesigned curve editor**: Better point layout with ghost button for add
+- **Emergency stop button**: Red danger button for immediate max fan
+- **Status message banner**: Info banner for feedback
+
+### System Control Updates
+- **Performance mode cards**: 4-column visual selector with icons and descriptions
+- **Current mode badge**: Blue accent highlight showing active mode
+- **GPU mode buttons**: Full-width buttons with emoji icons
+- **Keyboard lighting section**: Brightness slider in dark panel, larger color buttons (48px)
+- **Color preview section**: Better organized RGB inputs with preview
+
+### Settings Redesign
+- **Section icons**: Emoji icons for each settings category
+- **Dark panels**: Settings grouped in #141414 backgrounds
+- **About section**: Version with accent color, inline action buttons
+- **Action buttons**: Reset on left, Cancel/Save on right
+
+### App Resources (App.axaml)
+- **Extended color palette**: Added OmenCyan, OmenYellow, status colors, temperature colors
+- **New brushes**: TertiaryTextBrush, status brushes (Success, Warning, Error, Info)
+- **Temperature brushes**: TempCold, TempWarm, TempHot, TempCritical
+- **Accent variants**: AccentLight, AccentDark, AccentTransparent
+- **Theme include**: Now properly includes OmenTheme.axaml
+
+### ViewModel Updates
+- **MainWindowViewModel**: Added PerformanceMode, FanMode, AppVersion, navigation flags, Refresh/OpenGitHub commands
+- **DashboardViewModel**: Session uptime timer, peak temps, fan summary, throttling detection, memory used/total
+- **FanControlViewModel**: Hysteresis setting, status message, SavePreset/EmergencyStop commands
+- **SystemControlViewModel**: CurrentPerformanceMode property, SetPerformanceMode command
+- **HardwareStatus**: Added CpuFanPercent, GpuFanPercent, MemoryUsedGb, MemoryTotalGb, IsThrottling, ThrottlingReason
+- **LinuxHardwareService**: Mock data now includes all new fields
+
+---
+
 ## 🔧 Technical Details
 
 ### Files Changed
@@ -73,6 +145,35 @@ At 85°C: NEW behavior → falls back to 80°C point → 80% fans ✓
 - `docs/ANTIVIRUS_FAQ.md`
   - Added Windows 11 Smart App Control section
   - Documented workarounds for blocked installer
+
+- `src/OmenCore.Linux/JsonContext.cs` (NEW)
+  - Added JSON source generator for AOT/trimming support
+  - Typed DTOs: SystemStatus, TemperatureInfo, FanInfo, PerformanceInfo
+
+- `src/OmenCore.Linux/Commands/StatusCommand.cs`
+  - Now uses source-generated JSON serializer (fixes trimming warnings)
+
+- `src/OmenCore.Linux/Program.cs`
+  - ConfigManager now uses source-generated JSON serialization
+
+- Test files (3 files)
+  - Added `ResetEcToDefaults()` to all test IFanController implementations
+
+### Linux Avalonia Files Changed
+
+- `OmenCore.Avalonia/App.axaml` - Extended color palette and brush definitions
+- `OmenCore.Avalonia/Themes/OmenTheme.axaml` - Complete styling overhaul
+- `OmenCore.Avalonia/Views/MainWindow.axaml` - Redesigned sidebar and navigation
+- `OmenCore.Avalonia/Views/DashboardView.axaml` - New dashboard layout with status bar
+- `OmenCore.Avalonia/Views/FanControlView.axaml` - Enhanced fan curve editor UI
+- `OmenCore.Avalonia/Views/SystemControlView.axaml` - Visual mode selector cards
+- `OmenCore.Avalonia/Views/SettingsView.axaml` - Reorganized with dark panels
+- `OmenCore.Avalonia/ViewModels/MainWindowViewModel.cs` - New properties and commands
+- `OmenCore.Avalonia/ViewModels/DashboardViewModel.cs` - Session tracking, peak temps
+- `OmenCore.Avalonia/ViewModels/FanControlViewModel.cs` - Emergency stop, presets
+- `OmenCore.Avalonia/ViewModels/SystemControlViewModel.cs` - Performance mode command
+- `OmenCore.Avalonia/Services/IHardwareService.cs` - Extended HardwareStatus model
+- `OmenCore.Avalonia/Services/LinuxHardwareService.cs` - Updated mock data
 
 ### Fan Curve Safety Logic
 
@@ -118,6 +219,11 @@ Normal curve operation resumes
 - **Custom curve speed offset** - Some models show different actual RPM than requested %
 - **RGB lighting on Thetiger OMN (8BCA)** - All keyboard backends unavailable
 - **UI scroll lag** - Lists with many items need virtualization
+
+### Linux-Specific
+- **2023+ OMEN models (wf0000, 13700HX)** - May require kernel 6.5+ with hp-wmi driver; ec_sys won't work on these models
+- **Ubuntu 24.04 dual-boot** - BitLocker may trigger recovery on BIOS/bootloader changes
+- **Fan control not working** - Most 2023 models only expose `thermal_profile` via hp-wmi, not direct fan speed control
 
 ### From Previous Releases
 - OMEN 14 Transcend compatibility issues
