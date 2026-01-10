@@ -365,6 +365,17 @@ namespace OmenCore.Hardware
     {
         public DateTime Timestamp { get; set; }
         
+        /// <summary>
+        /// Indicates if the sample contains fresh data from hardware sensors.
+        /// False if sensors could not be read (stale data from last successful read).
+        /// </summary>
+        public bool IsFresh { get; set; } = true;
+        
+        /// <summary>
+        /// Number of consecutive stale readings (for staleness detection)
+        /// </summary>
+        public int StaleCount { get; set; } = 0;
+        
         // CPU
         public double CpuTemperature { get; set; }
         public double CpuLoad { get; set; }

@@ -123,6 +123,7 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
             
@@ -218,8 +219,7 @@
             </UniformGrid>
             
             <!-- Quick Actions -->
-            <StackPanel Grid.Row="5" VerticalAlignment="Bottom" Margin="0,12,0,0">
-                <Border Height="1" Background="#22FFFFFF" Margin="0,0,0,12"/>
+            <StackPanel Grid.Row="6" VerticalAlignment="Bottom" Margin="0,12,0,0">
                 <UniformGrid Rows="1">
                     <Button x:Name="DisplayOffBtn" Style="{StaticResource QuickButtonStyle}" Click="DisplayOff_Click" ToolTip="Turn off display">
                         <StackPanel Orientation="Horizontal">

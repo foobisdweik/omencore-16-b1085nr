@@ -243,6 +243,10 @@ class Program
         
         lock (_lock)
         {
+            // Track if we got fresh CPU temperature this cycle
+            var previousCpuTemp = _lastSample.CpuTemperature;
+            bool cpuTempUpdated = false;
+            
             // Start with last known values to preserve data if some hardware fails
             var sample = new HardwareSample
             {
@@ -266,7 +270,9 @@ class Program
                 BatteryCharge = _lastSample.BatteryCharge,
                 BatteryDischargeRate = _lastSample.BatteryDischargeRate,
                 IsOnAc = _lastSample.IsOnAc,
-                FanSpeeds = new Dictionary<string, double>(_lastSample.FanSpeeds)
+                FanSpeeds = new Dictionary<string, double>(_lastSample.FanSpeeds),
+                IsFresh = true,  // Assume fresh until proven otherwise
+                StaleCount = 0
             };
             
             // UpdateVisitor can throw if storage goes to sleep - catch and continue
@@ -284,6 +290,7 @@ class Program
                 // Also catch nested disposed errors
             }
             
+            int hardwareUpdated = 0;
             foreach (var hardware in _computer.Hardware)
             {
                 try
@@ -295,6 +302,15 @@ class Program
                     {
                         subHardware.Update();
                         ProcessSubHardware(subHardware, sample);
+                    }
+                    
+                    hardwareUpdated++;
+                    
+                    // Check if CPU temp was updated (different from previous)
+                    if (hardware.HardwareType == HardwareType.Cpu && 
+                        Math.Abs(sample.CpuTemperature - previousCpuTemp) > 0.01)
+                    {
+                        cpuTempUpdated = true;
                     }
                 }
                 catch (Exception ex)
@@ -326,6 +342,41 @@ class Program
                 }
             }
             
+            // Detect stale data - if CPU temp hasn't changed in many readings, mark as stale
+            if (!cpuTempUpdated && sample.CpuTemperature > 0)
+            {
+                sample.StaleCount = _lastSample.StaleCount + 1;
+                
+                // If stale for 20+ cycles (about 30+ seconds), mark as not fresh
+                if (sample.StaleCount >= 20)
+                {
+                    sample.IsFresh = false;
+                    
+                    // Log once when we first detect staleness
+                    if (_lastSample.IsFresh)
+                    {
+                        File.AppendAllText(GetLogPath(), 
+                            $"[{DateTime.Now:O}] ⚠️ CPU temp appears stuck at {sample.CpuTemperature:F1}°C for {sample.StaleCount} cycles. Reinitializing sensors...\n");
+                        
+                        // Try to reinitialize CPU sensors
+                        try
+                        {
+                            var cpuHw = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Cpu);
+                            if (cpuHw != null)
+                            {
+                                cpuHw.Update();
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+            else
+            {
+                sample.StaleCount = 0;
+                sample.IsFresh = true;
+            }
+            
             sample.Timestamp = DateTime.Now;
             _lastSample = sample;
             _lastUpdate = DateTime.Now;
@@ -349,7 +400,10 @@ class Program
                     "CCD1", "CCD 1",                                        // AMD CCD fallback
                     "CCDs Max", "CCDs Average",                             // AMD multi-CCD
                     "CPU", "SoC", "Socket");                                // Generic fallbacks
-                if (cpuTemp > 0) sample.CpuTemperature = cpuTemp;
+                
+                // Always update temperature, even if 0 (indicates sensor failure/unavailable)
+                // This prevents stuck readings when sensors become temporarily unavailable
+                sample.CpuTemperature = cpuTemp;
                 
                 var cpuLoad = GetSensorValue(hardware, SensorType.Load, "CPU Total");
                 if (cpuLoad > 0) sample.CpuLoad = cpuLoad;
@@ -615,6 +669,17 @@ internal class UpdateVisitor : IVisitor
 public class HardwareSample
 {
     public DateTime Timestamp { get; set; }
+    
+    /// <summary>
+    /// Indicates if the sample contains fresh data from hardware sensors.
+    /// False if sensors could not be read (stale data from last successful read).
+    /// </summary>
+    public bool IsFresh { get; set; } = true;
+    
+    /// <summary>
+    /// Number of consecutive stale readings (for client-side staleness detection)
+    /// </summary>
+    public int StaleCount { get; set; } = 0;
     
     // CPU
     public double CpuTemperature { get; set; }

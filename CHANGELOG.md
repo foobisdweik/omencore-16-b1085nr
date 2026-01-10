@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.2] - 2026-01-10
+
+### 🐛 Bug Fixes
+- **Critical: Temperature Monitoring Freezes (#39, #40)** - Fixed temps getting stuck causing fan issues
+  - Added staleness detection to HardwareWorker and client
+  - Worker tracks consecutive identical readings and marks sample as stale
+  - Client auto-restarts worker when stale data detected for 30+ seconds
+  - Prevents fans from staying at high RPM due to frozen temperature readings
+  - Prevents thermal throttling caused by fans not responding to heat
+
+### ⚠️ Known Issues
+- **OMEN 14 Transcend** - Power mode and fan behavior may be erratic (under investigation)
+- **2023 XF Model** - Keyboard lighting requires OMEN Gaming Hub installed
+- **Windows Defender** - May flag as `Win32/Sonbokli.A!cl` (ML false positive, common for GitHub projects)
+
+---
+
 ## [2.2.1] - 2026-01-08
 
 ### ✨ New Features

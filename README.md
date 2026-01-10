@@ -12,7 +12,7 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 - ✅ **No Sign-In Required** - Full offline operation
 - 🐧 **Cross-Platform** - Windows GUI + Linux CLI & Avalonia GUI
 
-[![Version](https://img.shields.io/badge/version-2.2.1-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v2.2.1)
+[![Version](https://img.shields.io/badge/version-2.2.2-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v2.2.2)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Website](https://img.shields.io/badge/website-omencore.info-brightgreen.svg)](https://omencore.info)
@@ -20,6 +20,17 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 [![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C.svg?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=XH8CKYF8T7EBU&no_recurring=0&item_name=Thank+you+for+your+generous+donation%2C+this+will+allow+me+to+continue+developing+my+programs.&currency_code=AUD)
 
 ![OmenCore Screenshot](docs/screenshots/main-window.png)
+
+---
+
+## 🆕 What's New in v2.2.2
+
+### 🐛 Bug Fixes
+- **Critical: Temperature Monitoring Freezes (#39, #40)** - Fixed temps getting stuck causing fans to stay at high RPM or not respond to heat
+  - Added staleness detection to auto-restart monitoring when sensors freeze
+  - Prevents thermal throttling from unresponsive fan curves
+
+Full changelog: [CHANGELOG_v2.2.2.md](docs/CHANGELOG_v2.2.2.md)
 
 ---
 

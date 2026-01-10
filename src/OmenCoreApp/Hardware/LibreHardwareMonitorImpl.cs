@@ -89,6 +89,11 @@ namespace OmenCore.Hardware
         
         // BUG FIX #36: Track stuck-at-TjMax temperature readings
         private int _stuckTempReadings = 0;
+        
+        // BUG FIX: Track stuck temperature readings (any value)
+        private double _lastCpuTempReading = 0;
+        private int _consecutiveSameTempReadings = 0;
+        private const int MaxSameTempReadingsBeforeLog = 10; // 10 identical readings = stuck sensor
 
         /// <summary>
         /// Create an in-process hardware monitor (default).
@@ -305,7 +310,30 @@ namespace OmenCore.Hardware
             if (workerSample == null)
             {
                 // Worker unavailable - return cached values
+                _logger?.Invoke("[Monitor] Worker returned null sample - using cached values");
                 return BuildSampleFromCache();
+            }
+            
+            // Check for stale data from worker
+            if (!workerSample.IsFresh || workerSample.StaleCount > 30)
+            {
+                _logger?.Invoke($"[Monitor] ⚠️ Worker data is stale (StaleCount={workerSample.StaleCount}, IsFresh={workerSample.IsFresh}). Restarting worker...");
+                
+                // Restart the worker process to get fresh sensors
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _workerClient.StopAsync();
+                        await Task.Delay(500);
+                        await _workerClient.StartAsync();
+                        _logger?.Invoke("[Monitor] Worker restarted successfully");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.Invoke($"[Monitor] Failed to restart worker: {ex.Message}");
+                    }
+                });
             }
             
             // Update cache from worker sample
@@ -491,6 +519,40 @@ namespace OmenCore.Hardware
                             }
                             
                             _cachedCpuTemp = rawCpuTemp;
+                            
+                            // BUG FIX: Detect stuck temperature readings (same value repeating)
+                            if (_cachedCpuTemp > 0 && Math.Abs(_cachedCpuTemp - _lastCpuTempReading) < 0.1)
+                            {
+                                _consecutiveSameTempReadings++;
+                                if (_consecutiveSameTempReadings >= MaxSameTempReadingsBeforeLog)
+                                {
+                                    _logger?.Invoke($"⚠️ CPU temp appears stuck at {_cachedCpuTemp:F1}°C for {_consecutiveSameTempReadings} readings. Attempting sensor refresh...");
+                                    // Force hardware update to try to unstick sensor
+                                    hardware.Update();
+                                    
+                                    // Try alternative sensor
+                                    var altSensor = hardware.Sensors
+                                        .Where(s => s.SensorType == SensorType.Temperature && 
+                                                   s.Value.HasValue && 
+                                                   s.Value.Value > 20 && 
+                                                   s.Value.Value < 100 &&
+                                                   Math.Abs(s.Value.Value - _cachedCpuTemp) > 1) // Different from stuck value
+                                        .OrderByDescending(s => s.Value!.Value)
+                                        .FirstOrDefault();
+                                    
+                                    if (altSensor != null)
+                                    {
+                                        _logger?.Invoke($"Using alternative CPU temp sensor: {altSensor.Name}={altSensor.Value:F1}°C");
+                                        _cachedCpuTemp = altSensor.Value!.Value;
+                                        _consecutiveSameTempReadings = 0;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                _consecutiveSameTempReadings = 0;
+                            }
+                            _lastCpuTempReading = _cachedCpuTemp;
                             
                             // Apply temperature smoothing to reduce spurious readings
                             if (_cachedCpuTemp > 0)
