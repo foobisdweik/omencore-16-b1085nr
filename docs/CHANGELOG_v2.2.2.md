@@ -120,9 +120,9 @@ if (!workerSample.IsFresh || workerSample.StaleCount > 30)
 
 | File | SHA256 |
 |------|--------|
-| OmenCoreSetup-2.2.2.exe | `TBD` |
-| OmenCore-2.2.2-win-x64.zip | `TBD` |
-| OmenCore-2.2.2-linux-x64.zip | `TBD` |
+| OmenCoreSetup-2.2.2.exe | `D804CAC35026B2706393296FE74DA522735CC1329A0C8EE2415CFFDD0347CE97` |
+| OmenCore-2.2.2-win-x64.zip | `778B4C58D19E9DEBC9492991F2CC1801C7825CD2CB8F4A6CB3101D8DCC63E4A3` |
+| OmenCore-2.2.2-linux-x64.zip | `68ADE210855D044C797C79AC252E89334722FF31CAE417EFD597C12CDBB8671A` |
 
 ---
 
