@@ -135,9 +135,9 @@ Added new properties:
 
 ### Windows
 - **OmenCoreSetup-2.3.1.exe** - Full installer with auto-update
-  - SHA256: `TBD`
+  - SHA256: `888BA908A9A7165722B2B15EF1C348B76EF34FF0BBF8D61E8F5D6A4EABD6BC96`
 - **OmenCore-2.3.1-win-x64.zip** - Portable version
-  - SHA256: `TBD`
+  - SHA256: `0DA4CD15C0C994237A16A1E951059AEFD9B70ABCD158437FD8C0BA7F1ABB9CC0`
 
 ### Linux
 - **OmenCore-2.3.1-linux-x64.zip** - GUI + CLI bundle

@@ -305,7 +305,7 @@ class Program
                     {
                         hardware.Update();
                     }
-                    catch (ObjectDisposedException ex) when (hardware.HardwareType == HardwareType.Storage)
+                    catch (ObjectDisposedException) when (hardware.HardwareType == HardwareType.Storage)
                     {
                         // Storage drive went to sleep - this is NORMAL, skip this device
                         continue;
