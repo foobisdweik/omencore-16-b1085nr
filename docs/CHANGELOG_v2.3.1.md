@@ -141,7 +141,7 @@ Added new properties:
 
 ### Linux
 - **OmenCore-2.3.1-linux-x64.zip** - GUI + CLI bundle
-  - SHA256: `TBD`
+  - SHA256: `D6F3367867BE51C721F6C425C873EF6800DC1BB17155AD1C15DE9BACEF6A6674`
 
 ---
 
