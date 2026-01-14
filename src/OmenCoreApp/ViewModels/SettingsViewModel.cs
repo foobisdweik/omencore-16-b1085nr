@@ -2886,19 +2886,20 @@ namespace OmenCore.ViewModels
                     DefaultExt = ".omencore"
                 };
                 
-                if (dialog.ShowDialog() != true)
+                if (dialog.ShowDialog() != true || string.IsNullOrEmpty(dialog.FileName))
                     return;
                 
-                var profile = await _profileExportService.ImportProfileAsync(dialog.FileName);
+                var fileName = dialog.FileName!; // Guaranteed non-null after ShowDialog() == true check
+                var profile = await _profileExportService.ImportProfileAsync(fileName);
                 
                 // Show import options dialog
                 var result = MessageBox.Show(
-                    $"Import profile from {Path.GetFileName(dialog.FileName)}?\\n\\n" +
-                    $"This will apply:\\n" +
-                    $"• {profile.FanPresets?.Count ?? 0} fan preset(s)\\n" +
-                    $"• {profile.PerformanceModes?.Count ?? 0} performance mode(s)\\n" +
-                    $"• {profile.GpuOcProfiles?.Count ?? 0} GPU OC profile(s)\\n" +
-                    $"• Battery & hysteresis settings\\n\\n" +
+                    $"Import profile from {Path.GetFileName(fileName)}?\n\n" +
+                    $"This will apply:\n" +
+                    $"• {profile.FanPresets?.Count ?? 0} fan preset(s)\n" +
+                    $"• {profile.PerformanceModes?.Count ?? 0} performance mode(s)\n" +
+                    $"• {profile.GpuOcProfiles?.Count ?? 0} GPU OC profile(s)\n" +
+                    $"• Battery & hysteresis settings\n\n" +
                     "Existing settings will be overwritten.",
                     "Import Profile",
                     MessageBoxButton.YesNo,
@@ -2907,13 +2908,13 @@ namespace OmenCore.ViewModels
                 if (result != MessageBoxResult.Yes)
                     return;
                 
-                _profileExportService.ApplyProfile(profile, _config);
+                _profileExportService.ApplyProfile(profile!, _config); // profile is guaranteed non-null here
                 _configService.Save(_config);
                 
-                _logging.Info($"Profile imported successfully from {dialog.FileName}");
+                _logging.Info($"Profile imported successfully from {fileName}");
                 
                 MessageBox.Show(
-                    "Profile imported successfully!\\n\\n" +
+                    "Profile imported successfully!\n\n" +
                     "Settings have been applied. Some changes may require restarting the app.",
                     "Import Complete",
                     MessageBoxButton.OK,

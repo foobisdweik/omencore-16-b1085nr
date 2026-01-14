@@ -51,28 +51,28 @@ namespace OmenCore.ViewModels
         private readonly FanService _fanService = null!;
         private readonly IFanVerificationService _fanVerificationService = null!;
         private readonly PerformanceModeService _performanceModeService = null!;
-        private readonly KeyboardLightingService _keyboardLightingService;
-        private readonly SystemOptimizationService _systemOptimizationService;
-        private readonly GpuSwitchService _gpuSwitchService;
+        private readonly KeyboardLightingService _keyboardLightingService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly SystemOptimizationService _systemOptimizationService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly GpuSwitchService _gpuSwitchService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
         private CorsairDeviceService? _corsairDeviceService;
         private LogitechDeviceService? _logitechDeviceService;
         private OmenCore.Razer.RazerService? _razerService;
         private readonly MacroService _macroService = new();
-        private readonly UndervoltService _undervoltService;
-        private readonly HardwareMonitoringService _hardwareMonitoringService;
-        private readonly SystemRestoreService _systemRestoreService;
-        private readonly OmenGamingHubCleanupService _hubCleanupService;
-        private readonly SystemInfoService _systemInfoService;
-        private readonly AutoUpdateService _autoUpdateService;
-        private readonly UpdateCheckService _updateCheckService;
-        private readonly ProcessMonitoringService _processMonitoringService;
-        private readonly GameProfileService _gameProfileService;
-        private readonly FanCleaningService _fanCleaningService;
-        private readonly HotkeyService _hotkeyService;
-        private readonly NotificationService _notificationService;
-        private readonly BiosUpdateService _biosUpdateService;
-        private readonly PowerAutomationService _powerAutomationService;
-        private readonly OmenKeyService _omenKeyService;
+        private readonly UndervoltService _undervoltService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly HardwareMonitoringService _hardwareMonitoringService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly SystemRestoreService _systemRestoreService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly OmenGamingHubCleanupService _hubCleanupService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly SystemInfoService _systemInfoService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly AutoUpdateService _autoUpdateService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly UpdateCheckService _updateCheckService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly ProcessMonitoringService _processMonitoringService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly GameProfileService _gameProfileService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly FanCleaningService _fanCleaningService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly HotkeyService _hotkeyService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly NotificationService _notificationService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly BiosUpdateService _biosUpdateService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly PowerAutomationService _powerAutomationService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly OmenKeyService _omenKeyService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
         private readonly OsdService? _osdService;
         private readonly HpWmiBios? _wmiBios;
         private readonly OghServiceProxy? _oghProxy;
@@ -260,21 +260,21 @@ namespace OmenCore.ViewModels
             }
         }
         
-        private readonly AsyncRelayCommand _applyUndervoltCommand;
-        private readonly AsyncRelayCommand _resetUndervoltCommand;
-        private readonly AsyncRelayCommand _refreshUndervoltCommand;
-        private readonly AsyncRelayCommand _createRestorePointCommand;
-        private readonly AsyncRelayCommand _cleanupOmenHubCommand;
-        private readonly AsyncRelayCommand _installUpdateCommand;
-        private readonly AsyncRelayCommand _checkForUpdatesCommand;
-        private readonly RelayCommand _takeUndervoltControlCommand;
-        private readonly RelayCommand _respectExternalUndervoltCommand;
-        private readonly RelayCommand _stopMacroRecordingInternalCommand;
-        private readonly RelayCommand _saveRecordedMacroInternalCommand;
-        private readonly AsyncRelayCommand _applyLogitechColorInternalCommand;
-        private readonly AsyncRelayCommand _syncCorsairThemeInternalCommand;
-        private readonly RelayCommand _openReleaseNotesCommand;
-        private readonly RelayCommand _openGameProfileManagerCommand;
+        private readonly AsyncRelayCommand _applyUndervoltCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly AsyncRelayCommand _resetUndervoltCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly AsyncRelayCommand _refreshUndervoltCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly AsyncRelayCommand _createRestorePointCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly AsyncRelayCommand _cleanupOmenHubCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly AsyncRelayCommand _installUpdateCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly AsyncRelayCommand _checkForUpdatesCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly RelayCommand _takeUndervoltControlCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly RelayCommand _respectExternalUndervoltCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly RelayCommand _stopMacroRecordingInternalCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly RelayCommand _saveRecordedMacroInternalCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly AsyncRelayCommand _applyLogitechColorInternalCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly AsyncRelayCommand _syncCorsairThemeInternalCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly RelayCommand _openReleaseNotesCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly RelayCommand _openGameProfileManagerCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
         private readonly INotifyCollectionChanged? _macroBufferNotifier;
         private readonly StringBuilder _logBuffer = new();
 
@@ -342,7 +342,7 @@ namespace OmenCore.ViewModels
         public ObservableCollection<string> OmenCleanupSteps { get; } = new();
         public ReadOnlyObservableCollection<GameProfile> GameProfiles => _gameProfileService.Profiles;
         
-        public OmenCore.Models.SystemInfo SystemInfo { get; private set; }
+        public OmenCore.Models.SystemInfo SystemInfo { get; private set; } = null!; // TODO: Initialize in constructor (#v2.4.0)
         
         /// <summary>
         /// Device capabilities detected at startup.
@@ -530,8 +530,8 @@ namespace OmenCore.ViewModels
             }
         }
 
-        public ReadOnlyObservableCollection<ThermalSample> ThermalSamples { get; }
-        public ReadOnlyObservableCollection<FanTelemetry> FanTelemetry { get; }
+        public ReadOnlyObservableCollection<ThermalSample> ThermalSamples { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ReadOnlyObservableCollection<FanTelemetry> FanTelemetry { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
         public ReadOnlyObservableCollection<MonitoringSample> MonitoringSamples { get; } = null!;
         public MonitoringSample? LatestMonitoringSample
         {
@@ -1056,50 +1056,50 @@ namespace OmenCore.ViewModels
             }
         }
 
-        public ICommand ApplyFanPresetCommand { get; }
-        public ICommand SaveCustomPresetCommand { get; }
-        public ICommand ApplyFanCurveCommand { get; }
-        public ICommand ApplyPerformanceModeCommand { get; }
-        public ICommand ApplyLightingProfileCommand { get; }
-        public ICommand ToggleAnimationsCommand { get; }
-        public ICommand GamingModeCommand { get; }
-        public ICommand RestoreDefaultsCommand { get; }
-        public ICommand SwitchGpuCommand { get; }
-        public ICommand ReloadConfigCommand { get; }
-        public ICommand OpenConfigFolderCommand { get; }
-        public ICommand DiscoverCorsairCommand { get; }
-        public ICommand ApplyCorsairLightingCommand { get; }
-        public ICommand SaveCorsairDpiCommand { get; }
-        public ICommand ApplyMacroCommand { get; }
-        public ICommand SyncCorsairThemeCommand { get; }
-        public ICommand StartMacroRecordingCommand { get; }
-        public ICommand StopMacroRecordingCommand { get; }
-        public ICommand SaveRecordedMacroCommand { get; }
-        public ICommand OpenAboutCommand { get; }
-        public ICommand ToggleServiceCommand { get; }
-        public ICommand ToggleLowOverheadModeCommand { get; }
-        public ICommand ApplyUndervoltCommand { get; }
-        public ICommand ResetUndervoltCommand { get; }
-        public ICommand RefreshUndervoltCommand { get; }
-        public ICommand TakeUndervoltControlCommand { get; }
-        public ICommand RespectExternalUndervoltCommand { get; }
-        public ICommand DiscoverLogitechCommand { get; }
-        public ICommand ApplyLogitechColorCommand { get; }
-        public ICommand CreateRestorePointCommand { get; }
-        public ICommand CleanupOmenHubCommand { get; }
-        public ICommand InstallUpdateCommand { get; }
-        public ICommand CheckForUpdatesCommand { get; }
-        public ICommand OpenReleaseNotesCommand { get; }
-        public ICommand OpenUpdateUrlCommand { get; }
-        public ICommand OpenGameProfileManagerCommand { get; }
-        public ICommand ExportConfigurationCommand { get; }
-        public ICommand ImportConfigurationCommand { get; }
+        public ICommand ApplyFanPresetCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand SaveCustomPresetCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ApplyFanCurveCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ApplyPerformanceModeCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ApplyLightingProfileCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ToggleAnimationsCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand GamingModeCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand RestoreDefaultsCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand SwitchGpuCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ReloadConfigCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand OpenConfigFolderCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand DiscoverCorsairCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ApplyCorsairLightingCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand SaveCorsairDpiCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ApplyMacroCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand SyncCorsairThemeCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand StartMacroRecordingCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand StopMacroRecordingCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand SaveRecordedMacroCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand OpenAboutCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ToggleServiceCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ToggleLowOverheadModeCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ApplyUndervoltCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ResetUndervoltCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand RefreshUndervoltCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand TakeUndervoltControlCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand RespectExternalUndervoltCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand DiscoverLogitechCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ApplyLogitechColorCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand CreateRestorePointCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand CleanupOmenHubCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand InstallUpdateCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand CheckForUpdatesCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand OpenReleaseNotesCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand OpenUpdateUrlCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand OpenGameProfileManagerCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ExportConfigurationCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ImportConfigurationCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
 
         // Expose Fan Diagnostics VM
-        public FanDiagnosticsViewModel FanDiagnostics { get; private set; }
+        public FanDiagnosticsViewModel FanDiagnostics { get; private set; } = null!; // TODO: Initialize in constructor (#v2.4.0)
 
         // Expose Keyboard Diagnostics VM
-        public KeyboardDiagnosticsViewModel KeyboardDiagnostics { get; private set; }
+        public KeyboardDiagnosticsViewModel KeyboardDiagnostics { get; private set; } = null!; // TODO: Initialize in constructor (#v2.4.0)
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
