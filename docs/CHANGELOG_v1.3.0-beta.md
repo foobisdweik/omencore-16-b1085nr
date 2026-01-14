@@ -469,7 +469,7 @@ As this is a beta release, please report:
 - Does **Fan Hysteresis** reduce annoying fan oscillation?
 - Do **Tray Quick Profiles** work correctly for fast switching?
 
-**Discord:** https://discord.gg/ahcUC2Un  
+**Discord:** https://discord.gg/HSrSgmM4  
 **GitHub Issues:** https://github.com/theantipopau/omencore/issues
 
 ---

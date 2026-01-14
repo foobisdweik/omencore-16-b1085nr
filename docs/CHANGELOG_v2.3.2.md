@@ -48,6 +48,13 @@ This release adds critical desktop safety protections and fixes multiple bugs re
 - **Reporter**: @its-urbi
 - **Files**: `MainWindow.xaml`
 
+### ✅ **Scroll Lock/Pause Keys Triggering OmenCore** (Fixed) - GitHub #46
+- **Symptom**: Pressing Scroll Lock or Pause key opens OmenCore window
+- **Root Cause**: Scroll Lock scan code (0x46) was in OMEN key scan code list
+- **Fix**: Added explicit VK code exclusion for Scroll Lock (0x91), Pause (0x13), and Num Lock (0x90)
+- **Reporter**: @SY-07
+- **Files**: `OmenKeyService.cs`
+
 ### ✅ **Window Minimum Size Reduced**
 - **Change**: Reduced minimum size from 900×600 to 850×550
 - **Reporter**: @replaY!
@@ -107,13 +114,13 @@ This release adds critical desktop safety protections and fixes multiple bugs re
 
 ### Windows
 - **OmenCoreSetup-2.3.2.exe** - Full installer with auto-update
-  - SHA256: `8F69EB1C9904B986E233463B8503255026D2AF00696F4CB21114BF3FDA93187D`
+  - SHA256: `F35C0EE28DB9FB54099167289974C451C6D47940504F79C0771FD23FCA7588A8`
 - **OmenCore-2.3.2-win-x64.zip** - Portable version
-  - SHA256: `BB960CD320C451857B890E228B144B0633212E719F45CB4DBBAEF6A19C5988DD`
+  - SHA256: `3524B11CC319B312A095693CBFA26C269F6950BD815272B14B220ABCCB7CA70C`
 
 ### Linux
 - **OmenCore-2.3.2-linux-x64.zip** - GUI + CLI bundle
-  - SHA256: `1DDC02599E4CA008A328A519D12F68AF02E375DB42BB242C91609293CF215A12`
+  - SHA256: `91D3E3A21334AB868458D757CD991713F814361E585599ED81B1A27D288F65BE`
 
 ---
 
@@ -123,6 +130,7 @@ This release adds critical desktop safety protections and fixes multiple bugs re
 - **PackRare5146** (Reddit) - OMEN 40L Desktop damage report ⚠️
 - **xenon205** (GitHub #44) - OMEN 17-ck1xxx fan presets broken
 - **its-urbi** (GitHub #45) - Window rounded corners issue
+- **SY-07** (GitHub #46) - Scroll Lock/Pause key false trigger, Discord invite expired
 - **dfshsu** (Discord) - Linux GUI crash on Debian 13
 - **SlopeSlayer910** (Discord) - Linux GUI crash on Ubuntu 24.04
 - **SimplyCarrying** (Discord) - OSD not updating, FPS counter issue

@@ -981,7 +981,7 @@ Features will be prioritized based on:
 
 **Feedback Channels:**
 - [GitHub Issues](https://github.com/Jeyloh/OmenCore/issues)
-- [Discord Server](https://discord.gg/ahcUC2Un)
+- [Discord Server](https://discord.gg/HSrSgmM4)
 - [Reddit r/HPOmen](https://reddit.com/r/HPOmen)
 
 ---

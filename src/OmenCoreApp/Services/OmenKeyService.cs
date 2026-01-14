@@ -50,6 +50,11 @@ namespace OmenCore.Services
         private const int VK_BRIGHTNESS_UP = 0x71;    // F2 - brightness up
         private const int VK_F2 = 0x71;               // F2
         private const int VK_F3 = 0x72;               // F3
+        
+        // Additional keys that must NEVER be treated as OMEN key (GitHub #46)
+        private const int VK_SCROLL_LOCK = 0x91;      // Scroll Lock - scan code 0x46 conflicts with OMEN
+        private const int VK_PAUSE = 0x13;            // Pause/Break key
+        private const int VK_NUM_LOCK = 0x90;         // Num Lock
 
         // HP OMEN-specific scan codes (varies by model)
         private static readonly int[] OmenScanCodes = { 0xE045, 0xE046, 0x0046, 0x009D };
@@ -532,6 +537,15 @@ namespace OmenCore.Services
 
         private bool IsOmenKey(uint vkCode, uint scanCode)
         {
+            // CRITICAL: Exclude Scroll Lock, Pause, and Num Lock keys (GitHub #46)
+            // Scroll Lock has scan code 0x46 which conflicts with OMEN scan codes
+            // These are standard keyboard keys that should NEVER trigger OmenCore
+            if (vkCode == VK_SCROLL_LOCK || vkCode == VK_PAUSE || vkCode == VK_NUM_LOCK)
+            {
+                _logging.Debug($"Excluded lock key: VK=0x{vkCode:X2}, Scan=0x{scanCode:X4} - NOT OMEN key");
+                return false;
+            }
+            
             // CRITICAL: Exclude brightness keys and other function keys that should never trigger OMEN actions
             // These keys are commonly used with Fn modifier and can conflict with OMEN key detection
             // Issue #42: Fn+F2/F3 brightness keys incorrectly triggering OmenCore
