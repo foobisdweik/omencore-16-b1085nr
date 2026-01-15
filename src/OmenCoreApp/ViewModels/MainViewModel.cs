@@ -320,6 +320,7 @@ namespace OmenCore.ViewModels
         private string _appVersionLabel = "v0.0.0";
         private string _currentFanMode = "Auto";
         private string _currentPerformanceMode = "Balanced";
+        private bool _logsCollapsed = false; // GitHub #48: Collapsible logs (its-urbi)
         
         // Session tracking (v2.2)
         private readonly DateTime _sessionStartTime = DateTime.Now;
@@ -478,6 +479,23 @@ namespace OmenCore.ViewModels
                 }
             }
         }
+        
+        public bool LogsCollapsed
+        {
+            get => _logsCollapsed;
+            set
+            {
+                if (_logsCollapsed != value)
+                {
+                    _logsCollapsed = value;
+                    OnPropertyChanged(nameof(LogsCollapsed));
+                    OnPropertyChanged(nameof(LogsToggleText));
+                }
+            }
+        }
+        
+        public string LogsToggleText => _logsCollapsed ? "🔼 Show Logs" : "🔽 Hide Logs";
+        
         public string UpdateBannerMessage
         {
             get => _updateBannerMessage;
@@ -1093,6 +1111,9 @@ namespace OmenCore.ViewModels
         public ICommand OpenUpdateUrlCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
         public ICommand OpenGameProfileManagerCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
         public ICommand ExportConfigurationCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ToggleLogsCommand { get; } // GitHub #48: Collapsible logs (its-urbi)
+        
+        private void ToggleLogs() => LogsCollapsed = !LogsCollapsed;
         public ICommand ImportConfigurationCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
 
         // Expose Fan Diagnostics VM
@@ -1398,6 +1419,7 @@ namespace OmenCore.ViewModels
             OpenGameProfileManagerCommand = _openGameProfileManagerCommand;
             ExportConfigurationCommand = new AsyncRelayCommand(_ => ExportConfigurationAsync());
             ImportConfigurationCommand = new AsyncRelayCommand(_ => ImportConfigurationAsync());
+            ToggleLogsCommand = new RelayCommand(_ => ToggleLogs()); // GitHub #48: Collapsible logs
 
             _logging.LogEmitted += HandleLogLine;
 
@@ -1653,29 +1675,9 @@ namespace OmenCore.ViewModels
                 {
                     _availableUpdate = null;
                     _updateInstallBlocked = false;
-                    if (showStatus)
-                    {
-                        UpdateBannerMessage = "You are running the latest version.";
-                        UpdateBannerVisible = true;
-                        // Auto-hide after 3 seconds
-                        _ = Task.Run(async () =>
-                        {
-                            await Task.Delay(3000);
-                            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-                            {
-                                if (UpdateBannerMessage == "You are running the latest version.")
-                                {
-                                    UpdateBannerVisible = false;
-                                    UpdateBannerMessage = string.Empty;
-                                }
-                            });
-                        });
-                    }
-                    else
-                    {
-                        UpdateBannerVisible = false;
-                        UpdateBannerMessage = string.Empty;
-                    }
+                    // GitHub #48: Don't show banner when on latest version (kg290's request)
+                    UpdateBannerVisible = false;
+                    UpdateBannerMessage = string.Empty;
                 }
             }
             catch (Exception ex)
