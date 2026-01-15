@@ -181,13 +181,13 @@ public class FanCurveEngine : IDisposable
         // Below minimum temp
         if (temp <= points[0].Temp)
         {
-            return points[0].Speed;
+            return Math.Clamp(points[0].Speed, 0, 100);  // Safety: Prevent runaway (GitHub #49)
         }
         
         // Above maximum temp
         if (temp >= points[^1].Temp)
         {
-            return points[^1].Speed;
+            return Math.Clamp(points[^1].Speed, 0, 100);  // Safety: Prevent runaway (GitHub #49)
         }
         
         // Find the two points to interpolate between
@@ -203,7 +203,8 @@ public class FanCurveEngine : IDisposable
                 var speedRange = p2.Speed - p1.Speed;
                 var tempOffset = temp - p1.Temp;
                 
-                return p1.Speed + (speedRange * tempOffset / tempRange);
+                var speed = p1.Speed + (speedRange * tempOffset / tempRange);
+                return Math.Clamp(speed, 0, 100);  // Safety: Prevent runaway (GitHub #49)
             }
         }
         

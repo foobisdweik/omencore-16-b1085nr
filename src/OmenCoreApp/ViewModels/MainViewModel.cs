@@ -1111,7 +1111,7 @@ namespace OmenCore.ViewModels
         public ICommand OpenUpdateUrlCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
         public ICommand OpenGameProfileManagerCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
         public ICommand ExportConfigurationCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ToggleLogsCommand { get; } // GitHub #48: Collapsible logs (its-urbi)
+        public ICommand ToggleLogsCommand { get; } = null!; // GitHub #48: Collapsible logs (its-urbi) - initialized in constructor
         
         private void ToggleLogs() => LogsCollapsed = !LogsCollapsed;
         public ICommand ImportConfigurationCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)

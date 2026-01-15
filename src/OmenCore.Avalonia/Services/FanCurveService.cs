@@ -158,7 +158,8 @@ public class FanCurveService : IFanCurveService
             if (temp >= curve[i].Temperature && temp <= curve[i + 1].Temperature)
             {
                 var t = (double)(temp - curve[i].Temperature) / (curve[i + 1].Temperature - curve[i].Temperature);
-                return (int)(curve[i].FanSpeed + t * (curve[i + 1].FanSpeed - curve[i].FanSpeed));
+                var speed = (int)(curve[i].FanSpeed + t * (curve[i + 1].FanSpeed - curve[i].FanSpeed));
+                return Math.Clamp(speed, 0, 100);  // Safety: Prevent runaway from corrupted curve data (GitHub #49)
             }
         }
         

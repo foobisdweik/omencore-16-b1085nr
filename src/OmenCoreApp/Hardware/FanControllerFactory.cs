@@ -151,8 +151,15 @@ namespace OmenCore.Hardware
             {
                 ActiveBackend = "WMI BIOS";
                 _logging?.Info("✓ Using WMI-based fan controller (OGH-independent, no driver required)");
+                _logging?.Info("  Backend: HP WMI BIOS (HPWMISVC)");
+                _logging?.Info("  Advantages: No additional drivers, Secure Boot compatible, OGH-independent");
                 return wmiController;
             }
+            
+            // Fallback diagnostics: WMI BIOS unavailable
+            _logging?.Warn("⚠️ WMI BIOS fan control not available on this system");
+            _logging?.Info("  Possible reasons: Non-HP laptop, old BIOS, HPWMISVC not running");
+            _logging?.Info("  Trying fallback: EC Direct access...");
 
             // Priority 2: EC Direct via PawnIO (Secure Boot compatible, OGH-independent)
             var ecController = TryCreateEcController();
@@ -160,8 +167,15 @@ namespace OmenCore.Hardware
             {
                 ActiveBackend = "EC Direct";
                 _logging?.Info("✓ Using EC-based fan controller (OGH-independent, requires PawnIO/WinRing0)");
+                _logging?.Info($"  Backend: {_ecAccess?.GetType().Name ?? "Unknown EC access"}");
+                _logging?.Info("  Advantages: Direct hardware control, works on older models");
                 return ecController;
             }
+            
+            // Fallback diagnostics: EC access unavailable
+            _logging?.Warn("⚠️ EC Direct fan control not available");
+            _logging?.Info("  Possible reasons: WinRing0/PawnIO not loaded, Secure Boot blocking driver");
+            _logging?.Info("  Trying fallback: OGH proxy...");
 
             // Priority 3: OGH proxy as last resort (requires OGH services)
             // Only used if WMI BIOS and EC both fail
@@ -170,13 +184,24 @@ namespace OmenCore.Hardware
             {
                 ActiveBackend = "OGH Proxy";
                 _logging?.Warn("⚠️ Using OGH proxy (WMI BIOS unavailable on this model)");
-                _logging?.Info("  Consider reporting your model for native support");
+                _logging?.Info("  Backend: OMEN Gaming Hub WMI proxy");
+                _logging?.Info("  Limitation: Requires OGH services running, profile-based only");
+                _logging?.Info("  Consider reporting your model for native WMI BIOS support");
                 return oghController;
             }
+            
+            // Fallback diagnostics: All control methods failed
+            _logging?.Error("❌ All fan control backends unavailable:");
+            _logging?.Error("  - WMI BIOS: Not available (HP WMI class missing or BIOS too old)");
+            _logging?.Error($"  - EC Direct: {(_ecAccess == null ? "No EC access driver" : "EC not ready")}");
+            _logging?.Error("  - OGH Proxy: Not available (OGH not installed or services not running)");
+            _logging?.Info("  Falling back to monitoring-only mode (no fan control)");
 
             // Last resort: fallback controller with monitoring only
             ActiveBackend = "Monitoring Only";
             _logging?.Warn("⚠️ No fan control backend available - using monitoring-only mode");
+            _logging?.Info("  Sensors will still work, but fan control will be unavailable");
+            _logging?.Info("  Please report this configuration on GitHub for potential support");
             return new FallbackFanController(_hwMonitor, _logging);
         }
 
