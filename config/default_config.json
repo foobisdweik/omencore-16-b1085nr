@@ -10,9 +10,11 @@
       "name": "Quiet",
       "isBuiltIn": true,
       "curve": [
-        { "temperatureC": 40, "fanPercent": 20 },
-        { "temperatureC": 70, "fanPercent": 45 },
-        { "temperatureC": 85, "fanPercent": 65 }
+        { "temperatureC": 50, "fanPercent": 25 },
+        { "temperatureC": 60, "fanPercent": 30 },
+        { "temperatureC": 68, "fanPercent": 45 },
+        { "temperatureC": 75, "fanPercent": 60 },
+        { "temperatureC": 85, "fanPercent": 75 }
       ]
     },
     {

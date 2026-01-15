@@ -1047,12 +1047,15 @@ namespace OmenCore.ViewModels
         private static List<FanCurvePoint> GetQuietCurve()
         {
             // Silent mode: delayed fan ramp, allows higher temps for quiet operation
+            // GitHub #47: Tuned to prevent 75°C overheat during sustained loads (movie playback)
+            // Now ramps more aggressively at 65°C+ to keep temps below 70°C under sustained load
             return new List<FanCurvePoint>
             {
                 new() { TemperatureC = 50, FanPercent = 25 },
-                new() { TemperatureC = 65, FanPercent = 35 },
-                new() { TemperatureC = 75, FanPercent = 50 },
-                new() { TemperatureC = 85, FanPercent = 70 },
+                new() { TemperatureC = 60, FanPercent = 30 },  // Earlier ramp
+                new() { TemperatureC = 68, FanPercent = 45 },  // More aggressive at warm temps
+                new() { TemperatureC = 75, FanPercent = 60 },  // Increased from 50% to 60%
+                new() { TemperatureC = 85, FanPercent = 75 },  // Increased from 70% to 75%
                 new() { TemperatureC = 95, FanPercent = 100 }
             };
         }
