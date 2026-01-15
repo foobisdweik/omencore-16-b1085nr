@@ -14,7 +14,7 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
             <TextBlock Text="Settings" 
                        FontSize="28" FontWeight="Bold" 
                        Foreground="{StaticResource TextPrimaryBrush}"/>
@@ -25,11 +25,16 @@
                        Margin="0,4,0,0"/>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" Style="{StaticResource SmoothScrollViewer}" 
-                      utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="1.2"
-                      IsDeferredScrollingEnabled="True">
-            <StackPanel>
-                <!-- System Status Section -->
+        <!-- Sub-tabs for easier navigation (GitHub #48 - kg290) -->
+        <TabControl Grid.Row="1" Style="{StaticResource ModernTabControl}" ItemContainerStyle="{StaticResource ModernTabItem}" Margin="0,8,0,0">
+            <!-- Status Tab -->
+            <TabItem Header="Status">
+                <ScrollViewer Style="{StaticResource SmoothScrollViewer}" 
+                              utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="1.2"
+                              IsDeferredScrollingEnabled="True"
+                              Padding="0,0,12,0">
+                    <StackPanel>
+                        <!-- System Status Section -->
                 <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
@@ -2088,6 +2093,8 @@
                 </Border>
             </StackPanel>
         </ScrollViewer>
+            </TabItem>
+        </TabControl>
         
         <!-- Loading Overlay -->
         <controls:LoadingOverlay Grid.RowSpan="2" Panel.ZIndex="1000" />

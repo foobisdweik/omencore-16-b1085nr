@@ -414,6 +414,11 @@
                     <views:AdvancedView DataContext="{Binding}" />
                 </TabItem>
                 
+                <!-- Diagnostics Tab: Fan and Keyboard Testing (GitHub #48 - kg290) -->
+                <TabItem Header="Diagnostics">
+                    <views:DiagnosticsView DataContext="{Binding}" />
+                </TabItem>
+                
                 <!-- Monitoring Tab with Dashboard View -->
                 <TabItem Header="Monitoring">
                     <views:DashboardView DataContext="{Binding Dashboard}" />
