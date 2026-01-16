@@ -7,6 +7,13 @@
              xmlns:utils="clr-namespace:OmenCore.Utils"
              mc:Ignorable="d" 
              d:DesignHeight="800" d:DesignWidth="1200">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/Styles/ModernStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
     <ScrollViewer Style="{StaticResource SmoothScrollViewer}" 
                   utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="1.2"
                   Padding="0,0,12,0">

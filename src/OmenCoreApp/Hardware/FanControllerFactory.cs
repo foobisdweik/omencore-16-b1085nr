@@ -587,8 +587,27 @@ namespace OmenCore.Hardware
 
         public bool SetMaxFanSpeed(bool enabled)
         {
-            // EC controller: set max speed via curve
-            return SetFanSpeed(enabled ? 100 : 50);
+            try
+            {
+                if (enabled)
+                {
+                    // Use optimized SetMaxSpeed method with fan boost
+                    _controller.SetMaxSpeed();
+                    _logging?.Info("EC: Max fan speed enabled with fan boost");
+                }
+                else
+                {
+                    // Restore auto control to BIOS
+                    _controller.RestoreAutoControl();
+                    _logging?.Info("EC: Restored auto control");
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logging?.Error($"Failed to set max fan speed: {ex.Message}", ex);
+                return false;
+            }
         }
 
         public bool SetPerformanceMode(string modeName)
@@ -617,8 +636,18 @@ namespace OmenCore.Hardware
 
         public bool RestoreAutoControl()
         {
-            // EC controller: set moderate speed as "auto"
-            return SetFanSpeed(50);
+            try
+            {
+                // Use proper EC auto control restoration
+                _controller.RestoreAutoControl();
+                _logging?.Info("EC: Restored BIOS auto fan control");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logging?.Error($"Failed to restore auto control: {ex.Message}", ex);
+                return false;
+            }
         }
 
         public IEnumerable<FanTelemetry> ReadFanSpeeds() => _controller.ReadFanSpeeds();

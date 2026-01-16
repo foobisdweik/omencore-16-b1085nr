@@ -41,6 +41,11 @@ namespace OmenCoreApp.Tests.ViewModels
             {
                 return (rpm: 800 + fanIndex * 100, level: 10 + fanIndex);
             }
+            
+            public (int rpm, int level, RpmSource source) GetCurrentFanStateWithSource(int fanIndex)
+            {
+                return (rpm: 800 + fanIndex * 100, level: 10 + fanIndex, source: RpmSource.Estimated);
+            }
 
             public Task<(int avg, int min, int max)> GetStableFanRpmAsync(int fanIndex, int samples = 3, CancellationToken ct = default)
             {

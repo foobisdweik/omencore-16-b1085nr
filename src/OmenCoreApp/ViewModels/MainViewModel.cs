@@ -51,28 +51,28 @@ namespace OmenCore.ViewModels
         private readonly FanService _fanService = null!;
         private readonly IFanVerificationService _fanVerificationService = null!;
         private readonly PerformanceModeService _performanceModeService = null!;
-        private readonly KeyboardLightingService _keyboardLightingService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly SystemOptimizationService _systemOptimizationService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly GpuSwitchService _gpuSwitchService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly KeyboardLightingService _keyboardLightingService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly SystemOptimizationService _systemOptimizationService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly GpuSwitchService _gpuSwitchService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
         private CorsairDeviceService? _corsairDeviceService;
         private LogitechDeviceService? _logitechDeviceService;
         private OmenCore.Razer.RazerService? _razerService;
         private readonly MacroService _macroService = new();
-        private readonly UndervoltService _undervoltService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly HardwareMonitoringService _hardwareMonitoringService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly SystemRestoreService _systemRestoreService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly OmenGamingHubCleanupService _hubCleanupService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly SystemInfoService _systemInfoService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly AutoUpdateService _autoUpdateService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly UpdateCheckService _updateCheckService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly ProcessMonitoringService _processMonitoringService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly GameProfileService _gameProfileService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly FanCleaningService _fanCleaningService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly HotkeyService _hotkeyService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly NotificationService _notificationService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly BiosUpdateService _biosUpdateService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly PowerAutomationService _powerAutomationService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly OmenKeyService _omenKeyService = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly UndervoltService _undervoltService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly HardwareMonitoringService _hardwareMonitoringService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly SystemRestoreService _systemRestoreService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly OmenGamingHubCleanupService _hubCleanupService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly SystemInfoService _systemInfoService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly AutoUpdateService _autoUpdateService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly UpdateCheckService _updateCheckService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly ProcessMonitoringService _processMonitoringService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly GameProfileService _gameProfileService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly FanCleaningService _fanCleaningService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly HotkeyService _hotkeyService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly NotificationService _notificationService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly BiosUpdateService _biosUpdateService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly PowerAutomationService _powerAutomationService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly OmenKeyService _omenKeyService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
         private readonly OsdService? _osdService;
         private readonly HpWmiBios? _wmiBios;
         private readonly OghServiceProxy? _oghProxy;

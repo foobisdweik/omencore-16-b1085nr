@@ -51,7 +51,7 @@ namespace OmenCoreApp.Tests.Hardware
             
             // Assert
             act.Should().Throw<InvalidOperationException>()
-                .WithMessage("*EC bridge*not ready*");
+                .WithMessage("*WinRing0*not ready*");
         }
 
         [Fact]

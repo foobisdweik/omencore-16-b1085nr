@@ -39,6 +39,16 @@ namespace OmenCore.ViewModels
         private int _currentLevel;
         public int CurrentLevel { get => _currentLevel; set { _currentLevel = value; OnPropertyChanged(); } }
         
+        private string _rpmSourceDisplay = "?";
+        /// <summary>
+        /// Display string for RPM data source (EC, HWMon, MAB, Est).
+        /// </summary>
+        public string RpmSourceDisplay 
+        { 
+            get => _rpmSourceDisplay; 
+            set { _rpmSourceDisplay = value; OnPropertyChanged(); } 
+        }
+        
         /// <summary>
         /// Whether a diagnostic test is currently running.
         /// </summary>
@@ -71,9 +81,18 @@ namespace OmenCore.ViewModels
         {
             try
             {
-                var (rpm, level) = _verifier.GetCurrentFanState(SelectedFanIndex);
+                var (rpm, level, source) = _verifier.GetCurrentFanStateWithSource(SelectedFanIndex);
                 CurrentRpm = rpm;
                 CurrentLevel = level;
+                RpmSourceDisplay = source switch
+                {
+                    RpmSource.EcDirect => "EC",
+                    RpmSource.HardwareMonitor => "HWMon",
+                    RpmSource.Afterburner => "MAB",
+                    RpmSource.WmiBios => "WMI",
+                    RpmSource.Estimated => "Est",
+                    _ => "?"
+                };
             }
             catch (Exception ex)
             {

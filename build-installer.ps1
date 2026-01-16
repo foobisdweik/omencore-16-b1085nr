@@ -35,8 +35,15 @@ if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
 if (-not (Test-Path $publishRoot)) { New-Item $publishRoot -ItemType Directory | Out-Null }
 if (-not (Test-Path $artifactsDir)) { New-Item $artifactsDir -ItemType Directory | Out-Null }
 
+# Choose the appropriate project for the requested runtime (GUI is Windows-only; use CLI for Linux builds)
+if ($Runtime -like "linux*") {
+    $appProject = "src/OmenCore.Linux/OmenCore.Linux.csproj"
+} else {
+    $appProject = "src/OmenCoreApp/OmenCoreApp.csproj"
+}
+
 $publishArgs = @(
-    "src/OmenCoreApp/OmenCoreApp.csproj",
+    $appProject,
     "--configuration", $Configuration,
     "-r", $Runtime,
     "--self-contained", "true",

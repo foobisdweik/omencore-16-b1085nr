@@ -252,6 +252,23 @@ namespace OmenCore.Services
         }
         
         /// <summary>
+        /// Read current fan speed with RPM source information.
+        /// </summary>
+        public (int rpm, int level, RpmSource source) GetCurrentFanStateWithSource(int fanIndex)
+        {
+            var (rpm, level) = GetCurrentFanState(fanIndex);
+            
+            // Get source from telemetry
+            RpmSource source = RpmSource.Unknown;
+            if (_fanService?.FanTelemetry != null && _fanService.FanTelemetry.Count > fanIndex)
+            {
+                source = _fanService.FanTelemetry[fanIndex].RpmSource;
+            }
+            
+            return (rpm, level, source);
+        }
+        
+        /// <summary>
         /// Verify fan reading by checking it multiple times.
         /// </summary>
         public async Task<(int avg, int min, int max)> GetStableFanRpmAsync(int fanIndex, int samples = 3, CancellationToken ct = default)

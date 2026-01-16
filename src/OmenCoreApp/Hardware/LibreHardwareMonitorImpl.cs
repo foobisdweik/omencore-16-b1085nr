@@ -1149,12 +1149,15 @@ namespace OmenCore.Hardware
                         }
                     }
                     
-                    // Log hardware types found for debugging if no fans detected (only once)
-                    if (results.Count == 0 && !_noFanSensorsLogged)
+                    // Log hardware types found for debugging if no fans detected
+                    if (results.Count == 0)
                     {
-                        _noFanSensorsLogged = true;
                         var hwTypes = _computer?.Hardware?.Select(h => $"{h.HardwareType}:{h.Name}").ToList() ?? new List<string>();
-                        _logger?.Invoke($"[FanDebug] No fan sensors found via LibreHardwareMonitor (using WMI). Hardware: [{string.Join(", ", hwTypes)}]");
+                        if (!_noFanSensorsLogged)
+                        {
+                            _noFanSensorsLogged = true;
+                            _logger?.Invoke($"[FanDebug] No fan sensors found via LibreHardwareMonitor. Hardware: [{string.Join(", ", hwTypes)}]");
+                        }
                     }
                 }
                 catch (ObjectDisposedException)

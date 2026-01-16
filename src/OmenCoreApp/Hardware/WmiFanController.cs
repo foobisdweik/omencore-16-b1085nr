@@ -669,23 +669,79 @@ namespace OmenCore.Hardware
                 var gpuTemp = _hwMonitor.GetGpuTemperature();
                 
                 // Get fan speed from HP WMI BIOS - returns krpm (0-55 = 0-5500 RPM)
+                _logging?.Debug("[FanRPM] LibreHardwareMonitor found 0 fans, using WMI BIOS fallback");
                 var fanLevel = _wmiBios.GetFanLevel();
+                _logging?.Debug($"[FanRPM] GetFanLevel returned: {(fanLevel.HasValue ? $"fan1={fanLevel.Value.fan1}, fan2={fanLevel.Value.fan2}" : "NULL")}");
                 int fan1Rpm = 0;
                 int fan2Rpm = 0;
                 int fan1Percent = 0;
                 int fan2Percent = 0;
                 
-                if (fanLevel.HasValue)
+                if (fanLevel.HasValue && (fanLevel.Value.fan1 > 0 || fanLevel.Value.fan2 > 0))
                 {
-                    // Convert krpm to RPM: value * 100 (e.g., 35 = 3500 RPM)
+                    // HP WMI BIOS returns fan level in krpm units:
+                    // 0 = 0 RPM (off)
+                    // 55 = 5500 RPM (max)
+                    // Convert krpm to RPM: multiply by 100 (e.g., 35 krpm = 3500 RPM)
                     fan1Rpm = fanLevel.Value.fan1 * 100;
                     fan2Rpm = fanLevel.Value.fan2 * 100;
                     
-                    // Calculate percent: 55 krpm = 100%
-                    fan1Percent = Math.Clamp(fanLevel.Value.fan1 * 100 / 55, 0, 100);
-                    fan2Percent = Math.Clamp(fanLevel.Value.fan2 * 100 / 55, 0, 100);
+                    // Calculate percent based on max RPM range (5500 RPM = 100%)
+                    fan1Percent = Math.Clamp((fan1Rpm * 100) / 5500, 0, 100);
+                    fan2Percent = Math.Clamp((fan2Rpm * 100) / 5500, 0, 100);
                     
-                    _logging?.Info($"HP WMI Fan levels: Fan1={fanLevel.Value.fan1} krpm ({fan1Rpm} RPM), Fan2={fanLevel.Value.fan2} krpm ({fan2Rpm} RPM)");
+                    _logging?.Info($"HP WMI Fan levels: Fan1={fanLevel.Value.fan1} krpm ({fan1Rpm} RPM, {fan1Percent}%), Fan2={fanLevel.Value.fan2} krpm ({fan2Rpm} RPM, {fan2Percent}%)");
+                }
+                else
+                {
+                    // WMI BIOS GetFanLevel failed or returned zeros
+                    // Many HP OMEN laptops don't support reading current fan level
+                    // Estimate based on last SET percentage if available
+                    _logging?.Debug($"[FanRPM] GetFanLevel unavailable, using last set percent: {_lastManualFanPercent}");
+                    
+                    if (_lastManualFanPercent >= 0)
+                    {
+                        // We have a last set value - estimate RPM from it
+                        fan1Percent = _lastManualFanPercent;
+                        fan2Percent = _lastManualFanPercent;
+                        // Estimate RPM: linear scale 0-100% = 0-5500 RPM
+                        fan1Rpm = (_lastManualFanPercent * 5500) / 100;
+                        fan2Rpm = (_lastManualFanPercent * 5500) / 100;
+                        _logging?.Debug($"[FanRPM] Using estimated RPM based on last set: {fan1Rpm} RPM ({fan1Percent}%)");
+                    }
+                    else if (_isMaxModeActive)
+                    {
+                        // Max mode is active
+                        fan1Percent = 100;
+                        fan2Percent = 100;
+                        fan1Rpm = 5500;
+                        fan2Rpm = 5500;
+                        _logging?.Debug("[FanRPM] Max mode active - showing 100%");
+                    }
+                    else
+                    {
+                        // No manual control active - fans are in BIOS/auto mode
+                        // Show "Auto" indicator by using -1 or estimate based on temps
+                        var maxTemp = Math.Max(cpuTemp, gpuTemp);
+                        if (maxTemp > 0)
+                        {
+                            // Rough estimate: BIOS typically runs 20-40% at idle, ramping with temp
+                            fan1Percent = Math.Clamp((int)((maxTemp - 30) * 2), 20, 80);
+                            fan2Percent = fan1Percent;
+                            fan1Rpm = (fan1Percent * 5500) / 100;
+                            fan2Rpm = fan1Rpm;
+                            _logging?.Debug($"[FanRPM] Auto mode, estimating {fan1Percent}% based on temp {maxTemp}°C");
+                        }
+                        else
+                        {
+                            // Can't estimate - show placeholder
+                            fan1Percent = 30;
+                            fan2Percent = 30;
+                            fan1Rpm = 1650; // ~30%
+                            fan2Rpm = 1650;
+                            _logging?.Debug("[FanRPM] No temp data, showing default 30%");
+                        }
+                    }
                 }
 
                 fans.Add(new FanTelemetry 
@@ -1026,7 +1082,8 @@ namespace OmenCore.Hardware
             if (!_disposed)
             {
                 StopCountdownExtension();
-                RestoreAutoControl();
+                // Don't restore auto control on exit - preserve user's fan settings
+                // This prevents fans ramping up when user closes app while in Quiet mode
                 _wmiBios.Dispose();
                 _disposed = true;
             }

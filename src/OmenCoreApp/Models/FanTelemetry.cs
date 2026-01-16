@@ -2,12 +2,32 @@ using System.ComponentModel;
 
 namespace OmenCore.Models
 {
+    /// <summary>
+    /// Source of the RPM data.
+    /// </summary>
+    public enum RpmSource
+    {
+        /// <summary>Direct EC register read (most accurate).</summary>
+        EcDirect,
+        /// <summary>LibreHardwareMonitor SuperIO.</summary>
+        HardwareMonitor,
+        /// <summary>MSI Afterburner shared memory.</summary>
+        Afterburner,
+        /// <summary>WMI BIOS query.</summary>
+        WmiBios,
+        /// <summary>Estimated from duty cycle (least accurate).</summary>
+        Estimated,
+        /// <summary>Unknown source.</summary>
+        Unknown
+    }
+    
     public class FanTelemetry : INotifyPropertyChanged
     {
         private int _rpm;
         private int _speedRpm;
         private int _dutyCyclePercent;
         private double _temperature;
+        private RpmSource _rpmSource = RpmSource.Unknown;
 
         public string Name { get; set; } = string.Empty;
 
@@ -64,6 +84,36 @@ namespace OmenCore.Models
                 }
             }
         }
+        
+        /// <summary>
+        /// Source of the RPM reading.
+        /// </summary>
+        public RpmSource RpmSource
+        {
+            get => _rpmSource;
+            set
+            {
+                if (_rpmSource != value)
+                {
+                    _rpmSource = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RpmSource)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RpmSourceDisplay)));
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Human-readable RPM source display string.
+        /// </summary>
+        public string RpmSourceDisplay => RpmSource switch
+        {
+            RpmSource.EcDirect => "EC",
+            RpmSource.HardwareMonitor => "HWMon",
+            RpmSource.Afterburner => "MAB",
+            RpmSource.WmiBios => "WMI",
+            RpmSource.Estimated => "Est",
+            _ => "?"
+        };
 
         public event PropertyChangedEventHandler? PropertyChanged;
     }

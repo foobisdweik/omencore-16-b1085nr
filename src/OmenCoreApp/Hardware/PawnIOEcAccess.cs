@@ -63,8 +63,8 @@ namespace OmenCore.Hardware
             0x2D, // Fan 2 set speed % (XSS2) - OmenMon-style, newer models
             0x2E, // Fan 1 speed % (legacy)
             0x2F, // Fan 2 speed % (legacy)
-            0x34, // Thermal policy
-            0x35, // Thermal policy extend
+            0x34, // Fan 1 speed in 100 RPM units (0-55)
+            0x35, // Fan 2 speed in 100 RPM units (0-55)
             0x44, // Fan 1 duty cycle
             0x45, // Fan 2 duty cycle
             0x46, // Fan control mode
@@ -72,10 +72,14 @@ namespace OmenCore.Hardware
             0x4B, // Fan 1 speed high byte
             0x4C, // Fan 2 speed low byte
             0x4D, // Fan 2 speed high byte
+            0x62, // OMCC - BIOS manual/auto control (0x06=Manual, 0x00=Auto)
+            0x63, // Timer register
             0xB0, // Fan speed target CPU
             0xB1, // Fan speed target GPU
             0xCE, // Performance mode register
             0xCF, // Power limit control
+            0xEC, // Fan boost (0x00=OFF, 0x0C=ON)
+            0xF4, // Fan state (0x00=Enable, 0x02=Disable)
             
             // OMCC (Omen Control Center) register
             0x96, // OMCC control register

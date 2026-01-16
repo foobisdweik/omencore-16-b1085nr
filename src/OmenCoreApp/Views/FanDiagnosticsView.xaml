@@ -31,7 +31,13 @@
                     <StackPanel>
                         <TextBlock Text="Current State" FontWeight="SemiBold" />
                         <TextBlock Text="RPM:" Style="{StaticResource Caption}" Margin="0,6,0,0" />
-                        <TextBlock Text="{Binding CurrentRpm}" FontSize="18" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding CurrentRpm}" FontSize="18" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
+                            <Border Background="{StaticResource SurfaceMediumBrush}" CornerRadius="4" Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center"
+                                    ToolTip="Source of RPM data: EC=Direct EC read, HWMon=LibreHardwareMonitor, MAB=MSI Afterburner, Est=Estimated">
+                                <TextBlock Text="{Binding RpmSourceDisplay}" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" />
+                            </Border>
+                        </StackPanel>
                         <TextBlock Text="Level:" Style="{StaticResource Caption}" Margin="0,8,0,0" />
                         <TextBlock Text="{Binding CurrentLevel}" FontSize="18" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
                     </StackPanel>

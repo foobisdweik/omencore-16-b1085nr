@@ -398,8 +398,18 @@ EC write to address 0x2C is blocked for safety. Only approved addresses can be w
 - **Windows:** [OmenCore-2.4.0-win-x64.zip](https://github.com/theantipopau/omencore/releases/tag/v2.4.0)
 - **Linux:** [OmenCore-2.4.0-linux-x64.tar.gz](https://github.com/theantipopau/omencore/releases/tag/v2.4.0)
 
-**SHA256 Hashes:** (To be added at release time)
+**SHA256 Hashes for Verification:**
 
+```
+44FDA0737A5D77C95BFF8A6405B0F37C471F189406C51CF58A964FCAA844805F  OmenCoreSetup-2.4.0.exe
+0BA81096D2E19066689AD1523C8049184839E6FCE720D8B05FCFAC929AE5B79E  OmenCore-2.4.0-win-x64.zip
+6C13F67F377D7140ECE28DABAC77C9C0267636BE732E87512AED466D7B0DE437  OmenCore-2.4.0-linux-x64.zip
+60BF36CCECC576642830DC8E85AD747A9D534E491984A5445E3BDB9A2AFE5408  OmenCore-2.4.0-linux-arm64.zip
+```
+
+**How to Verify:** 
+- Linux/macOS: `sha256sum -c checksums.txt`
+- Windows: `certUtil -hashfile OmenCoreSetup-2.4.0.exe SHA256`
 
 ---
 
@@ -409,8 +419,12 @@ EC write to address 0x2C is blocked for safety. Only approved addresses can be w
 c09913e - Fix GitHub #47: Tune Quiet mode fan curve for better thermal protection
 00f0fa0 - Implement GitHub #48 UI improvements: hide update banner, add collapsible logs
 d5b5f92 - Fix critical issues: Linux RAM GB, CS8602, WMI timeout, UI freeze prevention
-<pending> - Update version to 2.4.0 and add fan speed safety caps (GitHub #49)
-<pending> - Create comprehensive v2.4.0 changelog
+71607d6 - Fix build errors (WMI timeout API, XAML structure, missing using directives)
+a03a1af - Update all remaining version strings to 2.4.0
+9dd69f6 - Add CPU sensor diagnostic logging to HardwareWorker
+7467f65 - Complete Settings sub-tabs reorganization
+095963e - UI reorganization (Diagnostics tab) + collapsible logs
+1b2e177 - Critical safety fixes & enhanced diagnostics
 ```
 
 

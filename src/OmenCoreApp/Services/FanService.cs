@@ -1146,16 +1146,9 @@ namespace OmenCore.Services
             DisableCurve();
             Stop();
             
-            // Restore fan control to BIOS on exit so fans don't stay stuck
-            try
-            {
-                _fanController.RestoreAutoControl();
-                _logging.Info("Fan control restored to BIOS on shutdown");
-            }
-            catch (Exception ex)
-            {
-                _logging.Warn($"Could not restore fan control on shutdown: {ex.Message}");
-            }
+            // Don't restore auto control on exit - preserve user's fan settings
+            // This prevents fans ramping up when user closes app while in Quiet mode
+            _logging.Info("FanService disposed (preserving current fan settings)");
         }
     }
 }

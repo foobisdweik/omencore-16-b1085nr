@@ -8,11 +8,35 @@ using System.Threading;
 
 namespace OmenCore.Hardware
 {
+    /// <summary>
+    /// WinRing0-based EC access provider for systems without PawnIO.
+    /// Uses the WinRing0 driver's port I/O capabilities with ACPI EC protocol.
+    /// Requires Secure Boot and Memory Integrity to be disabled.
+    /// </summary>
     public sealed class WinRing0EcAccess : IEcAccess
     {
         private SafeFileHandle? _handle;
         private string _devicePath = string.Empty;
         private bool _disposed;
+        
+        // ACPI EC standard ports
+        private const ushort EC_DATA_PORT = 0x62;
+        private const ushort EC_CMD_PORT = 0x66;
+
+        // EC commands (ACPI standard)
+        private const byte EC_CMD_READ = 0x80;   // RD_EC
+        private const byte EC_CMD_WRITE = 0x81;  // WR_EC
+
+        // EC status bits
+        private const byte EC_STATUS_OBF = 0x01;  // Output Buffer Full
+        private const byte EC_STATUS_IBF = 0x02;  // Input Buffer Full
+
+        // Timeout for EC operations
+        private const int EC_TIMEOUT_MS = 100;
+        private const int EC_POLL_INTERVAL_US = 10;
+        
+        // Mutex for EC access synchronization
+        private static readonly Mutex EcMutex = new(false, @"Global\Access_EC");
 
         /// <summary>
         /// Allowlist of EC addresses that are safe to write (fan control only).
@@ -27,6 +51,8 @@ namespace OmenCore.Hardware
             0x2D, // Fan 2 set speed % (XSS2) - OmenMon-style, newer models
             0x2E, // Fan 1 speed % (legacy)
             0x2F, // Fan 2 speed % (legacy)
+            0x34, // Fan 1 speed in 100 RPM units (0-55)
+            0x35, // Fan 2 speed in 100 RPM units (0-55)
             0x44, // Fan 1 duty cycle
             0x45, // Fan 2 duty cycle
             0x46, // Fan control mode
@@ -34,8 +60,12 @@ namespace OmenCore.Hardware
             0x4B, // Fan 1 speed high byte
             0x4C, // Fan 2 speed low byte
             0x4D, // Fan 2 speed high byte
+            0x62, // OMCC - BIOS manual/auto control (0x06=Manual, 0x00=Auto)
+            0x63, // Timer register
             0xB0, // Fan speed target CPU
             0xB1, // Fan speed target GPU
+            0xEC, // Fan boost (0x00=OFF, 0x0C=ON)
+            0xF4, // Fan state (0x00=Enable, 0x02=Disable)
             
             // Note: 0x6C (dust cleaning/fan reversal) is NOT included because true fan reversal
             // requires OMEN Max hardware with omnidirectional BLDC fans. Writing to this register
@@ -63,23 +93,74 @@ namespace OmenCore.Hardware
                 Native.OPEN_EXISTING,
                 0,
                 IntPtr.Zero);
-            return IsAvailable;
+            
+            if (!IsAvailable)
+            {
+                System.Diagnostics.Debug.WriteLine($"[WinRing0] Failed to open device {devicePath}: {Marshal.GetLastWin32Error()}");
+                return false;
+            }
+            
+            // Verify we can actually do port I/O by reading the EC status
+            try
+            {
+                byte status = ReadPortByte(EC_CMD_PORT);
+                System.Diagnostics.Debug.WriteLine($"[WinRing0] EC status port read successful: 0x{status:X2}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[WinRing0] EC port read test failed: {ex.Message}");
+                _handle?.Dispose();
+                _handle = null;
+                return false;
+            }
         }
 
         public byte ReadByte(ushort address)
         {
             EnsureHandle();
-            // Read operations are generally safe, no allowlist needed
-            var payload = new EcRegister { Address = address, Value = 0 };
-            var ok = Native.DeviceIoControl(_handle!, Native.IOCTL_EC_READ,
-                ref payload, Marshal.SizeOf<EcRegister>(),
-                ref payload, Marshal.SizeOf<EcRegister>(),
-                out _, IntPtr.Zero);
-            if (!ok)
+            
+            bool acquired = false;
+            try
             {
-                throw new Win32Exception(Marshal.GetLastWin32Error(), $"EC read failed at 0x{address:X4}");
+                acquired = EcMutex.WaitOne(EC_TIMEOUT_MS * 2);
+                if (!acquired)
+                {
+                    throw new TimeoutException("EC mutex acquisition timed out");
+                }
+                
+                // Wait for input buffer empty
+                if (!WaitForInputBufferEmpty())
+                {
+                    throw new TimeoutException($"EC read timeout waiting for IBF clear at address 0x{address:X2}");
+                }
+                
+                // Send read command
+                WritePortByte(EC_CMD_PORT, EC_CMD_READ);
+                
+                // Wait for input buffer empty
+                if (!WaitForInputBufferEmpty())
+                {
+                    throw new TimeoutException($"EC read timeout after command at address 0x{address:X2}");
+                }
+                
+                // Send address
+                WritePortByte(EC_DATA_PORT, (byte)address);
+                
+                // Wait for output buffer full
+                if (!WaitForOutputBufferFull())
+                {
+                    throw new TimeoutException($"EC read timeout waiting for OBF at address 0x{address:X2}");
+                }
+                
+                // Read data
+                return ReadPortByte(EC_DATA_PORT);
             }
-            return payload.Value;
+            finally
+            {
+                if (acquired)
+                    EcMutex.ReleaseMutex();
+            }
         }
 
         public void WriteByte(ushort address, byte value)
@@ -89,22 +170,134 @@ namespace OmenCore.Hardware
             // CRITICAL SAFETY CHECK: Only allow writes to pre-approved addresses
             if (!AllowedWriteAddresses.Contains(address))
             {
-                var allowedList = string.Join(", ", AllowedWriteAddresses.Select(a => $"0x{a:X4}"));
+                var allowedList = string.Join(", ", AllowedWriteAddresses.Select(a => $"0x{a:X2}"));
                 throw new UnauthorizedAccessException(
-                    $"EC write to address 0x{address:X4} is blocked for safety. " +
-                    $"Only approved addresses can be written to prevent hardware damage. " +
-                    $"Allowed addresses: {allowedList}");
+                    $"EC write to address 0x{address:X2} is blocked for safety. " +
+                    $"Only approved addresses can be written to prevent hardware damage.");
             }
             
-            var payload = new EcRegister { Address = address, Value = value };
-            var ok = Native.DeviceIoControl(_handle!, Native.IOCTL_EC_WRITE,
-                ref payload, Marshal.SizeOf<EcRegister>(),
-                IntPtr.Zero, 0, out _, IntPtr.Zero);
+            bool acquired = false;
+            try
+            {
+                acquired = EcMutex.WaitOne(EC_TIMEOUT_MS * 2);
+                if (!acquired)
+                {
+                    throw new TimeoutException("EC mutex acquisition timed out");
+                }
+                
+                // Wait for input buffer empty
+                if (!WaitForInputBufferEmpty())
+                {
+                    throw new TimeoutException($"EC write timeout waiting for IBF clear at address 0x{address:X2}");
+                }
+                
+                // Send write command
+                WritePortByte(EC_CMD_PORT, EC_CMD_WRITE);
+                
+                // Wait for input buffer empty
+                if (!WaitForInputBufferEmpty())
+                {
+                    throw new TimeoutException($"EC write timeout after command at address 0x{address:X2}");
+                }
+                
+                // Send address
+                WritePortByte(EC_DATA_PORT, (byte)address);
+                
+                // Wait for input buffer empty
+                if (!WaitForInputBufferEmpty())
+                {
+                    throw new TimeoutException($"EC write timeout after address at 0x{address:X2}");
+                }
+                
+                // Send data
+                WritePortByte(EC_DATA_PORT, value);
+                
+                // Small delay for EC to process
+                Thread.Sleep(1);
+            }
+            finally
+            {
+                if (acquired)
+                    EcMutex.ReleaseMutex();
+            }
+        }
+        
+        /// <summary>
+        /// Wait for EC input buffer to be empty (IBF=0).
+        /// </summary>
+        private bool WaitForInputBufferEmpty()
+        {
+            int elapsed = 0;
+            while (elapsed < EC_TIMEOUT_MS * 1000)
+            {
+                byte status = ReadPortByte(EC_CMD_PORT);
+                if ((status & EC_STATUS_IBF) == 0)
+                    return true;
+                    
+                // Spin wait ~10us
+                SpinWait.SpinUntil(() => false, TimeSpan.FromTicks(EC_POLL_INTERVAL_US * 10));
+                elapsed += EC_POLL_INTERVAL_US;
+            }
+            return false;
+        }
+        
+        /// <summary>
+        /// Wait for EC output buffer to be full (OBF=1).
+        /// </summary>
+        private bool WaitForOutputBufferFull()
+        {
+            int elapsed = 0;
+            while (elapsed < EC_TIMEOUT_MS * 1000)
+            {
+                byte status = ReadPortByte(EC_CMD_PORT);
+                if ((status & EC_STATUS_OBF) != 0)
+                    return true;
+                    
+                SpinWait.SpinUntil(() => false, TimeSpan.FromTicks(EC_POLL_INTERVAL_US * 10));
+                elapsed += EC_POLL_INTERVAL_US;
+            }
+            return false;
+        }
+        
+        /// <summary>
+        /// Read a byte from an I/O port using WinRing0.
+        /// </summary>
+        private byte ReadPortByte(ushort port)
+        {
+            var inBuf = new PortByteInput { Port = (uint)port };
+            var outBuf = new PortByteOutput { Value = 0 };
+            
+            bool ok = Native.DeviceIoControl(_handle!,
+                Native.IOCTL_OLS_READ_IO_PORT_BYTE,
+                ref inBuf, Marshal.SizeOf<PortByteInput>(),
+                ref outBuf, Marshal.SizeOf<PortByteOutput>(),
+                out _, IntPtr.Zero);
+                
             if (!ok)
             {
-                throw new Win32Exception(Marshal.GetLastWin32Error(), $"EC write failed at 0x{address:X4}");
+                throw new Win32Exception(Marshal.GetLastWin32Error(), $"Port read failed at 0x{port:X4}");
             }
-            Thread.Sleep(1);
+            
+            return (byte)outBuf.Value;
+        }
+        
+        /// <summary>
+        /// Write a byte to an I/O port using WinRing0.
+        /// </summary>
+        private void WritePortByte(ushort port, byte value)
+        {
+            var inBuf = new PortByteInOut { Port = (uint)port, Value = value };
+            
+            bool ok = Native.DeviceIoControl(_handle!,
+                Native.IOCTL_OLS_WRITE_IO_PORT_BYTE,
+                ref inBuf, Marshal.SizeOf<PortByteInOut>(),
+                IntPtr.Zero, 0,
+                out _, IntPtr.Zero);
+                
+            if (!ok)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), $"Port write failed at 0x{port:X4}");
+            }
         }
 
         private void EnsureHandle()
@@ -115,7 +308,7 @@ namespace OmenCore.Hardware
             }
             if (!IsAvailable)
             {
-                throw new InvalidOperationException($"EC bridge {_devicePath} is not ready");
+                throw new InvalidOperationException($"WinRing0 driver {_devicePath} is not ready");
             }
         }
         
@@ -127,10 +320,23 @@ namespace OmenCore.Hardware
             _handle = null;
         }
 
+        // WinRing0 IOCTL structures
         [StructLayout(LayoutKind.Sequential)]
-        private struct EcRegister
+        private struct PortByteInput
         {
-            public ushort Address;
+            public uint Port;
+        }
+        
+        [StructLayout(LayoutKind.Sequential)]
+        private struct PortByteOutput
+        {
+            public uint Value;
+        }
+        
+        [StructLayout(LayoutKind.Sequential)]
+        private struct PortByteInOut
+        {
+            public uint Port;
             public byte Value;
         }
 
@@ -141,8 +347,12 @@ namespace OmenCore.Hardware
             public const uint FILE_SHARE_READ = 0x00000001;
             public const uint FILE_SHARE_WRITE = 0x00000002;
             public const uint OPEN_EXISTING = 3;
-            public const uint IOCTL_EC_READ = 0x80862007; // TODO replace with actual driver codes
-            public const uint IOCTL_EC_WRITE = 0x8086200B;
+            
+            // WinRing0 IOCTL codes (from OLS - OpenLibSys)
+            // CTL_CODE(OLS_TYPE, Function, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
+            // OLS_TYPE = 0x9C40
+            public const uint IOCTL_OLS_READ_IO_PORT_BYTE = 0x9C402480;
+            public const uint IOCTL_OLS_WRITE_IO_PORT_BYTE = 0x9C402488;
 
             [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)]
             public static extern SafeFileHandle CreateFile(
@@ -158,9 +368,9 @@ namespace OmenCore.Hardware
             public static extern bool DeviceIoControl(
                 SafeFileHandle hDevice,
                 uint dwIoControlCode,
-                ref EcRegister inBuffer,
+                ref PortByteInput inBuffer,
                 int nInBufferSize,
-                ref EcRegister outBuffer,
+                ref PortByteOutput outBuffer,
                 int nOutBufferSize,
                 out int bytesReturned,
                 IntPtr overlapped);
@@ -169,7 +379,7 @@ namespace OmenCore.Hardware
             public static extern bool DeviceIoControl(
                 SafeFileHandle hDevice,
                 uint dwIoControlCode,
-                ref EcRegister inBuffer,
+                ref PortByteInOut inBuffer,
                 int nInBufferSize,
                 IntPtr outBuffer,
                 int nOutBufferSize,

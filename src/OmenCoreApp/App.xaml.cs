@@ -728,13 +728,24 @@ namespace OmenCore
 
         protected override void OnExit(ExitEventArgs e)
         {
+            // Don't restore fan modes on exit - keep user's chosen settings
+            // This prevents fans ramping up unexpectedly when closing the app
+            try
+            {
+                Logging.Info("OmenCore shutting down (preserving current fan settings)...");
+            }
+            catch (Exception ex)
+            {
+                Logging.Debug($"Error during shutdown: {ex.Message}");
+            }
+
             // Unsubscribe from session switch events
             SystemEvents.SessionSwitch -= OnSessionSwitch;
             
             _trayIconService?.Dispose();
             _trayIcon?.Dispose();
             
-            // Dispose MainViewModel to restore fan control before shutting down
+            // Dispose MainViewModel to properly clean up services and restore fan control
             try
             {
                 var mainViewModel = _serviceProvider?.GetService<MainViewModel>();
@@ -753,7 +764,7 @@ namespace OmenCore
                 catch { }
             }
             
-            Logging.Info("OmenCore shutting down");
+            Logging.Info("OmenCore shutdown complete");
             Logging.Dispose();
             base.OnExit(e);
         }
