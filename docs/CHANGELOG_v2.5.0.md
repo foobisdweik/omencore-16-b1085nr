@@ -20,6 +20,12 @@ Since the roadmap was created, the following items have been implemented or adva
 - **Build & CI Fixes**: Fixed a compilation error in `KeyboardLightingService` and added tests; full solution builds successfully and unit tests pass locally.
 - **Settings UX**: Settings now show Defender false-positive guidance and recommend PawnIO when WinRing0 is detected.
 - **Diagnostics & Logging Improvements**: Enhanced logging around verification and sensor detection to aid diagnosis of issues reported by users (RPM mismatches, CPU temp 0°C).
+- **Linux QA & Artifacts**: Added linux-x64 packaging workflow with checksums and a comprehensive `LINUX_QA_TESTING.md` guide.
+- **Diagnostic Export (stub)**: Added `DiagnosticExportService` scaffold and Linux CLI `diagnose --export` to capture a JSON bundle in one step.
+- **Fan Control Hardening**: Tightened RPM verification tolerance, added baseline calibration points when no profile exists, and restored a safe Afterburner provider stub (graceful fallback only).
+- **GPU OC Guardrails**: NVAPI offsets now clamp with guardrail logging; Radeon path remains disabled to avoid unsafe writes.
+- **Curve Editor Validation**: Fan curve application now validates monotonic temps and 0–100% bounds before applying.
+- **Conflict Monitoring**: ConflictDetectionService can monitor Afterburner/XTU conflicts asynchronously for safer coexistence.
 - **Linux QA & Artifacts**: Added CI workflow for linux-x64 CLI packaging with checksums and smoke commands; documented testing checklist.
 - **Diagnostics Export (WIP)**: Added `DiagnosticExportService` scaffold to bundle logs/system info/EC dump for support requests.
 
@@ -150,7 +156,9 @@ Special thanks to:
 
 ## Next: v2.6.0 Planning
 
-- GPU overclock GUI (NVIDIA NVAPI + AMD Radeon API)
-- Thermal paste/cooler upgrade recommendations
-- Advanced power curve editor with live graphing
-- Afterburner integration refinement (async conflict resolution)
+- GPU overclock GUI (NVIDIA NVAPI + AMD Radeon API) with safe guardrails and per-mode presets
+- Advanced fan/power curve editor with live graphing and curve validation
+- Async Afterburner/XTU conflict resolution and shared-memory reader behind a service toggle
+- Linux daemon hardening: smoother start/stop, better logs, and packaging polish
+- Diagnostics UX: one-click export wired into GUI/CLI + auto-attach to GitHub issue template
+- Thermal guidance: paste/pad guidance surfaced contextually in troubleshooting

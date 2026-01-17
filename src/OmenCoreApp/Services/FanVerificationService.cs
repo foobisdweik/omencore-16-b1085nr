@@ -66,7 +66,7 @@ namespace OmenCore.Services
         // Verification timing
         private const int FanResponseDelayMs = 2500;  // Fans have mechanical inertia
         private const int RetryDelayMs = 2000;
-        private const double RpmTolerance = 0.20;  // 20% tolerance for RPM verification
+        private const double RpmTolerance = 0.18;  // Slightly tighter tolerance for verification
         
         public FanVerificationService(HpWmiBios? wmiBios, FanService? fanService, LoggingService logging)
         {

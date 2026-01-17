@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using OmenCore.Linux.Hardware;
@@ -22,20 +23,33 @@ public static class DiagnoseCommand
             aliases: new[] { "--report", "-r" },
             description: "Generate GitHub issue report template");
 
+        var exportOption = new Option<string?>(
+            aliases: new[] { "--export" },
+            description: "Write diagnostics to file (json)",
+            getDefaultValue: () => null);
+
         command.AddOption(jsonOption);
         command.AddOption(reportOption);
+        command.AddOption(exportOption);
 
-        command.SetHandler(async (json, report) =>
+        command.SetHandler(async (json, report, exportPath) =>
         {
-            await HandleDiagnoseAsync(json, report);
-        }, jsonOption, reportOption);
+            await HandleDiagnoseAsync(json, report, exportPath);
+        }, jsonOption, reportOption, exportOption);
 
         return command;
     }
 
-    private static async Task HandleDiagnoseAsync(bool jsonOutput, bool generateReport)
+    private static async Task HandleDiagnoseAsync(bool jsonOutput, bool generateReport, string? exportPath)
     {
         var info = await CollectAsync();
+
+        if (!string.IsNullOrWhiteSpace(exportPath))
+        {
+            await ExportAsync(info, exportPath);
+            Console.WriteLine($"Diagnostics written to {exportPath}");
+            return;
+        }
 
         if (generateReport)
         {
@@ -52,6 +66,24 @@ public static class DiagnoseCommand
         }
 
         PrintHumanReadable(info);
+    }
+
+    private static async Task ExportAsync(DiagnoseInfo info, string exportPath)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(info, LinuxJsonContext.Default.DiagnoseInfo);
+            var directory = Path.GetDirectoryName(exportPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+            await File.WriteAllTextAsync(exportPath, json);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to write diagnostics: {ex.Message}");
+        }
     }
 
     private static async Task<DiagnoseInfo> CollectAsync()

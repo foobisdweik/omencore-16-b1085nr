@@ -99,6 +99,9 @@ namespace OmenCore.Services.FanCalibration
         /// </summary>
         public int GetExpectedRpm(int fanIndex, int targetPercent)
         {
+            // Ensure we have at least a baseline curve so callers don't get zero RPM
+            EnsureBaselineCurve();
+
             var level = PercentToLevel(targetPercent);
             var mapping = fanIndex == 0 ? Fan0LevelToRpm : Fan1LevelToRpm;
             
@@ -131,6 +134,27 @@ namespace OmenCore.Services.FanCalibration
             // Linear interpolation
             double ratio = (double)(level - lowerLevel) / (upperLevel - lowerLevel);
             return (int)(lowerRpm + ratio * (upperRpm - lowerRpm));
+        }
+
+        /// <summary>
+        /// Seed a minimal baseline curve when no calibration data exists.
+        /// This keeps verification and UI flows from reporting 0 RPM on first run.
+        /// </summary>
+        private void EnsureBaselineCurve()
+        {
+            if (Fan0LevelToRpm.Count == 0)
+            {
+                Fan0LevelToRpm[0] = 0;
+                Fan0LevelToRpm[MaxLevel] = Fan0MaxRpm;
+                Fan0LevelToRpm[Math.Max(MinSpinLevel, 25)] = (int)(Fan0MaxRpm * 0.35);
+            }
+
+            if (Fan1LevelToRpm.Count == 0)
+            {
+                Fan1LevelToRpm[0] = 0;
+                Fan1LevelToRpm[MaxLevel] = Fan1MaxRpm;
+                Fan1LevelToRpm[Math.Max(MinSpinLevel, 25)] = (int)(Fan1MaxRpm * 0.35);
+            }
         }
         
         /// <summary>

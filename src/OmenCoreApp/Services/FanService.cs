@@ -357,9 +357,9 @@ namespace OmenCore.Services
             }
             
             var curveList = curve.ToList();
-            if (!curveList.Any())
+            if (!ValidateCurve(curveList, out var validationError))
             {
-                _logging.Warn("Empty curve provided");
+                _logging.Warn($"Custom fan curve rejected: {validationError}");
                 return;
             }
             
@@ -424,6 +424,17 @@ namespace OmenCore.Services
         /// <param name="gpuCurve">The fan curve to use for GPU temperature</param>
         public void EnableIndependentCurves(List<FanCurvePoint> cpuCurve, List<FanCurvePoint> gpuCurve)
         {
+            if (!ValidateCurve(cpuCurve, out var cpuError))
+            {
+                _logging.Warn($"CPU curve rejected: {cpuError}");
+                return;
+            }
+            if (!ValidateCurve(gpuCurve, out var gpuError))
+            {
+                _logging.Warn($"GPU curve rejected: {gpuError}");
+                return;
+            }
+
             lock (_curveLock)
             {
                 _cpuCurve = cpuCurve.OrderBy(p => p.TemperatureC).ToList();
@@ -438,6 +449,38 @@ namespace OmenCore.Services
             }
             
             _logging.Info($"Independent fan curves enabled - CPU: {_cpuCurve.Count} points, GPU: {_gpuCurve.Count} points");
+        }
+
+        /// <summary>
+        /// Validate that a fan curve is monotonic in temperature and within safe percentage bounds.
+        /// </summary>
+        private bool ValidateCurve(IReadOnlyList<FanCurvePoint> curve, out string error)
+        {
+            error = string.Empty;
+
+            if (curve.Count < 2)
+            {
+                error = "Curve needs at least 2 points";
+                return false;
+            }
+
+            int lastTemp = int.MinValue;
+            foreach (var point in curve)
+            {
+                if (point.TemperatureC < lastTemp)
+                {
+                    error = "Temperatures must be non-decreasing";
+                    return false;
+                }
+                if (point.FanPercent < 0 || point.FanPercent > 100)
+                {
+                    error = "Fan % must stay between 0 and 100";
+                    return false;
+                }
+                lastTemp = point.TemperatureC;
+            }
+
+            return true;
         }
         
         /// <summary>

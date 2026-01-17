@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
 
@@ -150,6 +151,27 @@ namespace OmenCore.Services
                 
                 return conflicts;
             });
+        }
+
+        /// <summary>
+        /// Periodically scan for conflicts asynchronously until cancellation.
+        /// </summary>
+        public async Task MonitorConflictsAsync(TimeSpan interval, CancellationToken ct)
+        {
+            if (interval <= TimeSpan.Zero) interval = TimeSpan.FromSeconds(10);
+
+            while (!ct.IsCancellationRequested)
+            {
+                await ScanForConflictsAsync();
+                try
+                {
+                    await Task.Delay(interval, ct);
+                }
+                catch (TaskCanceledException)
+                {
+                    break;
+                }
+            }
         }
         
         /// <summary>

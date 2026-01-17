@@ -482,8 +482,13 @@ namespace OmenCore.Hardware
                 return false;
             }
 
-            // Clamp to valid range
+            // Clamp to valid range and note if we trimmed
+            var requested = offsetMHz;
             offsetMHz = Math.Clamp(offsetMHz, MinCoreOffset, MaxCoreOffset);
+            if (offsetMHz != requested)
+            {
+                _logging.Warn($"NVAPI: Core offset clamped from {requested} to {offsetMHz} MHz (guardrail)");
+            }
 
             try
             {
@@ -542,7 +547,12 @@ namespace OmenCore.Hardware
                 return false;
             }
 
+            var requested = offsetMHz;
             offsetMHz = Math.Clamp(offsetMHz, MinMemoryOffset, MaxMemoryOffset);
+            if (offsetMHz != requested)
+            {
+                _logging.Warn($"NVAPI: Memory offset clamped from {requested} to {offsetMHz} MHz (guardrail)");
+            }
 
             try
             {
