@@ -11,6 +11,27 @@ v2.5.0 focuses on reliability hardening, verification systems, and addressing us
 
 ---
 
+## Progress & Recent Work ✅
+
+Since the roadmap was created, the following items have been implemented or advanced:
+
+- **Power Limits Verification**: Implemented `PowerVerificationService` that applies performance mode power limits and reads back EC registers to verify success. (Added `IPowerVerificationService` and `PowerLimitApplyResult`.)
+- **Windows Defender Guidance**: Added `docs/DEFENDER_FALSE_POSITIVE.md` to explain the WinRing0/LibreHardwareMonitor false positive and mitigations (PawnIO recommendation, Defender exclusions, admin-run guidance).
+- **Build & CI Fixes**: Fixed a compilation error in `KeyboardLightingService` and added tests; full solution builds successfully and unit tests pass locally.
+- **Settings UX**: Settings now show Defender false-positive guidance and recommend PawnIO when WinRing0 is detected.
+- **Diagnostics & Logging Improvements**: Enhanced logging around verification and sensor detection to aid diagnosis of issues reported by users (RPM mismatches, CPU temp 0°C).
+- **Linux QA & Artifacts**: Added CI workflow for linux-x64 CLI packaging with checksums and smoke commands; documented testing checklist.
+- **Diagnostics Export (WIP)**: Added `DiagnosticExportService` scaffold to bundle logs/system info/EC dump for support requests.
+
+**Next immediate actionable items** (candidate work for this build):
+1. **Phase 2 — RPM Validation & Calibration** (High): Add model calibration storage, calibration UI, and verification tests to stabilize RPM→% mapping.
+2. **MSI Afterburner Integration** (High): Implement robust shared-memory reader and conflict handling.
+3. **Fan Verification Enhancements** (High): Improve `FanVerificationService` to attempt multiple read-backs and optionally revert on failure; add unit tests that mock `IEcAccess`/WMI.
+4. **Diagnostic UX** (Medium): Add UI controls for exporting diagnostics and attaching to GitHub issues.
+5. **Linux QA** (Medium): Add CI smoke tests for Linux artifacts and improve error messages for kernel/OGH issues.
+
+---
+
 ## New Features
 
 ### Power Limit Verification System

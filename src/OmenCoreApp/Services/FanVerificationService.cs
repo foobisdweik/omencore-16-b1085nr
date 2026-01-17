@@ -41,6 +41,12 @@ namespace OmenCore.Services
     /// Provides closed-loop verification for fan control commands.
     /// After setting a fan speed, reads back the actual RPM to verify it was applied.
     /// 
+    /// Enhanced with:
+    /// - Multi-sample verification (reads RPM multiple times to ensure stability)
+    /// - Auto-revert on failure (restores previous state if verification fails)
+    /// - Detailed diagnostics (logs suggestion to switch backend if commands ineffective)
+    /// - Retry logic for transient failures
+    /// 
     /// This addresses the issue where "Requested % doesn't match actual fan speed".
     /// </summary>
     public class FanVerificationService : IFanVerificationService
@@ -48,6 +54,11 @@ namespace OmenCore.Services
         private readonly HpWmiBios? _wmiBios;
         private readonly FanService? _fanService;
         private readonly LoggingService _logging;
+        
+        // Verification parameters
+        private const int VerificationRetries = 2;          // Retry verification up to 2 times
+        private const int VerificationSamples = 3;          // Take 3 RPM samples and average
+        private const int SampleDelayMs = 300;              // Wait 300ms between samples
         private const int MaxLevel = 55;  // HP uses 55 as max on most models
         private const int MinRpm = 0;
         private const int MaxRpm = 5500;  // Typical max RPM
@@ -185,34 +196,58 @@ namespace OmenCore.Services
                 // Wait for fan to respond (fans have mechanical inertia)
                 await Task.Delay(FanResponseDelayMs, ct);
                 
-                // Read back actual RPM from telemetry
-                result.ActualRpmAfter = GetCurrentRpm(fanIndex);
-                
-                // Verify the change
-                result.VerificationPassed = VerifyRpm(result);
-                
-                if (!result.VerificationPassed)
+                // Multi-sample verification: take several RPM readings and average them
+                int totalAttempts = 0;
+                for (int attempt = 0; attempt <= VerificationRetries; attempt++)
                 {
-                    _logging.Warn($"Fan {fanIndex} verification failed: Expected ~{result.ExpectedRpm} RPM, got {result.ActualRpmAfter} RPM ({result.DeviationPercent:F1}% deviation)");
+                    totalAttempts = attempt + 1;
                     
-                    // Retry once
-                    await Task.Delay(RetryDelayMs, ct);
-                    result.ActualRpmAfter = GetCurrentRpm(fanIndex);
+                    // Take multiple samples and average them for stability
+                    var rpmSamples = new int[VerificationSamples];
+                    for (int i = 0; i < VerificationSamples; i++)
+                    {
+                        rpmSamples[i] = GetCurrentRpm(fanIndex);
+                        if (i < VerificationSamples - 1)
+                            await Task.Delay(SampleDelayMs, ct);
+                    }
+                    
+                    // Use average RPM for verification
+                    result.ActualRpmAfter = (int)rpmSamples.Average();
+                    
+                    _logging.Info($"Fan {fanIndex} RPM samples: [{string.Join(", ", rpmSamples)}], Average: {result.ActualRpmAfter} RPM");
+                    
+                    // Verify the change
                     result.VerificationPassed = VerifyRpm(result);
                     
-                    if (!result.VerificationPassed)
+                    if (result.VerificationPassed)
                     {
-                        _logging.Error($"Fan {fanIndex} control not responding as expected after retry. Model may need calibration.");
-                        result.ErrorMessage = $"RPM verification failed: expected ~{result.ExpectedRpm}, got {result.ActualRpmAfter}";
+                        _logging.Info($"✓ Fan {fanIndex} verified: {result.ActualRpmAfter} RPM (expected ~{result.ExpectedRpm}, deviation {result.DeviationPercent:F1}%)");
+                        break;
                     }
-                    else
+                    else if (attempt < VerificationRetries)
                     {
-                        _logging.Info($"✓ Fan {fanIndex} verified on retry: {result.ActualRpmAfter} RPM");
+                        _logging.Warn($"Fan {fanIndex} verification attempt {attempt + 1} failed: Expected ~{result.ExpectedRpm} RPM, got {result.ActualRpmAfter} RPM ({result.DeviationPercent:F1}% deviation). Retrying...");
+                        await Task.Delay(RetryDelayMs, ct);
                     }
                 }
-                else
+                
+                // Final diagnostic message if verification still failed
+                if (!result.VerificationPassed)
                 {
-                    _logging.Info($"✓ Fan {fanIndex} verified: {result.ActualRpmAfter} RPM (expected ~{result.ExpectedRpm}, deviation {result.DeviationPercent:F1}%)");
+                    _logging.Error($"Fan {fanIndex} verification failed after {totalAttempts} attempts: expected ~{result.ExpectedRpm} RPM, got {result.ActualRpmAfter} RPM");
+                    result.ErrorMessage = $"RPM verification failed after {totalAttempts} attempts: expected ~{result.ExpectedRpm}, got {result.ActualRpmAfter}";
+                    
+                    // Track failure for diagnostics
+                    _logging.Warn($"⚠️ Fan {fanIndex} commands appear ineffective. This model may not support WMI-based control. Consider using OGH proxy backend if available, or verify EC register mapping.");
+                    result.ErrorMessage += " [TIP: Consider switching to OGH proxy backend for this model]";
+                    
+                    // Auto-revert attempt: set fans back to auto mode
+                    _logging.Warn($"Attempting to restore auto control due to verification failure...");
+                    try
+                    {
+                        _wmiBios?.SetFanMode(HpWmiBios.FanMode.Default);
+                    }
+                    catch { /* Ignore revert errors */ }
                 }
             }
             catch (Exception ex)

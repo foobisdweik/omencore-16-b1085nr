@@ -1,0 +1,156 @@
+name: Linux QA & Artifact Build
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-linux-artifacts:
+    runs-on: ubuntu-22.04
+    name: Build & Test Linux Artifacts
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Setup .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Restore dependencies
+      run: dotnet restore OmenCore.sln
+    
+    - name: Build Linux CLI (self-contained x64)
+      run: |
+        dotnet publish src/OmenCore.Linux/OmenCore.Linux.csproj \
+          -c Release -r linux-x64 \
+          --self-contained \
+          -p:DebugType=none \
+          -p:DebugSymbols=false \
+          -p:PublishTrimmed=true
+    
+    - name: Verify Linux CLI executable
+      run: |
+        chmod +x src/OmenCore.Linux/bin/Release/net8.0/linux-x64/omencore-cli
+        ls -lh src/OmenCore.Linux/bin/Release/net8.0/linux-x64/omencore-cli
+        file src/OmenCore.Linux/bin/Release/net8.0/linux-x64/omencore-cli
+    
+    - name: Run CLI Help & Version Tests
+      run: |
+        ./src/OmenCore.Linux/bin/Release/net8.0/linux-x64/omencore-cli --help
+        ./src/OmenCore.Linux/bin/Release/net8.0/linux-x64/omencore-cli --version || true
+    
+    - name: Generate SHA256 Checksums
+      run: |
+        cd src/OmenCore.Linux/bin/Release/net8.0/linux-x64
+        sha256sum omencore-cli > checksums.sha256
+        echo "=== Generated Checksums ==="
+        cat checksums.sha256
+    
+    - name: Create Release Artifact Package
+      run: |
+        VERSION=$(git describe --tags --always)
+        ARTIFACT_DIR="OmenCore-${VERSION}-linux-x64"
+        mkdir -p "dist/${ARTIFACT_DIR}"
+        
+        # Copy files
+        cp src/OmenCore.Linux/bin/Release/net8.0/linux-x64/omencore-cli "dist/${ARTIFACT_DIR}/"
+        cp LICENSE "dist/${ARTIFACT_DIR}/"
+        cp README.md "dist/${ARTIFACT_DIR}/"
+        cp src/OmenCore.Linux/bin/Release/net8.0/linux-x64/checksums.sha256 "dist/${ARTIFACT_DIR}/"
+        
+        # Create tarball with checksums
+        cd dist
+        tar -czf "${ARTIFACT_DIR}.tar.gz" "${ARTIFACT_DIR}/"
+        sha256sum "${ARTIFACT_DIR}.tar.gz" > "${ARTIFACT_DIR}.checksums"
+        
+        echo "=== Artifact Created ==="
+        ls -lh "${ARTIFACT_DIR}"*
+        cat "${ARTIFACT_DIR}.checksums"
+    
+    - name: Upload Linux Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-x64-cli
+        path: dist/OmenCore-*-linux-x64.tar.gz
+        retention-days: 30
+    
+    - name: Upload Checksums
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-checksums
+        path: dist/OmenCore-*-linux-x64.checksums
+        retention-days: 30
+    
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/OmenCore-*-linux-x64.tar.gz
+          dist/OmenCore-*-linux-x64.checksums
+        body: |
+          ## Linux Artifacts for ${{ github.ref_name }}
+          
+          ### Installation
+          ```bash
+          wget https://github.com/theantipopau/omencore/releases/download/${{ github.ref_name }}/OmenCore-*-linux-x64.tar.gz
+          wget https://github.com/theantipopau/omencore/releases/download/${{ github.ref_name }}/OmenCore-*-linux-x64.checksums
+          sha256sum -c OmenCore-*-linux-x64.checksums
+          tar -xzf OmenCore-*-linux-x64.tar.gz
+          sudo ./OmenCore-*/omencore-cli status
+          ```
+          
+          ### Testing Guide
+          See [LINUX_QA_TESTING.md](https://github.com/theantipopau/omencore/blob/main/docs/LINUX_QA_TESTING.md)
+        draft: false
+        prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  run-unit-tests:
+    runs-on: ubuntu-latest
+    name: Run Unit Tests
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Run all tests
+      run: |
+        dotnet test OmenCore.sln -c Release \
+          --logger "console;verbosity=detailed" \
+          --logger "trx;LogFileName=test-results.trx"
+    
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: '**/*.trx'
+
+  check-warnings:
+    runs-on: ubuntu-latest
+    name: Code Quality Checks
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Build with warnings as errors
+      run: dotnet build OmenCore.sln -c Release /p:TreatWarningsAsErrors=true
+      continue-on-error: true
