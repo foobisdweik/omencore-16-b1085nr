@@ -2208,7 +2208,7 @@ namespace OmenCore.ViewModels
                 if (pawnIoAvailable)
                 {
                     DriverStatusText = "PawnIO Installed";
-                    DriverStatusDetail = "Secure Boot compatible driver backend available (recommended)";
+                    DriverStatusDetail = "✓ Secure Boot compatible driver backend available (recommended). Won't trigger Windows Defender false positives.";
                     DriverStatusColor = new SolidColorBrush(Color.FromRgb(102, 187, 106)); // Green
                 }
                 else if (winRing0Available)
@@ -2216,13 +2216,13 @@ namespace OmenCore.ViewModels
                     if (xtuRunning)
                     {
                         DriverStatusText = "WinRing0 Detected (XTU Conflict)";
-                        DriverStatusDetail = $"Intel XTU service ({xtuServiceName}) may block undervolting. Stop XTU to use OmenCore undervolting. Consider migrating to PawnIO.";
+                        DriverStatusDetail = $"Intel XTU service ({xtuServiceName}) may block undervolting. Stop XTU to use OmenCore undervolting. Consider migrating to PawnIO. (Note: WinRing0 may trigger Defender false positives - see FAQ)";
                         DriverStatusColor = new SolidColorBrush(Color.FromRgb(255, 183, 77)); // Orange
                     }
                     else
                     {
                         DriverStatusText = "WinRing0 Detected (Legacy)";
-                        DriverStatusDetail = "Legacy driver backend detected. Consider installing PawnIO for better Secure Boot/HVCI compatibility.";
+                        DriverStatusDetail = "Legacy driver backend working. Note: May trigger Windows Defender false positives (known issue with hardware monitoring tools). PawnIO recommended for Secure Boot systems.";
                         DriverStatusColor = new SolidColorBrush(Color.FromRgb(255, 183, 77)); // Orange-yellow (warn about legacy)
                     }
                 }
@@ -2238,12 +2238,12 @@ namespace OmenCore.ViewModels
 
                         DriverStatusDetail =
                             $"Legacy drivers blocked ({string.Join(", ", reasons)}). " +
-                            "Install PawnIO (pawnio.eu) for Secure Boot compatible MSR/EC access.";
+                            "Install PawnIO (pawnio.eu) for Secure Boot compatible MSR/EC access - avoids Defender false positives and works with security features enabled.";
                     }
                     else
                     {
                         DriverStatusDetail =
-                            "Install PawnIO (recommended for Secure Boot compatibility) to enable undervolting and advanced features.";
+                            "Install PawnIO (recommended - no Defender false positives) or run OmenCore as Administrator to initialize WinRing0.";
                     }
 
                     DriverStatusColor = new SolidColorBrush(Color.FromRgb(239, 83, 80)); // Red
