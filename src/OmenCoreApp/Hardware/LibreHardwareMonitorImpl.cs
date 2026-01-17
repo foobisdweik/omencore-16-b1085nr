@@ -1007,6 +1007,26 @@ namespace OmenCore.Hardware
             EnsureCacheFresh();
             lock (_lock)
             {
+                if (_cachedCpuTemp == 0 && _logger != null)
+                {
+                    // Debug: Log available CPU temperature sensors
+                    if (_computer != null)
+                    {
+                        var cpuHardware = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Cpu);
+                        if (cpuHardware != null)
+                        {
+                            var tempSensors = cpuHardware.Sensors
+                                .Where(s => s.SensorType == SensorType.Temperature)
+                                .Select(s => $"{s.Name}={s.Value}")
+                                .ToList();
+                            _logger($"[CPU Debug] CPU temp is 0. Available sensors: [{string.Join(", ", tempSensors)}]");
+                        }
+                        else
+                        {
+                            _logger("[CPU Debug] No CPU hardware found");
+                        }
+                    }
+                }
                 return _cachedCpuTemp;
             }
         }

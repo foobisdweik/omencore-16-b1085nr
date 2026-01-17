@@ -102,6 +102,61 @@ These are items that were scoped for v2.4.1 but remain incomplete or need furthe
 - Acceptance Criteria:
   - Testers confirm the checklist and report no blocking issues at release
 
+### 6) Battery Optimization Mode (Medium)
+- Goals:
+  - Add battery-aware profiles for productivity use cases beyond gaming
+  - Integrate with power limits and fan curves for quieter operation on battery
+- Deliverables:
+  - New "Battery Saver" preset with adaptive fan curves and CPU/GPU throttling
+  - UI toggle for "Battery Priority" mode with battery level monitoring
+  - Files: `src/Services/PowerService.cs` (extend for battery detection), `src/ViewModels/ProfileViewModel.cs` (add battery preset), `config/default_config.json` (battery thresholds)
+- Acceptance Criteria:
+  - Battery mode reduces fan noise by 20-30% at idle/low load while maintaining safe temps; benchmarks show 10-15% battery life improvement
+
+### 7) Advanced Profile Scheduling & Automation (Medium)
+- Goals:
+  - Enable time-based and context-aware profile switching for better user experience
+  - Build on existing preset logic with scheduling and event triggers
+- Deliverables:
+  - Scheduler UI for profile switching (e.g., "Quiet" at 10 PM) and event triggers (lid close, charger connect)
+  - Integration with Windows Task Scheduler/Linux cron; export/import profiles with scheduling metadata
+  - Files: `src/Services/SchedulerService.cs` (new service for scheduling), `src/ViewModels/SettingsViewModel.cs` (UI integration), `docs/SCHEDULING_GUIDE.md` (user guide)
+- Acceptance Criteria:
+  - Users can schedule profile changes that persist across reboots; no conflicts with manual overrides, and integration tests cover edge cases
+
+### 8) Memory and CPU Usage Optimizations (High)
+- Goals:
+  - Reduce resource overhead for long-running sessions and daemon mode
+  - Enhance performance monitoring with deeper optimizations
+- Deliverables:
+  - Profile-guided optimizations (lazy sensor polling, async EC access), memory leak audits, and "Lite Mode" for minimal monitoring
+  - Telemetry for CPU/memory usage deltas and benchmarks
+  - Files: `src/Services/HardwareMonitorService.cs` (optimize polling loops), `src/Tests/PerformanceTests.cs` (new test suite), `docs/PERFORMANCE_GUIDE.md` (optimization notes)
+- Acceptance Criteria:
+  - Monitoring loop CPU usage drops by 25-40% in lite mode; memory footprint stays under 50MB during extended runs, validated by benchmarks
+
+### 9) Expanded Hardware Support & Model Detection (Medium)
+- Goals:
+  - Improve compatibility with newer OMEN/Victus models and BIOS versions
+  - Enhance auto-detection and user-submittable calibration
+- Deliverables:
+  - Enhanced model database with auto-detection for new BIOS versions and "Beta Support" mode for untested models
+  - Update docs with supported model matrix and calibration submission UI
+  - Files: `src/Services/ModelDetectionService.cs` (improve detection logic), `src/Data/Models.json` (expand database), `docs/HARDWARE_SUPPORT.md` (model matrix)
+- Acceptance Criteria:
+  - 90%+ of reported models auto-detect correctly; beta mode provides safe fallbacks and collects anonymous telemetry
+
+### 10) UI/UX Polish & Accessibility (Low→Medium)
+- Goals:
+  - Improve user experience with theming, accessibility, and onboarding
+  - Address basic UX gaps for broader usability
+- Deliverables:
+  - Enhanced theming (high-contrast mode), keyboard shortcuts, screen reader support, and onboarding wizard
+  - Contextual help tooltips and accessibility checker
+  - Files: `src/Views/MainWindow.xaml` (UI updates), `src/Resources/Strings.resx` (localization), `docs/ACCESSIBILITY_GUIDE.md` (accessibility notes)
+- Acceptance Criteria:
+  - Accessibility checker passes WCAG AA basics; user testing shows 20% faster task completion for common workflows
+
 ---
 
 ## ⚪ Nice-to-have / Stretch Goals

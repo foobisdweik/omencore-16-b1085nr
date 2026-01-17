@@ -208,8 +208,8 @@ namespace OmenCore.Hardware
         }
         
         /// <summary>
-        /// Read actual fan RPM from HP OMEN EC registers 0x34 and 0x35.
-        /// These registers contain fan speed in units of 100 RPM.
+        /// Read actual fan RPM from HP OMEN EC registers.
+        /// Tries multiple register sets for compatibility with different models.
         /// </summary>
         private (int fan1Rpm, int fan2Rpm) ReadActualFanRpm()
         {
@@ -218,14 +218,40 @@ namespace OmenCore.Hardware
 
             try
             {
+                // Try primary registers (0x34/0x35) - units of 100 RPM
                 var fan1Unit = _ecAccess.ReadByte(REG_FAN1_RPM);
                 var fan2Unit = _ecAccess.ReadByte(REG_FAN2_RPM);
 
-                // Convert from 100 RPM units to actual RPM
-                var fan1Rpm = fan1Unit * 100;
-                var fan2Rpm = fan2Unit * 100;
+                if (fan1Unit > 0 || fan2Unit > 0)
+                {
+                    // Convert from 100 RPM units to actual RPM
+                    var fan1Rpm = fan1Unit * 100;
+                    var fan2Rpm = fan2Unit * 100;
+                    return (fan1Rpm, fan2Rpm);
+                }
 
-                return (fan1Rpm, fan2Rpm);
+                // Try alternative registers (0x4A-0x4B for Fan1, 0x4C-0x4D for Fan2) - 16-bit RPM
+                try
+                {
+                    var fan1Low = _ecAccess.ReadByte(0x4A);
+                    var fan1High = _ecAccess.ReadByte(0x4B);
+                    var fan2Low = _ecAccess.ReadByte(0x4C);
+                    var fan2High = _ecAccess.ReadByte(0x4D);
+
+                    var fan1Rpm = (fan1High << 8) | fan1Low;
+                    var fan2Rpm = (fan2High << 8) | fan2Low;
+
+                    if (fan1Rpm > 0 || fan2Rpm > 0)
+                    {
+                        return (fan1Rpm, fan2Rpm);
+                    }
+                }
+                catch
+                {
+                    // Alternative registers not available
+                }
+
+                return (0, 0);
             }
             catch
             {

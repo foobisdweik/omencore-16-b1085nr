@@ -366,11 +366,38 @@ namespace OmenCore.Services
                 }
                 
                 // Fallback: set each zone individually via WMI
+                bool wmiIndividualSuccess = true;
                 for (int i = 0; i < 4; i++)
                 {
-                    SetZoneColorInternal((KeyboardZone)i, orderedColors[i]);
+                    if (!SetZoneColorInternal((KeyboardZone)i, orderedColors[i]))
+                    {
+                        wmiIndividualSuccess = false;
+                        break;
+                    }
                 }
-                _logging.Info("✓ All zone colors set individually via WMI");
+                
+                if (wmiIndividualSuccess)
+                {
+                    _logging.Info("✓ All zone colors set individually via WMI");
+                    return;
+                }
+                _logging.Warn("WMI BIOS methods failed, trying EC fallback");
+                
+                // Final fallback: try EC if experimental is enabled
+                if (_ecAvailable && _ecAccess != null && IsExperimentalEcEnabled)
+                {
+                    _logging.Warn("⚠️ WMI failed, falling back to EXPERIMENTAL EC keyboard writes - crash risk!");
+                    for (int i = 0; i < 4; i++)
+                    {
+                        SetZoneColorViaEc((KeyboardZone)i, orderedColors[i]);
+                    }
+                    TrackEcResult(true);
+                    _logging.Info("✓ All zone colors set via EC fallback (EXPERIMENTAL)");
+                    _logging.Info($"✓ Applied keyboard zone colors: Z1=#{orderedColors[0].R:X2}{orderedColors[0].G:X2}{orderedColors[0].B:X2}, Z2=#{orderedColors[1].R:X2}{orderedColors[1].G:X2}{orderedColors[1].B:X2}, Z3=#{orderedColors[2].R:X2}{orderedColors[2].G:X2}{orderedColors[2].B:X2}, Z4=#{orderedColors[3].R:X2}{orderedColors[3].G:X2}{orderedColors[3].B:X2}");
+                    return;
+                }
+                
+                _logging.Error("All keyboard lighting backends failed. Colors may not be applied.");
             }
             catch (Exception ex)
             {
@@ -399,7 +426,7 @@ namespace OmenCore.Services
             _ecAccess.WriteByte((byte)(baseReg + 2), color.B);
         }
 
-        private void SetZoneColorInternal(KeyboardZone zone, Color color)
+        private bool SetZoneColorInternal(KeyboardZone zone, Color color)
         {
             var backend = BackendType;
             
@@ -407,7 +434,7 @@ namespace OmenCore.Services
             if ((backend == "EC" || backend == "Auto") && IsExperimentalEcEnabled && _ecAvailable && _ecAccess != null)
             {
                 SetZoneColorViaEc(zone, color);
-                return;
+                return true; // Assume success for EC
             }
             
             // Try WMI BIOS
@@ -415,13 +442,14 @@ namespace OmenCore.Services
             {
                 if (_wmiBios.SetZoneColor((int)zone, color.R, color.G, color.B))
                 {
-                    return; // Success
+                    return true; // Success
                 }
                 _logging.Warn($"WMI BIOS SetZoneColor failed for zone {zone}");
             }
             
             // EC fallback is DISABLED for keyboard RGB - not safe on all models
             _logging.Warn($"Zone {zone} color not applied - WMI BIOS method unavailable or failed");
+            return false;
         }
 
         public void SetBrightness(int brightness)

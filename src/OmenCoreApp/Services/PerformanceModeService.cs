@@ -11,6 +11,7 @@ namespace OmenCore.Services
         private readonly IFanController _fanController;
         private readonly PowerPlanService _powerPlanService;
         private readonly PowerLimitController? _powerLimitController;
+        private readonly IPowerVerificationService? _powerVerificationService;
         private readonly LoggingService _logging;
         private string _currentMode = "Default";
 
@@ -23,11 +24,13 @@ namespace OmenCore.Services
             IFanController fanController, 
             PowerPlanService powerPlanService, 
             PowerLimitController? powerLimitController,
-            LoggingService logging)
+            LoggingService logging,
+            IPowerVerificationService? powerVerificationService = null)
         {
             _fanController = fanController;
             _powerPlanService = powerPlanService;
             _powerLimitController = powerLimitController;
+            _powerVerificationService = powerVerificationService;
             _logging = logging;
         }
 
@@ -50,6 +53,24 @@ namespace OmenCore.Services
                 {
                     _powerLimitController.ApplyPerformanceLimits(mode);
                     _logging.Info($"⚡ Power limits applied: CPU={mode.CpuPowerLimitWatts}W, GPU={mode.GpuPowerLimitWatts}W");
+
+                    // Verify the power limits were applied correctly
+                    if (_powerVerificationService != null && _powerVerificationService.IsAvailable)
+                    {
+                        var verificationTask = _powerVerificationService.VerifyPowerLimitsAsync(mode);
+                        // Don't await to avoid blocking, but log result
+                        verificationTask.ContinueWith(t =>
+                        {
+                            if (t.Result)
+                            {
+                                _logging.Info("✓ Power limits verified successfully");
+                            }
+                            else
+                            {
+                                _logging.Warn("⚠️ Power limits verification failed - values may not have been applied");
+                            }
+                        });
+                    }
                 }
                 catch (Exception ex)
                 {

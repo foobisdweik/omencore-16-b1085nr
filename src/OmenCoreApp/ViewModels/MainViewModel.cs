@@ -1261,6 +1261,21 @@ namespace OmenCore.ViewModels
             {
                 _logging.Info("Power limit controller skipped (EC not available)");
             }
+
+            // Power verification service
+            IPowerVerificationService? powerVerificationService = null;
+            if (powerLimitController != null && ec != null)
+            {
+                try
+                {
+                    powerVerificationService = new PowerVerificationService(powerLimitController, ec, _logging);
+                    _logging.Info("✓ Power verification service initialized");
+                }
+                catch (Exception ex)
+                {
+                    _logging.Warn($"Power verification service unavailable: {ex.Message}");
+                }
+            }
             
             // Enable experimental EC keyboard writes if user has opted in
             if (_config.ExperimentalEcKeyboardEnabled)
@@ -1269,7 +1284,7 @@ namespace OmenCore.ViewModels
                 _logging.Info("⚠️ Experimental EC keyboard writes ENABLED (user opted in)");
             }
             
-            _performanceModeService = new PerformanceModeService(fanController, powerPlanService, powerLimitController, _logging);
+            _performanceModeService = new PerformanceModeService(fanController, powerPlanService, powerLimitController, _logging, powerVerificationService);
             _keyboardLightingService = new KeyboardLightingService(_logging, ec, _wmiBios, _configService);
             _systemOptimizationService = new SystemOptimizationService(_logging);
             _gpuSwitchService = new GpuSwitchService(_logging);
