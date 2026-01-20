@@ -235,6 +235,31 @@ namespace OmenCore.Services
         }
 
         /// <summary>
+        /// Show thermal protection activated notification
+        /// </summary>
+        public void ShowThermalProtectionActivated(double temperature, string protectionLevel)
+        {
+            if (!_isEnabled) return;
+
+            try
+            {
+                new ToastContentBuilder()
+                    .AddText($"🛡️ Thermal Protection Activated")
+                    .AddText($"Temperature: {temperature:F0}°C")
+                    .AddText($"Level: {protectionLevel}")
+                    .AddText("Fans boosted to prevent overheating.")
+                    .SetToastDuration(ToastDuration.Short)
+                    .Show();
+                    
+                _logging.Info($"Thermal protection notification: {protectionLevel} at {temperature}°C");
+            }
+            catch (Exception ex)
+            {
+                _logging.Info($"Failed to show notification: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Show a driver issue notification
         /// </summary>
         public void ShowDriverIssue(string driverName, string issue)

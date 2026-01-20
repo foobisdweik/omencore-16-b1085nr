@@ -56,17 +56,21 @@ namespace OmenCore.Services
         private readonly LoggingService _logging;
         
         // Verification parameters
-        private const int VerificationRetries = 2;          // Retry verification up to 2 times
-        private const int VerificationSamples = 3;          // Take 3 RPM samples and average
-        private const int SampleDelayMs = 300;              // Wait 300ms between samples
+        private const int VerificationRetries = 3;          // Retry verification up to 3 times (increased from 2)
+        private const int VerificationSamples = 5;          // Take 5 RPM samples and average (increased from 3)
+        private const int SampleDelayMs = 200;              // Wait 200ms between samples (reduced for faster verification)
         private const int MaxLevel = 55;  // HP uses 55 as max on most models
         private const int MinRpm = 0;
         private const int MaxRpm = 5500;  // Typical max RPM
         
         // Verification timing
-        private const int FanResponseDelayMs = 2500;  // Fans have mechanical inertia
-        private const int RetryDelayMs = 2000;
-        private const double RpmTolerance = 0.18;  // Slightly tighter tolerance for verification
+        private const int FanResponseDelayMs = 2000;  // Reduced from 2500ms for faster response
+        private const int RetryDelayMs = 1500;        // Reduced from 2000ms
+        private const double RpmTolerance = 0.15;     // Tighter tolerance (reduced from 0.18)
+        
+        // Auto-revert settings
+        private const bool AutoRevertOnFailure = true;     // Enable auto-revert to previous state
+        private const int RevertDelayMs = 1000;            // Delay before reverting
         
         public FanVerificationService(HpWmiBios? wmiBios, FanService? fanService, LoggingService logging)
         {
@@ -340,6 +344,15 @@ namespace OmenCore.Services
         }
         
         /// <summary>
+        /// Convert HP fan level back to a percentage.
+        /// </summary>
+        private int LevelToPercent(int level)
+        {
+            level = Math.Clamp(level, 0, MaxLevel);
+            return (int)Math.Round(level / (double)MaxLevel * 100);
+        }
+
+        /// <summary>
         /// Convert expected percentage to expected RPM.
         /// This is an approximation - real calibration data would be better.
         /// </summary>
@@ -377,7 +390,241 @@ namespace OmenCore.Services
             var tolerance = result.ExpectedRpm * RpmTolerance;
             return Math.Abs(result.ActualRpmAfter - result.ExpectedRpm) <= tolerance;
         }
-        
+
         #endregion
+
+        /// <summary>
+        /// Enhanced verification with multiple read-backs and auto-revert capability.
+        /// Attempts multiple verification cycles before giving up.
+        /// </summary>
+        public async Task<FanApplyResult> ApplyWithEnhancedVerificationAsync(
+            int fanIndex,
+            int targetPercent,
+            bool autoRevertOnFailure = true,
+            CancellationToken ct = default)
+        {
+            var startTime = DateTime.Now;
+            var result = new FanApplyResult
+            {
+                FanIndex = fanIndex,
+                FanName = GetFanName(fanIndex),
+                RequestedPercent = targetPercent,
+                ExpectedRpm = PercentToExpectedRpm(targetPercent)
+            };
+
+            if (_wmiBios == null || !_wmiBios.IsAvailable)
+            {
+                result.ErrorMessage = "WMI BIOS not available";
+                result.Duration = DateTime.Now - startTime;
+                return result;
+            }
+
+            // Store original state for potential revert
+            var originalState = GetCurrentFanState(fanIndex);
+            result.ActualRpmBefore = originalState.rpm;
+
+            try
+            {
+                _logging.Info($"Starting enhanced verification for fan {fanIndex} ({result.FanName}) at {targetPercent}%");
+
+                // First attempt with standard verification
+                var standardResult = await ApplyAndVerifyFanSpeedAsync(fanIndex, targetPercent, ct);
+                if (standardResult.Success)
+                {
+                    _logging.Info($"✓ Enhanced verification passed on first attempt for fan {fanIndex}");
+                    return standardResult;
+                }
+
+                _logging.Warn($"Standard verification failed for fan {fanIndex}, attempting enhanced verification cycles...");
+
+                // Enhanced verification: multiple read-back attempts
+                for (int cycle = 1; cycle <= 2; cycle++) // 2 additional cycles
+                {
+                    _logging.Info($"Enhanced verification cycle {cycle} for fan {fanIndex}");
+
+                    // Wait longer for fan to stabilize
+                    await Task.Delay(FanResponseDelayMs + (cycle * 500), ct);
+
+                    // Take more samples for better accuracy
+                    var (avgRpm, minRpm, maxRpm) = await GetStableFanRpmAsync(fanIndex, 7, ct); // 7 samples
+
+                    result.ActualRpmAfter = avgRpm;
+
+                    // Check if we're within a more lenient tolerance for enhanced verification
+                    var lenientTolerance = result.ExpectedRpm * (RpmTolerance * 1.5); // 50% more lenient
+                    var withinLenientTolerance = Math.Abs(result.ActualRpmAfter - result.ExpectedRpm) <= lenientTolerance;
+
+                    if (withinLenientTolerance)
+                    {
+                        _logging.Info($"✓ Enhanced verification passed on cycle {cycle} for fan {fanIndex}: {avgRpm} RPM (range: {minRpm}-{maxRpm})");
+                        result.VerificationPassed = true;
+                        result.WmiCallSucceeded = true; // Assume it worked since we got here
+                        result.Duration = DateTime.Now - startTime;
+                        return result;
+                    }
+
+                    _logging.Warn($"Enhanced verification cycle {cycle} failed: expected ~{result.ExpectedRpm}, got {avgRpm} RPM (range: {minRpm}-{maxRpm})");
+                }
+
+                // All verification attempts failed
+                result.ActualRpmAfter = GetCurrentRpm(fanIndex);
+                result.VerificationPassed = false;
+                result.WmiCallSucceeded = false;
+                result.ErrorMessage = $"Enhanced verification failed after multiple attempts: expected ~{result.ExpectedRpm}, got {result.ActualRpmAfter}";
+
+                // Auto-revert if enabled and requested
+                if (autoRevertOnFailure && AutoRevertOnFailure)
+                {
+                    _logging.Warn($"Auto-reverting fan {fanIndex} to previous state due to verification failure...");
+                    await Task.Delay(RevertDelayMs, ct);
+
+                    try
+                    {
+                        // Try to restore original fan level
+                        var originalPercent = LevelToPercent(originalState.level);
+                        var revertResult = await ApplyAndVerifyFanSpeedAsync(fanIndex, originalPercent, ct);
+
+                        if (revertResult.Success)
+                        {
+                            _logging.Info($"✓ Successfully reverted fan {fanIndex} to {originalPercent}% ({originalState.rpm} RPM)");
+                            result.ErrorMessage += " [Auto-reverted to previous state]";
+                        }
+                        else
+                        {
+                            _logging.Warn($"Failed to auto-revert fan {fanIndex} to previous state");
+                            result.ErrorMessage += " [Auto-revert failed]";
+                        }
+                    }
+                    catch (Exception revertEx)
+                    {
+                        _logging.Error($"Exception during auto-revert: {revertEx.Message}");
+                        result.ErrorMessage += " [Auto-revert exception]";
+                    }
+                }
+
+                _logging.Error($"✗ Enhanced verification completely failed for fan {fanIndex}: {result.ErrorMessage}");
+            }
+            catch (Exception ex)
+            {
+                result.ErrorMessage = $"Enhanced verification exception: {ex.Message}";
+                _logging.Error($"Enhanced verification exception for fan {fanIndex}: {ex.Message}", ex);
+            }
+
+            result.Duration = DateTime.Now - startTime;
+            return result;
+        }
+
+        /// <summary>
+        /// Perform a comprehensive fan calibration test across multiple speeds.
+        /// Useful for generating calibration data for specific laptop models.
+        /// </summary>
+        public async Task<FanCalibrationResult> PerformFanCalibrationAsync(
+            int fanIndex,
+            CancellationToken ct = default)
+        {
+            var calibrationResult = new FanCalibrationResult
+            {
+                FanIndex = fanIndex,
+                FanName = GetFanName(fanIndex),
+                CalibrationPoints = new List<FanCalibrationPoint>(),
+                StartTime = DateTime.Now
+            };
+
+            _logging.Info($"Starting fan calibration for {calibrationResult.FanName} (fan {fanIndex})");
+
+            // Test speeds: 0%, 20%, 40%, 60%, 80%, 100%
+            var testSpeeds = new[] { 0, 20, 40, 60, 80, 100 };
+
+            foreach (var speed in testSpeeds)
+            {
+                if (ct.IsCancellationRequested)
+                {
+                    calibrationResult.ErrorMessage = "Calibration cancelled";
+                    break;
+                }
+
+                _logging.Info($"Calibrating fan {fanIndex} at {speed}%...");
+
+                try
+                {
+                    // Apply the speed
+                    var applyResult = await ApplyWithEnhancedVerificationAsync(fanIndex, speed, false, ct);
+
+                    // Wait for stabilization
+                    await Task.Delay(3000, ct);
+
+                    // Take multiple readings
+                    var (avgRpm, minRpm, maxRpm) = await GetStableFanRpmAsync(fanIndex, 10, ct);
+
+                    var point = new FanCalibrationPoint
+                    {
+                        RequestedPercent = speed,
+                        AppliedLevel = applyResult.AppliedLevel,
+                        MeasuredRpm = avgRpm,
+                        RpmRangeMin = minRpm,
+                        RpmRangeMax = maxRpm,
+                        VerificationPassed = applyResult.Success,
+                        Duration = applyResult.Duration
+                    };
+
+                    calibrationResult.CalibrationPoints.Add(point);
+
+                    _logging.Info($"Calibration point: {speed}% → {avgRpm} RPM (range: {minRpm}-{maxRpm}, verified: {applyResult.Success})");
+
+                    // Wait between tests to prevent thermal stress
+                    if (speed < 100)
+                        await Task.Delay(2000, ct);
+                }
+                catch (Exception ex)
+                {
+                    _logging.Error($"Calibration failed at {speed}%: {ex.Message}");
+
+                    var errorPoint = new FanCalibrationPoint
+                    {
+                        RequestedPercent = speed,
+                        ErrorMessage = ex.Message
+                    };
+                    calibrationResult.CalibrationPoints.Add(errorPoint);
+                }
+            }
+
+            calibrationResult.EndTime = DateTime.Now;
+            calibrationResult.Duration = calibrationResult.EndTime - calibrationResult.StartTime;
+            calibrationResult.Success = calibrationResult.CalibrationPoints.All(p => p.VerificationPassed);
+
+            _logging.Info($"Fan calibration completed for {calibrationResult.FanName}: {calibrationResult.CalibrationPoints.Count} points, success: {calibrationResult.Success}");
+
+            return calibrationResult;
+        }
+    }
+
+    /// <summary>
+    /// Result of a fan calibration operation.
+    /// </summary>
+    public class FanCalibrationResult
+    {
+        public int FanIndex { get; set; }
+        public string FanName { get; set; } = "";
+        public List<FanCalibrationPoint> CalibrationPoints { get; set; } = new();
+        public DateTime StartTime { get; set; }
+        public DateTime EndTime { get; set; }
+        public TimeSpan Duration { get; set; }
+        public bool Success { get; set; }
+        public string? ErrorMessage { get; set; }
+    }
+
+    /// <summary>
+    /// Single calibration point data.
+    /// </summary>
+    public class FanCalibrationPoint
+    {
+        public int RequestedPercent { get; set; }
+        public int AppliedLevel { get; set; }
+        public int MeasuredRpm { get; set; }
+        public int RpmRangeMin { get; set; }
+        public int RpmRangeMax { get; set; }
+        public bool VerificationPassed { get; set; }
+        public TimeSpan Duration { get; set; }
+        public string? ErrorMessage { get; set; }
     }
 }

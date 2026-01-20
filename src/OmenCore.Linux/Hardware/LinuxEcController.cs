@@ -71,6 +71,120 @@ public class LinuxEcController
             AccessMethod = "none";
     }
     
+    /// <summary>
+    /// Get detailed diagnostic information for troubleshooting.
+    /// </summary>
+    public Dictionary<string, object> GetDiagnostics()
+    {
+        var diagnostics = new Dictionary<string, object>
+        {
+            ["ec_available"] = IsAvailable,
+            ["ec_access_method"] = AccessMethod,
+            ["ec_sys_path"] = EC_PATH,
+            ["ec_sys_exists"] = File.Exists(EC_PATH),
+            ["hp_wmi_path"] = HP_WMI_PATH,
+            ["hp_wmi_exists"] = Directory.Exists(HP_WMI_PATH),
+            ["kernel_version"] = GetKernelVersion(),
+            ["distribution"] = GetDistributionInfo(),
+            ["is_root"] = CheckRootAccess()
+        };
+        
+        // Check file permissions if paths exist
+        if (File.Exists(EC_PATH))
+        {
+            try
+            {
+                var info = new FileInfo(EC_PATH);
+                diagnostics["ec_sys_permissions"] = $"{info.UnixFileMode}";
+                diagnostics["ec_sys_can_read"] = CanReadFile(EC_PATH);
+                diagnostics["ec_sys_can_write"] = CanWriteFile(EC_PATH);
+            }
+            catch (Exception ex)
+            {
+                diagnostics["ec_sys_permissions_error"] = ex.Message;
+            }
+        }
+        
+        // Check HP-WMI files
+        var wmiFiles = new[] { HP_WMI_THERMAL, HP_WMI_FAN_ALWAYS_ON, HP_WMI_FAN1, HP_WMI_FAN2 };
+        foreach (var file in wmiFiles)
+        {
+            diagnostics[$"hp_wmi_{Path.GetFileName(file)}"] = File.Exists(file);
+        }
+        
+        return diagnostics;
+    }
+    
+    private string GetKernelVersion()
+    {
+        try
+        {
+            using var process = new System.Diagnostics.Process
+            {
+                StartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "uname",
+                    Arguments = "-r",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false
+                }
+            };
+            process.Start();
+            var output = process.StandardOutput.ReadToEnd().Trim();
+            process.WaitForExit();
+            return output;
+        }
+        catch
+        {
+            return "unknown";
+        }
+    }
+    
+    private string GetDistributionInfo()
+    {
+        try
+        {
+            if (File.Exists("/etc/os-release"))
+            {
+                var lines = File.ReadAllLines("/etc/os-release");
+                var id = lines.FirstOrDefault(l => l.StartsWith("ID="))?.Split('=')[1].Trim('"') ?? "unknown";
+                var version = lines.FirstOrDefault(l => l.StartsWith("VERSION_ID="))?.Split('=')[1].Trim('"') ?? "";
+                return $"{id} {version}".Trim();
+            }
+        }
+        catch
+        {
+            // Ignore errors
+        }
+        return "unknown";
+    }
+    
+    private bool CanReadFile(string path)
+    {
+        try
+        {
+            using var fs = File.OpenRead(path);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    
+    private bool CanWriteFile(string path)
+    {
+        try
+        {
+            using var fs = File.OpenWrite(path);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    
     public static bool CheckRootAccess()
     {
         return Environment.UserName == "root" || Mono.Unix.Native.Syscall.getuid() == 0;

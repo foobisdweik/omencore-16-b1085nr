@@ -130,7 +130,7 @@
             </Button>
         </Grid>
 
-        <ScrollViewer Grid.Row="1" Style="{StaticResource SmoothScrollViewer}" utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="1.2">
+        <ScrollViewer Grid.Row="1">
             <StackPanel>
                 <!-- Corsair Devices Section -->
                 <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16">
@@ -883,7 +883,239 @@
                         </Border>
                     </StackPanel>
                 </Border>
-                
+
+                <!-- Advanced Lighting Effects -->
+                <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="🎨 Advanced Lighting Effects" FontSize="20" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16"/>
+
+                        <!-- Temperature-Responsive Lighting -->
+                        <Border Background="{StaticResource SurfaceDarkBrush}"
+                                CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="🌡️ Temperature-Responsive Lighting"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    <TextBlock Text="Keyboard and RGB devices change color based on CPU/GPU temperature"
+                                               FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               Margin="0,2,0,0"/>
+                                </StackPanel>
+
+                                <ToggleButton Grid.Column="1"
+                                              IsChecked="{Binding TemperatureResponsiveLightingEnabled, Mode=TwoWay}"
+                                              Style="{StaticResource ModernToggleButton}"
+                                              VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Temperature Thresholds -->
+                        <Border Background="{StaticResource SurfaceMediumBrush}"
+                                CornerRadius="8" Padding="16" Margin="0,0,0,12"
+                                Visibility="{Binding TemperatureResponsiveLightingEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock Text="Temperature Thresholds (°C)" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                        <TextBlock Text="Low" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                        <TextBox Text="{Binding CpuTempThresholdLow, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource ModernTextBox}" Margin="0,2,0,0"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Margin="4,0">
+                                        <TextBlock Text="Medium" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                        <TextBox Text="{Binding CpuTempThresholdMedium, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource ModernTextBox}" Margin="0,2,0,0"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2" Margin="8,0,0,0">
+                                        <TextBlock Text="High" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                        <TextBox Text="{Binding CpuTempThresholdHigh, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource ModernTextBox}" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Color Pickers for Temperature Levels -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Grid.Column="0" Background="{Binding TempLowColorHex, Converter={StaticResource HexToBrushConverter}}"
+                                            CornerRadius="6" Padding="8" Margin="0,0,8,0" Cursor="Hand">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="Low Temp" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
+                                            <TextBox Text="{Binding TempLowColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource ModernTextBox}" FontSize="10" Margin="0,4,0,0" Width="70"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Grid.Column="1" Background="{Binding TempMediumColorHex, Converter={StaticResource HexToBrushConverter}}"
+                                            CornerRadius="6" Padding="8" Margin="4,0" Cursor="Hand">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="Medium Temp" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
+                                            <TextBox Text="{Binding TempMediumColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource ModernTextBox}" FontSize="10" Margin="0,4,0,0" Width="70"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Grid.Column="2" Background="{Binding TempHighColorHex, Converter={StaticResource HexToBrushConverter}}"
+                                            CornerRadius="6" Padding="8" Margin="8,0,0,0" Cursor="Hand">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="High Temp" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
+                                            <TextBox Text="{Binding TempHighColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource ModernTextBox}" FontSize="10" Margin="0,4,0,0" Width="70"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Performance Mode Synced Lighting -->
+                        <Border Background="{StaticResource SurfaceDarkBrush}"
+                                CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="⚡ Performance Mode Synced Lighting"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    <TextBlock Text="RGB devices change color based on current performance mode"
+                                               FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               Margin="0,2,0,0"/>
+                                </StackPanel>
+
+                                <ToggleButton Grid.Column="1"
+                                              IsChecked="{Binding PerformanceModeSyncedLightingEnabled, Mode=TwoWay}"
+                                              Style="{StaticResource ModernToggleButton}"
+                                              VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Performance Mode Colors -->
+                        <Border Background="{StaticResource SurfaceMediumBrush}"
+                                CornerRadius="8" Padding="16" Margin="0,0,0,12"
+                                Visibility="{Binding PerformanceModeSyncedLightingEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock Text="Performance Mode Colors" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Grid.Column="0" Background="{Binding BalancedModeColorHex, Converter={StaticResource HexToBrushConverter}}"
+                                            CornerRadius="6" Padding="8" Margin="0,0,8,0" Cursor="Hand">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="Balanced" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
+                                            <TextBox Text="{Binding BalancedModeColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource ModernTextBox}" FontSize="10" Margin="0,4,0,0" Width="70"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Grid.Column="1" Background="{Binding PerformanceModeColorHex, Converter={StaticResource HexToBrushConverter}}"
+                                            CornerRadius="6" Padding="8" Margin="4,0" Cursor="Hand">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="Performance" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
+                                            <TextBox Text="{Binding PerformanceModeColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource ModernTextBox}" FontSize="10" Margin="0,4,0,0" Width="70"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Grid.Column="2" Background="{Binding QuietModeColorHex, Converter={StaticResource HexToBrushConverter}}"
+                                            CornerRadius="6" Padding="8" Margin="4,0" Cursor="Hand">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="Quiet" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
+                                            <TextBox Text="{Binding QuietModeColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource ModernTextBox}" FontSize="10" Margin="0,4,0,0" Width="70"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Grid.Column="3" Background="{Binding CustomModeColorHex, Converter={StaticResource HexToBrushConverter}}"
+                                            CornerRadius="6" Padding="8" Margin="8,0,0,0" Cursor="Hand">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="Custom" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
+                                            <TextBox Text="{Binding CustomModeColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Style="{StaticResource ModernTextBox}" FontSize="10" Margin="0,4,0,0" Width="70"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Throttling Indicators -->
+                        <Border Background="{StaticResource SurfaceDarkBrush}"
+                                CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="🚨 Throttling Indicators"
+                                               FontSize="14" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    <TextBlock Text="Flash red/orange when CPU/GPU thermal or power throttling occurs"
+                                               FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               Margin="0,2,0,0"/>
+                                </StackPanel>
+
+                                <ToggleButton Grid.Column="1"
+                                              IsChecked="{Binding ThrottlingIndicatorLightingEnabled, Mode=TwoWay}"
+                                              Style="{StaticResource ModernToggleButton}"
+                                              VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Throttling Color -->
+                        <Border Background="{StaticResource SurfaceMediumBrush}"
+                                CornerRadius="8" Padding="16" Margin="0,0,0,0"
+                                Visibility="{Binding ThrottlingIndicatorLightingEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock Text="Throttling Warning Color" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
+
+                                <Border Background="{Binding ThrottlingColorHex, Converter={StaticResource HexToBrushConverter}}"
+                                        CornerRadius="6" Padding="12" Cursor="Hand">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <TextBlock Text="⚠️ Throttling Alert" FontSize="12" Foreground="White" FontWeight="SemiBold"/>
+                                        <TextBox Text="{Binding ThrottlingColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                 Style="{StaticResource ModernTextBox}" FontSize="10" Margin="12,0,0,0" Width="70"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
                 <!-- Keyboard Unavailable Message -->
                 <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16"
                         Visibility="{Binding IsKeyboardLightingAvailable, Converter={StaticResource InverseBoolToVisibility}}">

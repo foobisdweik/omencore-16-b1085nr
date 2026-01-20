@@ -242,13 +242,13 @@ namespace OmenCore.Models
         public bool Enabled { get; set; } = true;
         
         /// <summary>Temperature dead-zone in °C. Fans won't change unless temp moves beyond this threshold.</summary>
-        public double DeadZone { get; set; } = 3.0;
+        public double DeadZone { get; set; } = 4.0;
         
         /// <summary>Ramp-up delay in seconds before increasing fan speed.</summary>
-        public double RampUpDelay { get; set; } = 0.5;
+        public double RampUpDelay { get; set; } = 1.0;
         
         /// <summary>Ramp-down delay in seconds before decreasing fan speed.</summary>
-        public double RampDownDelay { get; set; } = 3.0;
+        public double RampDownDelay { get; set; } = 5.0;
         
         /// <summary>Enable thermal protection override - forces max fans when temps exceed threshold, even in Auto mode.</summary>
         public bool ThermalProtectionEnabled { get; set; } = true;

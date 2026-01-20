@@ -55,7 +55,20 @@ namespace OmenCore.Hardware
             throw new InvalidOperationException($"Failed to open WinRing0 device. Tried: {string.Join(", ", DevicePaths)}. Ensure driver is installed.");
         }
 
-        public bool IsAvailable => !_handle.IsInvalid && !_handle.IsClosed;
+        public bool IsAvailable
+        {
+            get
+            {
+                try
+                {
+                    return !_handle.IsInvalid && !_handle.IsClosed;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return false;
+                }
+            }
+        }
 
         /// <summary>
         /// Read a Model-Specific Register
@@ -67,26 +80,33 @@ namespace OmenCore.Hardware
                 if (!IsAvailable)
                     throw new InvalidOperationException("WinRing0 driver not available");
 
-                var request = new MsrRequest { Register = msrAddress };
-                var response = new MsrResponse();
-                
-                uint bytesReturned = 0;
-                bool success = NativeMethods.DeviceIoControl(
-                    _handle,
-                    IOCTL_MSR_READ,
-                    ref request,
-                    Marshal.SizeOf<MsrRequest>(),
-                    ref response,
-                    Marshal.SizeOf<MsrResponse>(),
-                    ref bytesReturned,
-                    IntPtr.Zero);
-
-                if (!success)
+                try
                 {
-                    throw new InvalidOperationException($"Failed to read MSR 0x{msrAddress:X}");
-                }
+                    var request = new MsrRequest { Register = msrAddress };
+                    var response = new MsrResponse();
+                    
+                    uint bytesReturned = 0;
+                    bool success = NativeMethods.DeviceIoControl(
+                        _handle,
+                        IOCTL_MSR_READ,
+                        ref request,
+                        Marshal.SizeOf<MsrRequest>(),
+                        ref response,
+                        Marshal.SizeOf<MsrResponse>(),
+                        ref bytesReturned,
+                        IntPtr.Zero);
 
-                return response.Value;
+                    if (!success)
+                    {
+                        throw new InvalidOperationException($"Failed to read MSR 0x{msrAddress:X}");
+                    }
+
+                    return response.Value;
+                }
+                catch (ObjectDisposedException)
+                {
+                    throw new InvalidOperationException("WinRing0 handle has been disposed");
+                }
             }
         }
 
@@ -100,26 +120,33 @@ namespace OmenCore.Hardware
                 if (!IsAvailable)
                     throw new InvalidOperationException("WinRing0 driver not available");
 
-                var request = new MsrWriteRequest 
-                { 
-                    Register = msrAddress,
-                    Value = value
-                };
-                
-                uint bytesReturned = 0;
-                bool success = NativeMethods.DeviceIoControl(
-                    _handle,
-                    IOCTL_MSR_WRITE,
-                    ref request,
-                    Marshal.SizeOf<MsrWriteRequest>(),
-                    IntPtr.Zero,
-                    0,
-                    ref bytesReturned,
-                    IntPtr.Zero);
-
-                if (!success)
+                try
                 {
-                    throw new InvalidOperationException($"Failed to write MSR 0x{msrAddress:X}");
+                    var request = new MsrWriteRequest 
+                    { 
+                        Register = msrAddress,
+                        Value = value
+                    };
+                    
+                    uint bytesReturned = 0;
+                    bool success = NativeMethods.DeviceIoControl(
+                        _handle,
+                        IOCTL_MSR_WRITE,
+                        ref request,
+                        Marshal.SizeOf<MsrWriteRequest>(),
+                        IntPtr.Zero,
+                        0,
+                        ref bytesReturned,
+                        IntPtr.Zero);
+
+                    if (!success)
+                    {
+                        throw new InvalidOperationException($"Failed to write MSR 0x{msrAddress:X}");
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    throw new InvalidOperationException("WinRing0 handle has been disposed");
                 }
             }
         }

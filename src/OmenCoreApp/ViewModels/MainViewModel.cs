@@ -77,6 +77,7 @@ namespace OmenCore.ViewModels
         private readonly HpWmiBios? _wmiBios;
         private readonly OghServiceProxy? _oghProxy;
         private readonly NvapiService? _nvapiService;
+        private readonly IEcAccess? _ecAccess;
         private HotkeyOsdWindow? _hotkeyOsd;
         
         // Update check properties
@@ -132,7 +133,10 @@ namespace OmenCore.ViewModels
                         _wmiBios,
                         _oghProxy,
                         _systemInfoService,
-                        _nvapiService
+                        _nvapiService,
+                        _fanService,
+                        _hardwareMonitoringService,
+                        _ecAccess
                     );
                     _systemControl.PropertyChanged += (s, e) =>
                     {
@@ -551,6 +555,7 @@ namespace OmenCore.ViewModels
         public ReadOnlyObservableCollection<ThermalSample> ThermalSamples { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
         public ReadOnlyObservableCollection<FanTelemetry> FanTelemetry { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
         public ReadOnlyObservableCollection<MonitoringSample> MonitoringSamples { get; } = null!;
+        public IHardwareMonitoringService? HardwareMonitoringService => _hardwareMonitoringService;
         public MonitoringSample? LatestMonitoringSample
         {
             get => _latestMonitoringSample;
@@ -1186,11 +1191,11 @@ namespace OmenCore.ViewModels
             
             // Initialize EC access with automatic backend selection
             // Tries PawnIO first (Secure Boot compatible), then WinRing0
-            IEcAccess? ec = null;
+            _ecAccess = null;
             try
             {
-                ec = EcAccessFactory.GetEcAccess();
-                if (ec != null && ec.IsAvailable)
+                _ecAccess = EcAccessFactory.GetEcAccess();
+                if (_ecAccess != null && _ecAccess.IsAvailable)
                 {
                     _logging.Info($"EC access initialized: {EcAccessFactory.GetStatusMessage()}");
                     EcBackend = EcAccessFactory.ActiveBackend.ToString();
@@ -1209,7 +1214,7 @@ namespace OmenCore.ViewModels
 
             // Create fan controller with intelligent backend selection using pre-detected capabilities
             // Priority: OGH Proxy > WMI BIOS (no driver) > EC (requires WinRing0) > Fallback (monitoring only)
-            var fanControllerFactory = new FanControllerFactory(monitorBridge, ec, _config.EcFanRegisterMap, _logging, capabilities);
+            var fanControllerFactory = new FanControllerFactory(monitorBridge, _ecAccess, _config.EcFanRegisterMap, _logging, capabilities);
             var fanController = fanControllerFactory.Create();
             FanBackend = fanControllerFactory.ActiveBackend;
             
@@ -1227,7 +1232,7 @@ namespace OmenCore.ViewModels
                 _oghProxy.RunDiagnostics();
             }
             
-            _fanService = new FanService(fanController, new ThermalSensorProvider(monitorBridge), _logging, _config.MonitoringIntervalMs);
+            _fanService = new FanService(fanController, new ThermalSensorProvider(monitorBridge), _logging, _notificationService, _config.MonitoringIntervalMs);
             _fanService.SetHysteresis(_config.FanHysteresis);
             _fanService.ThermalProtectionEnabled = _config.FanHysteresis?.ThermalProtectionEnabled ?? true;
             // Configure smoothing/transition settings for fan ramping
@@ -1245,11 +1250,11 @@ namespace OmenCore.ViewModels
             
             // Power limit controller (EC-based CPU/GPU power control)
             PowerLimitController? powerLimitController = null;
-            if (ec != null && ec.IsAvailable)
+            if (_ecAccess != null && _ecAccess.IsAvailable)
             {
                 try
                 {
-                    powerLimitController = new PowerLimitController(ec, useSimplifiedMode: true);
+                    powerLimitController = new PowerLimitController(_ecAccess, useSimplifiedMode: true);
                     _logging.Info("✓ Power limit controller initialized (simplified mode)");
                 }
                 catch (Exception ex)
@@ -1264,11 +1269,11 @@ namespace OmenCore.ViewModels
 
             // Power verification service
             IPowerVerificationService? powerVerificationService = null;
-            if (powerLimitController != null && ec != null)
+            if (powerLimitController != null && _ecAccess != null)
             {
                 try
                 {
-                    powerVerificationService = new PowerVerificationService(powerLimitController, ec, _logging);
+                    powerVerificationService = new PowerVerificationService(powerLimitController, _ecAccess, _logging);
                     _logging.Info("✓ Power verification service initialized");
                 }
                 catch (Exception ex)
@@ -1285,7 +1290,7 @@ namespace OmenCore.ViewModels
             }
             
             _performanceModeService = new PerformanceModeService(fanController, powerPlanService, powerLimitController, _logging, powerVerificationService);
-            _keyboardLightingService = new KeyboardLightingService(_logging, ec, _wmiBios, _configService);
+            _keyboardLightingService = new KeyboardLightingService(_logging, _ecAccess, _wmiBios, _configService);
             _systemOptimizationService = new SystemOptimizationService(_logging);
             _gpuSwitchService = new GpuSwitchService(_logging);
             
@@ -1315,7 +1320,7 @@ namespace OmenCore.ViewModels
             _autoUpdateService = new AutoUpdateService(_logging);
             _processMonitoringService = new ProcessMonitoringService(_logging);
             _gameProfileService = new GameProfileService(_logging, _processMonitoringService, _configService);
-            _fanCleaningService = new FanCleaningService(_logging, ec, _systemInfoService, _wmiBios, _oghProxy);
+            _fanCleaningService = new FanCleaningService(_logging, _ecAccess, _systemInfoService, _wmiBios, _oghProxy);
             _biosUpdateService = new BiosUpdateService(_logging);
             _updateCheckService = new UpdateCheckService(_logging);
             var profileExportService = new ProfileExportService(_logging, _configService);
@@ -1341,6 +1346,7 @@ namespace OmenCore.ViewModels
             _hotkeyService.ToggleBoostModeRequested += OnHotkeyToggleBoostMode;
             _hotkeyService.ToggleQuietModeRequested += OnHotkeyToggleQuietMode;
             _hotkeyService.ToggleWindowRequested += OnHotkeyToggleWindow;
+            _hotkeyService.ApplySettingsRequested += OnHotkeyApplySettings;
             
             // Wire up OMEN key events
             _omenKeyService.ToggleOmenCoreRequested += OnOmenKeyToggleWindow;
@@ -2304,7 +2310,9 @@ namespace OmenCore.ViewModels
 
         private void HardwareMonitoringServiceOnSampleUpdated(object? sender, MonitoringSample sample)
         {
-            Application.Current?.Dispatcher?.BeginInvoke(() => LatestMonitoringSample = sample);
+            App.Logging.Info($"[Monitor] Sample updated: CPU={sample.CpuTemperatureC:F1}°C, GPU={sample.GpuTemperatureC:F1}°C, Load={sample.CpuLoadPercent:F1}%/{sample.GpuLoadPercent:F1}%");
+            Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, 
+                () => LatestMonitoringSample = sample);
         }
 
         private void RecordingBufferOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -2645,7 +2653,7 @@ namespace OmenCore.ViewModels
 
                     await rgbManager.InitializeAllAsync();
 
-                    Lighting = new LightingViewModel(_corsairDeviceService, _logitechDeviceService, _logging, _keyboardLightingService, _configService, _razerService, rgbManager);
+                    Lighting = new LightingViewModel(_corsairDeviceService, _logitechDeviceService, _logging, _keyboardLightingService, _configService, _razerService, rgbManager, _hardwareMonitoringService, _performanceModeService);
                     OnPropertyChanged(nameof(Lighting));
 
                     // Apply saved keyboard colors on startup
@@ -3097,6 +3105,31 @@ namespace OmenCore.ViewModels
                     mainWindow.Focus();
                     
                     _logging.Info("Window shown and activated");
+                }
+            });
+        }
+
+        private void OnHotkeyApplySettings(object? sender, EventArgs e)
+        {
+            Application.Current?.Dispatcher?.BeginInvoke(() =>
+            {
+                try
+                {
+                    // Apply current performance mode if one is selected
+                    if (SystemControl?.SelectedPerformanceMode != null)
+                    {
+                        SystemControl.ApplyPerformanceModeCommand.Execute(null);
+                        ShowHotkeyOsd("Performance", SystemControl.SelectedPerformanceMode.Name, "Ctrl+S");
+                        PushEvent($"⚡ Applied: {SystemControl.SelectedPerformanceMode.Name} (hotkey)");
+                    }
+                    else
+                    {
+                        _logging.Info("Apply settings hotkey: No performance mode selected");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logging.Warn($"Hotkey apply settings failed: {ex.Message}");
                 }
             });
         }

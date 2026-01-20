@@ -31,6 +31,7 @@ namespace OmenCore
 
         public static LoggingService Logging { get; } = new();
         public static ConfigurationService Configuration { get; } = new();
+        public static IServiceProvider? ServiceProvider => ((App)Current)._serviceProvider;
         
         /// <summary>
         /// Returns true if a remote session change recently occurred that should suppress window activation.

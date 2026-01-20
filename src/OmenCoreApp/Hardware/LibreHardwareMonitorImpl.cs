@@ -94,6 +94,11 @@ namespace OmenCore.Hardware
         private double _lastCpuTempReading = 0;
         private int _consecutiveSameTempReadings = 0;
         private const int MaxSameTempReadingsBeforeLog = 10; // 10 identical readings = stuck sensor
+        private const int MaxSameTempReadingsBeforeReinit = 20; // After trying alternatives, reinitialize
+        
+        // GPU stuck detection
+        private double _lastGpuTempReading = 0;
+        private int _consecutiveSameGpuTempReadings = 0;
 
         /// <summary>
         /// Create an in-process hardware monitor (default).
@@ -269,18 +274,23 @@ namespace OmenCore.Hardware
             // Wait for worker initialization to complete (prevent race condition)
             if (_workerInitializing)
             {
-                // Worker is still starting up - wait a bit
-                for (int i = 0; i < 10 && _workerInitializing; i++)
+                _logger?.Invoke($"[Monitor] ReadSampleAsync: Worker is initializing, waiting...");
+                // Worker is still starting up - wait longer
+                for (int i = 0; i < 20 && _workerInitializing; i++)
                 {
                     await Task.Delay(200, token);
                 }
+                _logger?.Invoke($"[Monitor] ReadSampleAsync: Worker initialization wait complete. _initialized={_initialized}");
             }
 
             // Use worker if enabled and initialized
             if (_useWorker && _workerClient != null && _initialized)
             {
+                _logger?.Invoke($"[Monitor] ReadSampleAsync: Using worker (useWorker={_useWorker}, client!=null={_workerClient != null}, initialized={_initialized})");
                 return await ReadSampleFromWorkerAsync(token);
             }
+
+            _logger?.Invoke($"[Monitor] ReadSampleAsync: Using fallback to in-process (useWorker={_useWorker}, client!=null={_workerClient != null}, initialized={_initialized})");
 
             // Check cache freshness to reduce CPU overhead
             lock (_lock)
@@ -314,6 +324,13 @@ namespace OmenCore.Hardware
                 return BuildSampleFromCache();
             }
             
+            // Check for initialization in progress (StaleCount == 999)
+            if (workerSample.StaleCount == 999)
+            {
+                _logger?.Invoke("[Monitor] ℹ️ Worker still initializing hardware sensors - using cached values");
+                return BuildSampleFromCache();
+            }
+            
             // Check for stale data from worker
             if (!workerSample.IsFresh || workerSample.StaleCount > 30)
             {
@@ -342,6 +359,13 @@ namespace OmenCore.Hardware
                 _cachedCpuTemp = workerSample.CpuTemperature;
                 _cachedCpuLoad = workerSample.CpuLoad;
                 _cachedCpuPower = workerSample.CpuPower;
+                
+                // Update core clocks from worker
+                if (workerSample.CpuCoreClocks != null && workerSample.CpuCoreClocks.Count > 0)
+                {
+                    _cachedCoreClocks.Clear();
+                    _cachedCoreClocks.AddRange(workerSample.CpuCoreClocks);
+                }
                 
                 _cachedGpuTemp = workerSample.GpuTemperature;
                 _cachedGpuLoad = workerSample.GpuLoad;
@@ -524,7 +548,13 @@ namespace OmenCore.Hardware
                             if (_cachedCpuTemp > 0 && Math.Abs(_cachedCpuTemp - _lastCpuTempReading) < 0.1)
                             {
                                 _consecutiveSameTempReadings++;
-                                if (_consecutiveSameTempReadings >= MaxSameTempReadingsBeforeLog)
+                                if (_consecutiveSameTempReadings >= MaxSameTempReadingsBeforeReinit)
+                                {
+                                    _logger?.Invoke($"🚨 CPU temp stuck at {_cachedCpuTemp:F1}°C for {_consecutiveSameTempReadings} readings. Triggering hardware reinitialize...");
+                                    Task.Run(() => Reinitialize());
+                                    _consecutiveSameTempReadings = 0;
+                                }
+                                else if (_consecutiveSameTempReadings >= MaxSameTempReadingsBeforeLog)
                                 {
                                     _logger?.Invoke($"⚠️ CPU temp appears stuck at {_cachedCpuTemp:F1}°C for {_consecutiveSameTempReadings} readings. Attempting sensor refresh...");
                                     // Force hardware update to try to unstick sensor
@@ -674,6 +704,23 @@ namespace OmenCore.Hardware
                                     _lastGpuName = hardware.Name;
                                     _logger?.Invoke($"Using dedicated GPU: {hardware.Name} ({tempValue:F0}°C)");
                                 }
+                                
+                                // GPU stuck detection
+                                if (Math.Abs(_cachedGpuTemp - _lastGpuTempReading) < 0.1)
+                                {
+                                    _consecutiveSameGpuTempReadings++;
+                                    if (_consecutiveSameGpuTempReadings >= MaxSameTempReadingsBeforeReinit)
+                                    {
+                                        _logger?.Invoke($"🚨 GPU temp stuck at {_cachedGpuTemp:F1}°C for {_consecutiveSameGpuTempReadings} readings. Triggering hardware reinitialize...");
+                                        Task.Run(() => Reinitialize());
+                                        _consecutiveSameGpuTempReadings = 0;
+                                    }
+                                }
+                                else
+                                {
+                                    _consecutiveSameGpuTempReadings = 0;
+                                }
+                                _lastGpuTempReading = _cachedGpuTemp;
                             }
                             
                             var gpuLoadSensor = GetSensor(hardware, SensorType.Load, "GPU Core")
@@ -775,6 +822,23 @@ namespace OmenCore.Hardware
                                         var gpuType = isIntelArc ? "Intel Arc" : "integrated Intel GPU";
                                         _logger?.Invoke($"Using {gpuType}: {hardware.Name} ({_cachedGpuTemp:F0}°C)");
                                     }
+                                    
+                                    // GPU stuck detection for Intel GPUs
+                                    if (Math.Abs(_cachedGpuTemp - _lastGpuTempReading) < 0.1)
+                                    {
+                                        _consecutiveSameGpuTempReadings++;
+                                        if (_consecutiveSameGpuTempReadings >= MaxSameTempReadingsBeforeReinit)
+                                        {
+                                            _logger?.Invoke($"🚨 Intel GPU temp stuck at {_cachedGpuTemp:F1}°C for {_consecutiveSameGpuTempReadings} readings. Triggering hardware reinitialize...");
+                                            Task.Run(() => Reinitialize());
+                                            _consecutiveSameGpuTempReadings = 0;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        _consecutiveSameGpuTempReadings = 0;
+                                    }
+                                    _lastGpuTempReading = _cachedGpuTemp;
                                 }
                                 else if (isIntelArc)
                                 {

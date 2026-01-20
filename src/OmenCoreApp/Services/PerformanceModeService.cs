@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OmenCore;
 using OmenCore.Hardware;
 using OmenCore.Models;
 
@@ -13,7 +14,7 @@ namespace OmenCore.Services
         private readonly PowerLimitController? _powerLimitController;
         private readonly IPowerVerificationService? _powerVerificationService;
         private readonly LoggingService _logging;
-        private string _currentMode = "Default";
+        private PerformanceMode? _currentMode;
 
         /// <summary>
         /// Event raised when a performance mode is applied (for UI synchronization).
@@ -36,6 +37,7 @@ namespace OmenCore.Services
 
         public void Apply(PerformanceMode mode)
         {
+            _currentMode = mode;
             var modeInfo = $"⚡ Applying performance mode: '{mode.Name}'";
             if (!string.IsNullOrEmpty(mode.LinkedPowerPlanGuid))
             {
@@ -106,7 +108,6 @@ namespace OmenCore.Services
                 _logging.Warn("⚠️ Fan control unavailable");
             }
             
-            _currentMode = mode.Name;
             _logging.Info($"✓ Performance mode '{mode.Name}' applied successfully");
             
             // Raise event for UI synchronization (sidebar, tray, etc.)
@@ -145,9 +146,14 @@ namespace OmenCore.Services
         }
 
         /// <summary>
+        /// Expose the currently applied performance mode instance.
+        /// </summary>
+        public PerformanceMode? CurrentMode => _currentMode;
+
+        /// <summary>
         /// Get the current performance mode name.
         /// </summary>
-        public string? GetCurrentMode() => _currentMode;
+        public string? GetCurrentMode() => _currentMode?.Name;
 
         /// <summary>
         /// Whether EC-level power limit control is available.
@@ -173,6 +179,14 @@ namespace OmenCore.Services
                     
                 return string.Join(", ", capabilities);
             }
+        }
+
+        /// <summary>
+        /// Return the configured performance modes available to the UI.
+        /// </summary>
+        public IEnumerable<PerformanceMode> GetAvailableModes()
+        {
+            return App.Configuration?.Config.PerformanceModes ?? new List<PerformanceMode>();
         }
 
         public IReadOnlyList<PerformanceMode> GetModes(AppConfig config) => config.PerformanceModes;

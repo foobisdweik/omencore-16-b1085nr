@@ -256,15 +256,15 @@ namespace OmenCore.Services
                     if (name.Contains("GPU temperature", StringComparison.OrdinalIgnoreCase))
                         result.GpuTemperature = value;
                     else if (name.Contains("GPU fan", StringComparison.OrdinalIgnoreCase) && name.Contains("RPM", StringComparison.OrdinalIgnoreCase))
-                        result.GpuFanRpm = (int)value;
+                        result.FanSpeedRpm = (int)value;
                     else if (name.Contains("GPU fan", StringComparison.OrdinalIgnoreCase) && name.Contains("%", StringComparison.OrdinalIgnoreCase))
-                        result.GpuFanPercent = value;
+                        result.FanSpeedPercent = value;
                     else if (name.Contains("GPU power", StringComparison.OrdinalIgnoreCase))
                         result.GpuPower = value;
                     else if (name.Contains("GPU clock", StringComparison.OrdinalIgnoreCase) || name.Contains("Core clock", StringComparison.OrdinalIgnoreCase))
-                        result.GpuCoreClock = value;
+                        result.CoreClockMhz = value;
                     else if (name.Contains("Memory clock", StringComparison.OrdinalIgnoreCase))
-                        result.GpuMemoryClock = value;
+                        result.MemoryClockMhz = value;
                 }
                 
                 result.Timestamp = DateTime.Now;
@@ -395,10 +395,27 @@ namespace OmenCore.Services
     {
         public DateTime Timestamp { get; set; }
         public float GpuTemperature { get; set; }
-        public int GpuFanRpm { get; set; }
-        public float GpuFanPercent { get; set; }
+        public int FanSpeedRpm { get; set; }
+        public float FanSpeedPercent { get; set; }
         public float GpuPower { get; set; }
-        public float GpuCoreClock { get; set; }
-        public float GpuMemoryClock { get; set; }
+        public float CoreClockMhz { get; set; }
+        public float MemoryClockMhz { get; set; }
+        public int GpuId { get; set; }
+        public float TemperatureC { get; set; }
+        public float TemperatureMinC { get; set; }
+        public float TemperatureMaxC { get; set; }
+        public float CoreVoltageMv { get; set; }
+        public float PowerPercent { get; set; }
+        public PerformanceLimitReason PerfLimitReason { get; set; }
+        public string GpuName { get; set; } = string.Empty;
+    }
+
+    public enum PerformanceLimitReason
+    {
+        None,
+        Thermal,
+        Power,
+        Voltage,
+        Unknown
     }
 }

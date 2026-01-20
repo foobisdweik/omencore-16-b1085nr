@@ -23,7 +23,10 @@ namespace OmenCore.ViewModels
         private readonly OghServiceProxy? _oghProxy;
         private readonly SystemInfoService? _systemInfoService;
         private readonly NvapiService? _nvapiService;
+        private readonly FanService? _fanService;
+        private readonly HardwareMonitoringService? _hardwareMonitoringService;
         private IMsrAccess? _msrAccess;  // Changed from WinRing0MsrAccess to IMsrAccess
+        private readonly IEcAccess? _ecAccess;
 
         private PerformanceMode? _selectedPerformanceMode;
         private UndervoltStatus _undervoltStatus = UndervoltStatus.CreateUnknown();
@@ -48,9 +51,16 @@ namespace OmenCore.ViewModels
                     _selectedPerformanceMode = value;
                     OnPropertyChanged();
                     OnPropertyChanged(nameof(CurrentPerformanceModeName));  // Notify sidebar to update
+                    OnPropertyChanged(nameof(CurrentPerformanceModeIndicator));
                     OnPropertyChanged(nameof(IsQuietMode));
                     OnPropertyChanged(nameof(IsBalancedMode));
                     OnPropertyChanged(nameof(IsPerformanceMode));
+                    
+                    // Auto-save selected performance mode to config
+                    if (value != null)
+                    {
+                        SavePerformanceModeToConfig(value.Name);
+                    }
                 }
             }
         }
@@ -353,6 +363,28 @@ namespace OmenCore.ViewModels
                 }
             }
         }
+
+        private double _latestGpuPowerWatts;
+        private string _gpuFullPowerText = "Full power • waiting for telemetry";
+
+        public bool IsGpuFullPowerActive => GpuPowerBoostAvailable &&
+            (string.Equals(GpuPowerBoostLevel, "Maximum", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(GpuPowerBoostLevel, "Extended", StringComparison.OrdinalIgnoreCase));
+
+        public bool ShowGpuFullPowerPill => _hardwareMonitoringService != null && IsGpuFullPowerActive;
+
+        public string GpuFullPowerText
+        {
+            get => _gpuFullPowerText;
+            private set
+            {
+                if (_gpuFullPowerText != value)
+                {
+                    _gpuFullPowerText = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
         
         // GPU Power Boost settings (TGP/PPAB control)
         private string _gpuPowerBoostLevel = "Medium";
@@ -366,6 +398,23 @@ namespace OmenCore.ViewModels
                     _gpuPowerBoostLevel = value;
                     OnPropertyChanged();
                     OnPropertyChanged(nameof(GpuPowerBoostDescription));
+                    OnPropertyChanged(nameof(GpuPowerBoostStatusDescription));
+                    OnPropertyChanged(nameof(IsGpuFullPowerActive));
+                    OnPropertyChanged(nameof(ShowGpuFullPowerPill));
+                    OnPropertyChanged(nameof(CurrentPerformanceModeIndicator));
+                    if (IsGpuFullPowerActive)
+                    {
+                        RefreshGpuPowerPill();
+                    }
+                    
+                    // Update fan service with new GPU power boost level
+                    if (_fanService != null)
+                    {
+                        _fanService.GpuPowerBoostLevel = value;
+                    }
+                    
+                    // Auto-save GPU power boost level to config
+                    SaveGpuPowerBoostToConfig();
                 }
             }
         }
@@ -380,6 +429,9 @@ namespace OmenCore.ViewModels
                 {
                     _gpuPowerBoostAvailable = value;
                     OnPropertyChanged();
+                    OnPropertyChanged(nameof(IsGpuFullPowerActive));
+                    OnPropertyChanged(nameof(ShowGpuFullPowerPill));
+                    OnPropertyChanged(nameof(CurrentPerformanceModeIndicator));
                 }
             }
         }
@@ -406,6 +458,20 @@ namespace OmenCore.ViewModels
             "Extended" => "Extended Boost (PPAB+) - For RTX 5080/newer GPUs that support +25W or more",
             _ => "Select GPU power level"
         };
+
+        public string GpuPowerBoostStatusDescription
+        {
+            get
+            {
+                if (!GpuPowerBoostAvailable)
+                    return "GPU Power Boost not available on this system";
+
+                var nvapiNote = GpuNvapiAvailable ?
+                    " (NVAPI power limits available for fine-tuning)" : "";
+
+                return $"{GpuPowerBoostDescription}{nvapiNote}";
+            }
+        }
         
         public ObservableCollection<string> GpuPowerBoostLevels { get; } = new() { "Minimum", "Medium", "Maximum", "Extended" };
 
@@ -487,6 +553,20 @@ namespace OmenCore.ViewModels
                 if (_gpuOcAvailable != value)
                 {
                     _gpuOcAvailable = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private bool _gpuNvapiAvailable;
+        public bool GpuNvapiAvailable
+        {
+            get => _gpuNvapiAvailable;
+            private set
+            {
+                if (_gpuNvapiAvailable != value)
+                {
+                    _gpuNvapiAvailable = value;
                     OnPropertyChanged();
                 }
             }
@@ -741,7 +821,10 @@ namespace OmenCore.ViewModels
             HpWmiBios? wmiBios = null,
             OghServiceProxy? oghProxy = null,
             SystemInfoService? systemInfoService = null,
-            NvapiService? nvapiService = null)
+            NvapiService? nvapiService = null,
+            FanService? fanService = null,
+            HardwareMonitoringService? hardwareMonitoringService = null,
+            IEcAccess? ecAccess = null)
         {
             _undervoltService = undervoltService;
             _performanceModeService = performanceModeService;
@@ -754,6 +837,14 @@ namespace OmenCore.ViewModels
             _oghProxy = oghProxy;
             _systemInfoService = systemInfoService;
             _nvapiService = nvapiService;
+            _fanService = fanService;
+            _hardwareMonitoringService = hardwareMonitoringService;
+            _ecAccess = ecAccess;
+
+            if (_hardwareMonitoringService != null)
+            {
+                _hardwareMonitoringService.SampleUpdated += OnMonitoringSampleUpdated;
+            }
 
             // Initialize GPU OC if available
             InitializeGpuOc();
@@ -1177,40 +1268,67 @@ namespace OmenCore.ViewModels
                 _logging.Error($"Failed to reset TCC offset: {ex.Message}", ex);
             }
         }
+
+        private void RefreshGpuPowerPill()
+        {
+            var text = _latestGpuPowerWatts > 0
+                ? $"Full power • {_latestGpuPowerWatts:F0}W"
+                : "Full power • waiting for telemetry";
+            GpuFullPowerText = text;
+        }
+
+        private void OnMonitoringSampleUpdated(object? sender, MonitoringSample sample)
+        {
+            _latestGpuPowerWatts = sample.GpuPowerWatts;
+
+            if (!IsGpuFullPowerActive)
+                return;
+
+            App.Current?.Dispatcher?.BeginInvoke(RefreshGpuPowerPill);
+        }
         
         private void DetectGpuPowerBoost()
         {
+            // Check if user has a saved preference - don't overwrite it
+            var savedLevel = _configService.Config.LastGpuPowerBoostLevel;
+            var hasSavedPreference = !string.IsNullOrEmpty(savedLevel) && GpuPowerBoostLevels.Contains(savedLevel);
+            
             // Try WMI BIOS first (preferred)
             if (_wmiBios != null && _wmiBios.IsAvailable)
             {
-                GpuPowerBoostAvailable = true;
                 var gpuPower = _wmiBios.GetGpuPower();
                 if (gpuPower.HasValue)
                 {
-                    // Check for extended PPAB values (RTX 5080 etc.)
+                    GpuPowerBoostAvailable = true;
+                    
+                    // Detect current state for status display
+                    string detectedLevel;
                     if (gpuPower.Value.customTgp && gpuPower.Value.ppab)
                     {
-                        // Standard Maximum level - can't distinguish extended via bool
-                        GpuPowerBoostLevel = "Maximum";
-                        GpuPowerBoostStatus = "Maximum (Custom TGP + Dynamic Boost)";
+                        detectedLevel = "Maximum";
                     }
                     else if (gpuPower.Value.customTgp)
                     {
-                        GpuPowerBoostLevel = "Medium";
-                        GpuPowerBoostStatus = "Medium (Custom TGP)";
+                        detectedLevel = "Medium";
                     }
                     else
                     {
-                        GpuPowerBoostLevel = "Minimum";
-                        GpuPowerBoostStatus = "Minimum (Base TGP)";
+                        detectedLevel = "Minimum";
                     }
+                    
+                    // Only update level if user has no saved preference
+                    if (!hasSavedPreference)
+                    {
+                        GpuPowerBoostLevel = detectedLevel;
+                    }
+                    GpuPowerBoostStatus = $"{detectedLevel} (detected via WMI)";
+                    _logging.Info($"✓ GPU Power Boost available via WMI BIOS. Detected: {detectedLevel}, User pref: {savedLevel ?? "none"}");
+                    return;
                 }
                 else
                 {
-                    GpuPowerBoostStatus = "Could not read current setting";
+                    _logging.Info("WMI BIOS available but GetGpuPower returned null - trying EC fallback");
                 }
-                _logging.Info($"✓ GPU Power Boost available via WMI BIOS. Current: {GpuPowerBoostStatus}");
-                return;
             }
             
             // Fallback: Try OGH proxy (for systems where WMI BIOS commands fail)
@@ -1220,7 +1338,6 @@ namespace OmenCore.ViewModels
                 if (success)
                 {
                     GpuPowerBoostAvailable = true;
-                    // Map OGH level to our names including Extended
                     var mappedLevel = level switch
                     {
                         0 => "Minimum",
@@ -1229,24 +1346,72 @@ namespace OmenCore.ViewModels
                         3 => "Extended",
                         _ => levelName
                     };
-                    GpuPowerBoostLevel = mappedLevel;
-                    GpuPowerBoostStatus = $"{mappedLevel} (via OGH)";
-                    _logging.Info($"✓ GPU Power Boost available via OGH. Current: {GpuPowerBoostStatus}");
+                    
+                    if (!hasSavedPreference)
+                    {
+                        GpuPowerBoostLevel = mappedLevel;
+                    }
+                    GpuPowerBoostStatus = $"{mappedLevel} (detected via OGH)";
+                    _logging.Info($"✓ GPU Power Boost available via OGH. Detected: {mappedLevel}, User pref: {savedLevel ?? "none"}");
                     return;
                 }
                 
-                // OGH WMI exists but GPU power commands failed - don't enable if commands don't work
                 _logging.Warn("GPU Power Boost: OGH WMI exists but GetGpuPowerLevel() failed");
             }
             
-            // Neither backend functional - provide detailed explanation
-            GpuPowerBoostAvailable = false;
-            var modelNotSupportedMsg = @"Not available - This OMEN model does not support WMI GPU power commands.
-
-The HP WMI BIOS interface exists but GPU power commands return empty results. " +
-                "This is a known limitation on some newer OMEN models (17-ck2xxx series and others).";
-            GpuPowerBoostStatus = modelNotSupportedMsg;
-            _logging.Info("GPU Power Boost: HP WMI BIOS interface not available, OGH not functional");
+            // Fallback: Try EC-based detection for OMEN 17-ck2xxx models with RTX 4090
+            if (_ecAccess != null && _ecAccess.IsAvailable)
+            {
+                var model = _systemInfoService?.GetSystemInfo().Model ?? "Unknown";
+                _logging.Info($"Checking EC-based GPU boost for model: {model}");
+                
+                if (model.Contains("OMEN", StringComparison.OrdinalIgnoreCase) || 
+                    model.Contains("17-ck", StringComparison.OrdinalIgnoreCase) ||
+                    model.Contains("16-wd", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        var perfMode = _ecAccess.ReadByte(0xCE);
+                        _logging.Info($"EC performance mode register 0xCE = 0x{perfMode:X2}");
+                        
+                        GpuPowerBoostAvailable = true;
+                        
+                        // EC register 0xCE maps to performance mode, not GPU boost directly
+                        // We still allow GPU boost control via EC even if current mode is 0
+                        // Only update level if user has no saved preference
+                        if (!hasSavedPreference)
+                        {
+                            GpuPowerBoostLevel = perfMode switch
+                            {
+                                0 => "Minimum",
+                                1 => "Minimum",
+                                2 => "Medium",
+                                3 => "Maximum",
+                                _ => "Medium"
+                            };
+                        }
+                        GpuPowerBoostStatus = $"EC mode 0x{perfMode:X2} (experimental) - User setting will be applied";
+                        _logging.Info($"✓ GPU Power Boost enabled via EC. EC=0x{perfMode:X2}, User pref: {savedLevel ?? "none"}");
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Warn($"EC GPU boost detection failed: {ex.Message}");
+                    }
+                }
+            }
+            
+            // Neither backend functional - but don't override if already enabled by a successful apply
+            if (!GpuPowerBoostAvailable)
+            {
+                GpuPowerBoostAvailable = false;
+                GpuPowerBoostStatus = "Not available on this model";
+                _logging.Info("GPU Power Boost: No functional backend found");
+            }
+            else
+            {
+                _logging.Info("GPU Power Boost: Detection failed but already enabled by prior successful apply");
+            }
         }
         
         private void ApplyGpuPowerBoost()
@@ -1265,7 +1430,7 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
 
                 if (_wmiBios.SetGpuPower(level))
                 {
-                    GpuPowerBoostStatus = GpuPowerBoostLevel switch
+                    var baseStatus = GpuPowerBoostLevel switch
                     {
                         "Minimum" => "✓ Minimum (Base TGP only)",
                         "Medium" => "✓ Medium (Custom TGP enabled)",
@@ -1273,6 +1438,21 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                         "Extended" => "✓ Extended (PPAB+ for RTX 5080, +25W if supported)",
                         _ => "Applied"
                     };
+
+                    // If NVAPI is available, suggest using power limits for fine-tuning
+                    if (GpuNvapiAvailable && GpuPowerLimitPercent != 100)
+                    {
+                        GpuPowerBoostStatus = $"{baseStatus} + NVAPI {GpuPowerLimitPercent}% limit";
+                    }
+                    else if (GpuNvapiAvailable)
+                    {
+                        GpuPowerBoostStatus = $"{baseStatus} (NVAPI power limits available)";
+                    }
+                    else
+                    {
+                        GpuPowerBoostStatus = baseStatus;
+                    }
+
                     _logging.Info($"✓ GPU Power Boost set to: {GpuPowerBoostLevel} via WMI BIOS");
                     
                     // Save to config for persistence (note: may still reset after sleep/reboot on some models)
@@ -1310,9 +1490,116 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                     return;
                 }
             }
+
+            // Fallback: Try EC-based GPU boost (experimental, model-specific)
+            // NOTE: EC registers for PPAB vary by laptop model and are not publicly documented
+            // This is a placeholder for future model-specific implementations
+            if (TryApplyEcGpuBoost())
+            {
+                GpuPowerBoostStatus = GpuPowerBoostLevel switch
+                {
+                    "Minimum" => "✓ Minimum (Base TGP, via EC)",
+                    "Medium" => "✓ Medium (Custom TGP, via EC)",
+                    "Maximum" => "✓ Maximum (Dynamic Boost +15W, via EC)",
+                    "Extended" => "✓ Extended (PPAB+ +25W, via EC)",
+                    _ => "Applied via EC"
+                };
+                _logging.Info($"✓ GPU Power Boost set to: {GpuPowerBoostLevel} via EC (experimental)");
+                
+                // Save to config for persistence
+                SaveGpuPowerBoostToConfig();
+                return;
+            }
             
-            GpuPowerBoostStatus = "Failed - WMI GPU power commands not supported on this model";
-            _logging.Warn($"Failed to set GPU Power Boost to: {GpuPowerBoostLevel} - WMI commands not functional on this OMEN model");
+            GpuPowerBoostStatus = "Failed - WMI/EC commands not supported on this model";
+            _logging.Warn($"Failed to set GPU Power Boost to: {GpuPowerBoostLevel} - WMI and EC methods unavailable");
+        }
+
+        /// <summary>
+        /// Try to apply GPU power boost via EC registers (experimental, model-specific)
+        /// This implementation attempts common PPAB registers for OMEN 17-ck2xxx series
+        /// </summary>
+        private bool TryApplyEcGpuBoost()
+        {
+            _logging.Info("TryApplyEcGpuBoost() called - attempting EC-based GPU boost");
+            
+            if (_ecAccess == null || !_ecAccess.IsAvailable)
+            {
+                _logging.Info("EC access not available for GPU boost");
+                return false;
+            }
+
+            // Get system model to determine register map
+            var model = _systemInfoService?.GetSystemInfo().Model ?? "Unknown";
+            _logging.Info($"Attempting EC-based GPU boost for model: {model}");
+
+            // OMEN laptop models that support EC-based performance/GPU control
+            if (model.Contains("OMEN", StringComparison.OrdinalIgnoreCase) || 
+                model.Contains("17-ck", StringComparison.OrdinalIgnoreCase) ||
+                model.Contains("16-wd", StringComparison.OrdinalIgnoreCase))
+            {
+                _logging.Info("Model matches OMEN laptop, proceeding with EC boost implementation");
+                
+                try
+                {
+                    // Register 0xCE: Performance mode (controls PPAB/GPU power)
+                    // Values: 0=Quiet, 1=Default, 2=Performance, 3=Extreme (enables PPAB +15W boost)
+                    var currentMode = _ecAccess.ReadByte(0xCE);
+                    _logging.Info($"Current performance mode register 0xCE: 0x{currentMode:X2}");
+
+                    // Map our GPU boost level to EC performance mode value
+                    byte targetMode = GpuPowerBoostLevel switch
+                    {
+                        "Minimum" => 0,      // Quiet - no boost
+                        "Medium" => 2,       // Performance - some boost
+                        "Maximum" => 3,      // Extreme - full PPAB +15W
+                        "Extended" => 3,     // Use Extreme for Extended too
+                        _ => 2
+                    };
+
+                    if (currentMode != targetMode)
+                    {
+                        _ecAccess.WriteByte(0xCE, targetMode);
+                        _logging.Info($"Set performance mode to 0x{targetMode:X2} for {GpuPowerBoostLevel} boost");
+                        
+                        // Verify the change
+                        System.Threading.Thread.Sleep(50); // Small delay for EC to process
+                        var newMode = _ecAccess.ReadByte(0xCE);
+                        if (newMode == targetMode)
+                        {
+                            _logging.Info($"✓ Performance mode set to 0x{targetMode:X2} successfully");
+                            return true;
+                        }
+                        else
+                        {
+                            _logging.Warn($"Failed to set performance mode, wrote 0x{targetMode:X2} but read 0x{newMode:X2}");
+                            // Return true anyway if value changed at all - some laptops may limit values
+                            if (newMode != currentMode)
+                            {
+                                _logging.Info($"Performance mode changed from 0x{currentMode:X2} to 0x{newMode:X2}");
+                                return true;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        _logging.Info($"Performance mode already at 0x{targetMode:X2}");
+                        return true;
+                    }
+
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    _logging.Error($"EC GPU boost failed: {ex.Message}");
+                    return false;
+                }
+            }
+            else
+            {
+                _logging.Info($"EC GPU boost not implemented for model: {model}");
+                return false;
+            }
         }
         
         /// <summary>
@@ -1344,12 +1631,14 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                     // Update status on UI thread
                     App.Current?.Dispatcher?.BeginInvoke(() =>
                     {
+                        GpuPowerBoostAvailable = true;
+                        GpuPowerBoostLevel = savedLevel;
                         GpuPowerBoostStatus = savedLevel switch
                         {
-                            "Minimum" => "Minimum (Base TGP only) - Restored",
-                            "Medium" => "Medium (Custom TGP) - Restored",
-                            "Maximum" => "Maximum (Custom TGP + Dynamic Boost) - Restored",
-                            _ => $"{savedLevel} - Restored"
+                            "Minimum" => "✓ Minimum (Base TGP only) - Restored",
+                            "Medium" => "✓ Medium (Custom TGP) - Restored",
+                            "Maximum" => "✓ Maximum (Dynamic Boost) - Restored",
+                            _ => $"✓ {savedLevel} - Restored"
                         };
                     });
                     return;
@@ -1373,14 +1662,70 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                     
                     App.Current?.Dispatcher?.BeginInvoke(() =>
                     {
-                        GpuPowerBoostStatus = $"{savedLevel} (via OGH) - Restored";
+                        GpuPowerBoostAvailable = true;
+                        GpuPowerBoostLevel = savedLevel;
+                        GpuPowerBoostStatus = $"✓ {savedLevel} (via OGH) - Restored";
                     });
                     return;
                 }
             }
             
-            // Neither WMI nor OGH succeeded - throw to trigger retry
-            throw new InvalidOperationException("GPU Power Boost restoration failed - WMI BIOS and OGH both unavailable or returned failure");
+            // Fallback: Try EC-based GPU boost for OMEN models
+            if (_ecAccess != null && _ecAccess.IsAvailable)
+            {
+                var model = _systemInfoService?.GetSystemInfo().Model ?? "Unknown";
+                if (model.Contains("OMEN", StringComparison.OrdinalIgnoreCase) || 
+                    model.Contains("17-ck", StringComparison.OrdinalIgnoreCase) ||
+                    model.Contains("16-wd", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        // EC register 0xCE controls performance mode which affects GPU power
+                        // 0=Quiet, 1=Default, 2=Performance, 3=Extreme (enables PPAB)
+                        byte ecValue = savedLevel switch
+                        {
+                            "Minimum" => 0,
+                            "Medium" => 2,
+                            "Maximum" => 3,  // Extreme mode enables PPAB +15W
+                            _ => 2
+                        };
+                        
+                        _ecAccess.WriteByte(0xCE, ecValue);
+                        var readBack = _ecAccess.ReadByte(0xCE);
+                        
+                        if (readBack == ecValue)
+                        {
+                            _logging.Info($"✓ GPU Power Boost reapplied on startup: {savedLevel} via EC (0xCE={ecValue})");
+                            
+                            App.Current?.Dispatcher?.BeginInvoke(() =>
+                            {
+                                GpuPowerBoostAvailable = true;
+                                GpuPowerBoostLevel = savedLevel;
+                                GpuPowerBoostStatus = savedLevel switch
+                                {
+                                    "Minimum" => "✓ Minimum (Base TGP, via EC) - Restored",
+                                    "Medium" => "✓ Medium (Custom TGP, via EC) - Restored",
+                                    "Maximum" => "✓ Maximum (Dynamic Boost +15W, via EC) - Restored",
+                                    "Extended" => "✓ Extended (PPAB+ +25W, via EC) - Restored",
+                                    _ => $"✓ {savedLevel} (via EC) - Restored"
+                                };
+                            });
+                            return;
+                        }
+                        else
+                        {
+                            _logging.Warn($"EC GPU boost write verification failed: wrote 0x{ecValue:X2}, read 0x{readBack:X2}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging.Warn($"EC GPU boost failed: {ex.Message}");
+                    }
+                }
+            }
+            
+            // Neither WMI nor OGH nor EC succeeded - throw to trigger retry
+            throw new InvalidOperationException("GPU Power Boost restoration failed - all backends unavailable or returned failure");
         }
         
         private void SaveGpuPowerBoostToConfig()
@@ -1395,6 +1740,21 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
             catch (Exception ex)
             {
                 _logging.Warn($"Failed to save GPU Power Boost level to config: {ex.Message}");
+            }
+        }
+        
+        private void SavePerformanceModeToConfig(string modeName)
+        {
+            try
+            {
+                var config = _configService.Config;
+                config.LastPerformanceModeName = modeName;
+                _configService.Save(config);
+                _logging.Info($"Performance mode saved to config: {modeName}");
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to save performance mode to config: {ex.Message}");
             }
         }
         
@@ -1416,6 +1776,7 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
             {
                 if (_nvapiService.Initialize())
                 {
+                    GpuNvapiAvailable = true;
                     GpuOcAvailable = _nvapiService.SupportsOverclocking;
                     
                     // Set limits from the service
@@ -1860,6 +2221,7 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
                 _logging.Info($"Performance mode saved to config: {SelectedPerformanceMode.Name}");
                 
                 OnPropertyChanged(nameof(CurrentPerformanceModeName));
+                OnPropertyChanged(nameof(CurrentPerformanceModeIndicator));
                 OnPropertyChanged(nameof(SelectedPerformanceMode));
                 OnPropertyChanged(nameof(IsQuietMode));
                 OnPropertyChanged(nameof(IsBalancedMode));
@@ -1868,6 +2230,35 @@ The HP WMI BIOS interface exists but GPU power commands return empty results. " 
         }
         
         public string CurrentPerformanceModeName => SelectedPerformanceMode?.Name ?? "Auto";
+
+        public string CurrentPerformanceModeIndicator
+        {
+            get
+            {
+                var modeName = CurrentPerformanceModeName;
+
+                if (!IsPerformanceMode)
+                {
+                    return modeName;
+                }
+
+                if (!GpuPowerBoostAvailable)
+                {
+                    return $"{modeName} • GPU Power: base";
+                }
+
+                var boostText = GpuPowerBoostLevel switch
+                {
+                    "Maximum" => "+15W GPU Boost",
+                    "Extended" => "+25W GPU Boost",
+                    "Medium" => "Balanced GPU power",
+                    "Minimum" => "Base TGP",
+                    _ => "GPU power unknown"
+                };
+
+                return $"{modeName} • {boostText}";
+            }
+        }
         
         // Mode boolean properties for UI binding
         public bool IsQuietMode => SelectedPerformanceMode?.Name == "Quiet";

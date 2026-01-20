@@ -10,7 +10,7 @@
         xmlns:utils="clr-namespace:OmenCore.Utils"
         mc:Ignorable="d"
         Title="OmenCore - Gaming Laptop Control Center" Height="900" Width="1500" MinHeight="500" MinWidth="800"
-        Icon="/Assets/OmenCore.ico"
+        Icon="pack://application:,,,/OmenCore;component/Assets/OmenCore.ico"
         Background="Transparent"
         WindowStyle="None"
         AllowsTransparency="True"
@@ -43,7 +43,7 @@
             <Border Grid.Row="0" Background="{StaticResource SurfaceDarkBrush}" CornerRadius="12,12,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid Height="44">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0">
-                        <Image Source="pack://application:,,,/Assets/logo-small.png" Width="26" Height="26" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="HighQuality" />
+                        <Image Source="pack://application:,,,/OmenCore;component/Assets/logo-small.png" Width="26" Height="26" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="HighQuality" />
                         <TextBlock Text="OmenCore" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
                         <Border Background="{StaticResource SurfaceMediumBrush}" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" VerticalAlignment="Center">
                             <TextBlock Text="{Binding AppVersionLabel}" FontSize="10" Foreground="{StaticResource AccentBrush}" FontWeight="Medium" />
@@ -181,7 +181,7 @@
                                 </StackPanel>
                             </Button>
                         </StackPanel>
-                        <ScrollViewer Style="{StaticResource SmoothScrollViewer}" utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="1.2">
+                        <ScrollViewer Style="{StaticResource SmoothScrollViewer}">
                             <StackPanel>
                                 <TextBlock Text="QUICK ACTIONS" Foreground="{StaticResource TextTertiaryBrush}" FontSize="8" FontWeight="SemiBold" Margin="0,4,0,6" />
                                 <Button Command="{Binding ApplyFanPresetCommand}" Style="{StaticResource ModernButton}" Margin="0,0,0,3" HorizontalContentAlignment="Left" Padding="6,4" Height="26">
@@ -403,7 +403,7 @@
                         </Border>
                     </StackPanel>
 
-                    <TabControl Grid.Row="1" Margin="24,0,24,12" Style="{StaticResource ModernTabControl}" ItemContainerStyle="{StaticResource ModernTabItem}">
+                    <TabControl Grid.Row="1" Margin="24,0,24,12" Style="{StaticResource ModernTabControl}" ItemContainerStyle="{StaticResource ModernTabItem}" x:Name="TabControlMain">
                 <!-- General Tab: Performance + Fan Profiles (Paired) -->
                 <TabItem Header="General">
                     <views:GeneralView DataContext="{Binding General}" />
@@ -419,9 +419,9 @@
                     <views:DiagnosticsView DataContext="{Binding}" />
                 </TabItem>
                 
-                <!-- Monitoring Tab with Dashboard View -->
-                <TabItem Header="Monitoring">
-                    <views:DashboardView DataContext="{Binding Dashboard}" />
+                <!-- Monitoring Tab with Hardware Monitoring Dashboard -->
+                <TabItem Header="Monitoring" x:Name="MonitoringTabItem">
+                    <!-- Content will be created programmatically in code-behind -->
                 </TabItem>
                 
                 <!-- System Optimizer Tab - Windows Gaming Tweaks -->
@@ -471,7 +471,7 @@
                     <Border Grid.Column="1" Style="{StaticResource CardBorder}" Padding="12,8">
                         <DockPanel>
                             <TextBlock DockPanel.Dock="Top" Text="SYSTEM LOG" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,0,0,8" />
-                            <ScrollViewer Style="{StaticResource SmoothScrollViewer}">
+                            <ScrollViewer x:Name="SystemLogScrollViewer" Style="{StaticResource SmoothScrollViewer}">
                                 <TextBlock Text="{Binding LogBuffer}" TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontFamily="Consolas" FontSize="10" LineHeight="14" />
                             </ScrollViewer>
                         </DockPanel>

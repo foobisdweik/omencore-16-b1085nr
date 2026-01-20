@@ -174,7 +174,7 @@ namespace OmenCore.Services
     public class OmenCoreProfile
     {
         public DateTime ExportDate { get; set; }
-        public string Version { get; set; } = "2.4.0";
+        public string Version { get; set; } = "2.5.0";
         public ProfileSystemInfo? SystemInfo { get; set; }
         public List<FanPreset>? FanPresets { get; set; }
         public List<PerformanceMode>? PerformanceModes { get; set; }

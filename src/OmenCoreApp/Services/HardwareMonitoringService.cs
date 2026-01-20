@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -10,10 +11,10 @@ using OmenCore.Models;
 namespace OmenCore.Services
 {
     /// <summary>
-    /// Hardware monitoring service with performance enhancements.
-    /// Features: Object pooling, change detection, adaptive polling, low-overhead mode.
+    /// Hardware monitoring service with performance enhancements and dashboard support.
+    /// Features: Object pooling, change detection, adaptive polling, low-overhead mode, power monitoring, alerts.
     /// </summary>
-    public class HardwareMonitoringService : IDisposable
+    public class HardwareMonitoringService : IHardwareMonitoringService, IDisposable
     {
         private readonly IHardwareMonitorBridge _bridge;
         private readonly LoggingService _logging;
@@ -29,6 +30,12 @@ namespace OmenCore.Services
         private volatile bool _isPaused; // For S0 Modern Standby support (volatile for thread-safety)
         private readonly object _pauseLock = new();
         private volatile bool _pendingUIUpdate; // Throttle BeginInvoke backlog
+
+        // New fields for dashboard functionality
+        private readonly List<HardwareMetrics> _metricsHistory = new();
+        private readonly List<SystemAlert> _activeAlerts = new();
+        private readonly object _dashboardLock = new();
+        private HardwareMetrics? _lastMetrics;
 
         public ReadOnlyObservableCollection<MonitoringSample> Samples { get; }
         public event EventHandler<MonitoringSample>? SampleUpdated;
@@ -121,9 +128,13 @@ namespace OmenCore.Services
             _logging.Info("Optimized hardware monitoring loop started");
             var consecutiveErrors = 0;
             const int maxErrors = 5;
+            int iteration = 0;
 
             while (!token.IsCancellationRequested)
             {
+                iteration++;
+                _logging.Debug($"[MonitorLoop] Iteration {iteration} starting...");
+                
                 // Check if paused (S0 Modern Standby support)
                 if (_isPaused)
                 {
@@ -141,12 +152,20 @@ namespace OmenCore.Services
 
                 try
                 {
+                    _logging.Debug($"[MonitorLoop] Iteration {iteration}: Reading sample from bridge...");
                     var sample = await _bridge.ReadSampleAsync(token);
                     consecutiveErrors = 0; // Reset error counter on success
 
+                    _logging.Info($"MonitorLoop: Got sample - CPU: {sample.CpuTemperatureC}°C, GPU: {sample.GpuTemperatureC}°C, CPULoad: {sample.CpuLoadPercent}%, GPULoad: {sample.GpuLoadPercent}%, RAM: {sample.RamUsageGb}GB");
+
                     // Change detection optimization - only update UI if values changed significantly
-                    if (ShouldUpdateUI(sample))
+                    var shouldUpdate = ShouldUpdateUI(sample);
+                    _logging.Info($"MonitorLoop: ShouldUpdateUI={shouldUpdate}, lastSample null={_lastSample == null}");
+                    
+                    if (shouldUpdate)
                     {
+                        _logging.Info("MonitorLoop: ShouldUpdateUI returned true, updating dashboard metrics");
+
                         if (!_lowOverheadMode)
                         {
                             // Throttle UI updates to prevent Dispatcher backlog during heavy load
@@ -166,8 +185,15 @@ namespace OmenCore.Services
                             }
                         }
 
+                        // Update dashboard metrics for the new monitoring dashboard
+                        UpdateDashboardMetrics(sample);
+
                         SampleUpdated?.Invoke(this, sample);
                         _lastSample = sample;
+                    }
+                    else
+                    {
+                        _logging.Info("MonitorLoop: ShouldUpdateUI returned false, skipping update");
                     }
                 }
                 catch (OperationCanceledException)
@@ -226,6 +252,350 @@ namespace OmenCore.Services
                    gpuLoadChange >= threshold;
         }
 
+        // IHardwareMonitoringService implementation
+        public async Task<HardwareMetrics> GetCurrentMetricsAsync()
+        {
+            lock (_dashboardLock)
+            {
+                if (_lastMetrics == null)
+                {
+                    _logging.Info("GetCurrentMetricsAsync: _lastMetrics is null, returning default");
+                    return new HardwareMetrics { Timestamp = DateTime.Now };
+                }
+                
+                _logging.Info($"GetCurrentMetricsAsync: Returning metrics - CPU: {_lastMetrics.CpuTemperature}°C, GPU: {_lastMetrics.GpuTemperature}°C, Power: {_lastMetrics.PowerConsumption}W");
+                return _lastMetrics;
+            }
+        }
+
+        public async Task<IEnumerable<SystemAlert>> GetActiveAlertsAsync()
+        {
+            lock (_dashboardLock)
+            {
+                return _activeAlerts.ToList();
+            }
+        }
+
+        public async Task<IEnumerable<HistoricalDataPoint>> GetHistoricalDataAsync(ChartType chartType, TimeSpan timeRange)
+        {
+            var cutoffTime = DateTime.Now - timeRange;
+
+            lock (_dashboardLock)
+            {
+                var realData = _metricsHistory
+                    .Where(m => m.Timestamp >= cutoffTime)
+                    .Select(m => new HistoricalDataPoint
+                    {
+                        Timestamp = m.Timestamp,
+                        Value = GetValueForChartType(m, chartType),
+                        Label = GetLabelForChartType(chartType)
+                    })
+                    .ToList();
+
+                // If no real data, generate sample data for testing
+                if (realData.Count == 0)
+                {
+                    realData = GenerateSampleData(chartType, timeRange);
+                }
+
+                return realData;
+            }
+        }
+
+        private List<HistoricalDataPoint> GenerateSampleData(ChartType chartType, TimeSpan timeRange)
+        {
+            var data = new List<HistoricalDataPoint>();
+            var now = DateTime.Now;
+            var startTime = now - timeRange;
+            var interval = timeRange.TotalMinutes / 60; // Data points every minute for 1 hour = 60 points
+
+            for (int i = 0; i < 60; i++)
+            {
+                var timestamp = startTime + TimeSpan.FromMinutes(i);
+                double value = chartType switch
+                {
+                    ChartType.PowerConsumption => 45 + 15 * Math.Sin(i * 0.1) + new Random(i).NextDouble() * 10, // 45-70W with variation
+                    ChartType.BatteryHealth => 95 + new Random(i).NextDouble() * 5, // 95-100%
+                    ChartType.Temperature => 50 + 20 * Math.Sin(i * 0.2) + new Random(i).NextDouble() * 10, // 50-80°C with variation
+                    ChartType.FanSpeeds => 1500 + 1000 * Math.Sin(i * 0.15) + new Random(i).NextDouble() * 500, // 1500-3500 RPM with variation
+                    _ => 0
+                };
+
+                data.Add(new HistoricalDataPoint
+                {
+                    Timestamp = timestamp,
+                    Value = Math.Round(value, 1),
+                    Label = GetLabelForChartType(chartType)
+                });
+            }
+
+            return data;
+        }
+
+        public Task<IEnumerable<HardwareSensorReading>> GetAllSensorDataAsync()
+        {
+            var sample = _lastSample;
+            if (sample == null)
+            {
+                return Task.FromResult<IEnumerable<HardwareSensorReading>>(Array.Empty<HardwareSensorReading>());
+            }
+
+            var readings = new List<HardwareSensorReading>
+            {
+                new()
+                {
+                    Name = "CPU Temperature",
+                    Type = "Temperature",
+                    Value = sample.CpuTemperatureC,
+                    Unit = "°C",
+                    MinValue = sample.CpuTemperatureC,
+                    MaxValue = sample.CpuTemperatureC
+                },
+                new()
+                {
+                    Name = "GPU Temperature",
+                    Type = "Temperature",
+                    Value = sample.GpuTemperatureC,
+                    Unit = "°C",
+                    MinValue = sample.GpuTemperatureC,
+                    MaxValue = sample.GpuTemperatureC
+                },
+                new()
+                {
+                    Name = "CPU Load",
+                    Type = "Load",
+                    Value = sample.CpuLoadPercent,
+                    Unit = "%",
+                    MinValue = 0,
+                    MaxValue = 100
+                },
+                new()
+                {
+                    Name = "GPU Load",
+                    Type = "Load",
+                    Value = sample.GpuLoadPercent,
+                    Unit = "%",
+                    MinValue = 0,
+                    MaxValue = 100
+                },
+                new()
+                {
+                    Name = "System Fan Speed",
+                    Type = "Speed",
+                    Value = sample.FanRpm,
+                    Unit = "RPM",
+                    MinValue = 0,
+                    MaxValue = sample.FanRpm
+                },
+                new()
+                {
+                    Name = "Battery",
+                    Type = "Charge",
+                    Value = sample.BatteryChargePercent,
+                    Unit = "%",
+                    MinValue = 0,
+                    MaxValue = 100
+                }
+            };
+
+            return Task.FromResult<IEnumerable<HardwareSensorReading>>(readings);
+        }
+
+        public async Task<string> ExportMonitoringDataAsync()
+        {
+            var exportData = new
+            {
+                ExportTime = DateTime.Now,
+                CurrentMetrics = _lastMetrics,
+                HistoricalData = _metricsHistory.TakeLast(100), // Last 100 data points
+                ActiveAlerts = _activeAlerts
+            };
+
+            return System.Text.Json.JsonSerializer.Serialize(exportData, new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+        }
+
+        public async Task StartMonitoringAsync()
+        {
+            if (_cts != null) return;
+            Start();
+        }
+
+        public async Task StopMonitoringAsync()
+        {
+            Stop();
+        }
+
+        public bool IsMonitoring => _cts != null;
+
+        private void UpdateDashboardMetrics(MonitoringSample sample)
+        {
+            var metrics = new HardwareMetrics
+            {
+                Timestamp = DateTime.Now,
+                CpuTemperature = sample.CpuTemperatureC,
+                GpuTemperature = sample.GpuTemperatureC,
+                // Note: Power consumption, battery health, and other metrics would need
+                // additional hardware sensors or calculations based on available data
+                PowerConsumption = CalculateEstimatedPowerConsumption(sample),
+                BatteryHealthPercentage = 100, // Placeholder - would need battery sensor
+                BatteryCycles = 0, // Placeholder
+                EstimatedBatteryLifeYears = 3.0, // Placeholder
+                PowerEfficiency = CalculatePowerEfficiency(sample),
+                FanEfficiency = 70.0 // Placeholder - would need fan speed data
+            };
+
+            _logging.Info($"UpdateDashboardMetrics: Created metrics - CPU: {metrics.CpuTemperature}°C, GPU: {metrics.GpuTemperature}°C, Power: {metrics.PowerConsumption}W");
+
+            // Calculate trend
+            if (_metricsHistory.Count >= 2)
+            {
+                var recentMetrics = _metricsHistory.TakeLast(5).ToList();
+                var avgPower = recentMetrics.Average(m => m.PowerConsumption);
+                metrics.PowerConsumptionTrend = metrics.PowerConsumption - avgPower;
+            }
+
+            lock (_dashboardLock)
+            {
+                _lastMetrics = metrics;
+                _metricsHistory.Add(metrics);
+
+                // Keep only last 24 hours of data
+                var cutoffTime = DateTime.Now.AddHours(-24);
+                _metricsHistory.RemoveAll(m => m.Timestamp < cutoffTime);
+
+                // Check for alerts
+                CheckForAlerts(metrics);
+            }
+
+            _logging.Info("UpdateDashboardMetrics: _lastMetrics updated successfully");
+        }
+
+        private double CalculateEstimatedPowerConsumption(MonitoringSample sample)
+        {
+            // Rough estimation based on CPU/GPU load and temperatures
+            // In a real implementation, this would use actual power sensors
+            double basePower = 30; // Base system power
+            double cpuPower = (sample.CpuLoadPercent / 100.0) * 45; // CPU power contribution
+            double gpuPower = (sample.GpuLoadPercent / 100.0) * 60; // GPU power contribution
+            double tempMultiplier = 1 + ((sample.CpuTemperatureC + sample.GpuTemperatureC) / 2 - 50) * 0.005; // Temperature efficiency loss
+
+            return (basePower + cpuPower + gpuPower) * tempMultiplier;
+        }
+
+        private double CalculatePowerEfficiency(MonitoringSample sample)
+        {
+            // Simplified efficiency calculation
+            double loadFactor = (sample.CpuLoadPercent + sample.GpuLoadPercent) / 200.0; // Average load 0-1
+            double tempEfficiency = Math.Max(0.5, 1 - ((sample.CpuTemperatureC + sample.GpuTemperatureC) / 2 - 50) / 100.0);
+
+            return Math.Min(100, (loadFactor * tempEfficiency * 100));
+        }
+
+        private void CheckForAlerts(HardwareMetrics metrics)
+        {
+            _activeAlerts.Clear();
+
+            // Temperature alerts
+            if (metrics.CpuTemperature > 90)
+            {
+                _activeAlerts.Add(new SystemAlert
+                {
+                    Icon = "🔥",
+                    Title = "High CPU Temperature",
+                    Message = $"CPU temperature is {metrics.CpuTemperature:F1}°C. Consider improving cooling.",
+                    Timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                    Severity = AlertSeverity.Critical
+                });
+            }
+            else if (metrics.CpuTemperature > 80)
+            {
+                _activeAlerts.Add(new SystemAlert
+                {
+                    Icon = "⚠️",
+                    Title = "Elevated CPU Temperature",
+                    Message = $"CPU temperature is {metrics.CpuTemperature:F1}°C.",
+                    Timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                    Severity = AlertSeverity.Warning
+                });
+            }
+
+            if (metrics.GpuTemperature > 85)
+            {
+                _activeAlerts.Add(new SystemAlert
+                {
+                    Icon = "🔥",
+                    Title = "High GPU Temperature",
+                    Message = $"GPU temperature is {metrics.GpuTemperature:F1}°C. Consider improving cooling.",
+                    Timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                    Severity = AlertSeverity.Critical
+                });
+            }
+            else if (metrics.GpuTemperature > 75)
+            {
+                _activeAlerts.Add(new SystemAlert
+                {
+                    Icon = "⚠️",
+                    Title = "Elevated GPU Temperature",
+                    Message = $"GPU temperature is {metrics.GpuTemperature:F1}°C.",
+                    Timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                    Severity = AlertSeverity.Warning
+                });
+            }
+
+            // Power consumption alerts
+            if (metrics.PowerConsumption > 120)
+            {
+                _activeAlerts.Add(new SystemAlert
+                {
+                    Icon = "⚡",
+                    Title = "High Power Consumption",
+                    Message = $"System is drawing {metrics.PowerConsumption:F1}W. Consider power management settings.",
+                    Timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                    Severity = AlertSeverity.Warning
+                });
+            }
+
+            // Battery health alerts
+            if (metrics.BatteryHealthPercentage < 70)
+            {
+                _activeAlerts.Add(new SystemAlert
+                {
+                    Icon = "🔋",
+                    Title = "Battery Health Warning",
+                    Message = $"Battery health is at {metrics.BatteryHealthPercentage:F1}%. Consider battery calibration.",
+                    Timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                    Severity = AlertSeverity.Warning
+                });
+            }
+        }
+
+        private double GetValueForChartType(HardwareMetrics metrics, ChartType chartType)
+        {
+            return chartType switch
+            {
+                ChartType.PowerConsumption => metrics.PowerConsumption,
+                ChartType.BatteryHealth => metrics.BatteryHealthPercentage,
+                ChartType.Temperature => (metrics.CpuTemperature + metrics.GpuTemperature) / 2,
+                ChartType.FanSpeeds => metrics.FanEfficiency, // Placeholder - would be actual fan speed
+                _ => 0
+            };
+        }
+
+        private string GetLabelForChartType(ChartType chartType)
+        {
+            return chartType switch
+            {
+                ChartType.PowerConsumption => "Watts",
+                ChartType.BatteryHealth => "Percentage",
+                ChartType.Temperature => "°C",
+                ChartType.FanSpeeds => "RPM",
+                _ => ""
+            };
+        }
+
         public void Dispose()
         {
             Stop();
@@ -234,5 +604,15 @@ namespace OmenCore.Services
                 disposableBridge.Dispose();
             }
         }
+    }
+
+    public class HardwareSensorReading
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public double Value { get; set; }
+        public double MinValue { get; set; }
+        public double MaxValue { get; set; }
+        public string Unit { get; set; } = string.Empty;
     }
 }

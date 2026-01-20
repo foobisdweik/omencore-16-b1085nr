@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using OmenCore.Controls;
 using OmenCore.ViewModels;
 
 namespace OmenCore.Views
@@ -21,16 +23,27 @@ namespace OmenCore.Views
             
             // Apply Stay on Top setting from config
             Topmost = App.Configuration.Config.StayOnTop;
+            
+            // Listen for LogBuffer changes to auto-scroll the system log
+            if (viewModel is INotifyPropertyChanged notify)
+            {
+                notify.PropertyChanged += OnViewModelPropertyChanged;
+            }
         }
         
-        /// <summary>
-        /// Forces the window to close completely (for app shutdown).
-        /// Call this from tray menu "Exit" or app shutdown.
-        /// </summary>
-        public void ForceClose()
+        private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            _forceClose = true;
-            Close();
+            if (e.PropertyName == nameof(MainViewModel.LogBuffer))
+            {
+                // Auto-scroll the system log to the latest entry
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (SystemLogScrollViewer != null)
+                    {
+                        SystemLogScrollViewer.ScrollToEnd();
+                    }
+                });
+            }
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -43,6 +56,56 @@ namespace OmenCore.Views
             // Initialize global hotkeys
             var windowHandle = new WindowInteropHelper(this).Handle;
             (DataContext as MainViewModel)?.InitializeHotkeys(windowHandle);
+            
+            // CRITICAL FIX: Create and inject Dashboard to display monitoring data
+            // Using Dispatcher to ensure this happens after window layout is complete
+            _ = Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    // Ensure MainWindow's DataContext is properly set
+                    var mainViewModel = this.DataContext as MainViewModel;
+                    if (mainViewModel == null)
+                    {
+                        App.Logging.Error("[MainWindow] DataContext is not MainViewModel!");
+                        return;
+                    }
+                    
+                    // Create the Dashboard with the MainViewModel
+                    var dashboard = new HardwareMonitoringDashboard
+                    {
+                        DataContext = mainViewModel
+                    };
+                    
+                    // Inject it into the Monitoring tab
+                    if (this.MonitoringTabItem != null)
+                    {
+                        this.MonitoringTabItem.Content = dashboard;
+                        App.Logging.Info("[MainWindow] Created HardwareMonitoringDashboard with MainViewModel and injected into Monitoring tab");
+                        
+                        // Force the Dashboard to apply its template and render
+                        dashboard.ApplyTemplate();
+                        dashboard.UpdateLayout();
+                        App.Logging.Info("[MainWindow] Called ApplyTemplate() and UpdateLayout() on Dashboard");
+                    }
+                    else
+                    {
+                        App.Logging.Error("[MainWindow] MonitoringTabItem not found!");
+                    }
+                    
+                    // Select the General tab to make it visible and force rendering
+                    if (this.TabControlMain != null)
+                    {
+                        this.TabControlMain.SelectedIndex = 0;
+                        this.TabControlMain.UpdateLayout();
+                        App.Logging.Info("[MainWindow] Set TabControl.SelectedIndex = 0 (General tab) and called UpdateLayout()");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    App.Logging.Error($"[MainWindow] ERROR creating Dashboard: {ex.Message}\n{ex.StackTrace}");
+                }
+            }, System.Windows.Threading.DispatcherPriority.Normal);
         }
 
         private void MainWindow_Closing(object? sender, CancelEventArgs e)

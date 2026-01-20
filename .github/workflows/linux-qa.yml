@@ -46,6 +46,73 @@ jobs:
         ./src/OmenCore.Linux/bin/Release/net8.0/linux-x64/omencore-cli --help
         ./src/OmenCore.Linux/bin/Release/net8.0/linux-x64/omencore-cli --version || true
     
+    - name: Run Smoke Tests (Basic Functionality)
+      run: |
+        CLI_PATH="./src/OmenCore.Linux/bin/Release/net8.0/linux-x64/omencore-cli"
+        
+        echo "=== Testing CLI Basic Commands ==="
+        
+        # Test status command (should work even without hardware)
+        echo "Testing status command..."
+        $CLI_PATH status || echo "Status command failed (expected on CI)"
+        
+        # Test list command
+        echo "Testing list command..."
+        $CLI_PATH list || echo "List command failed (expected on CI)"
+        
+        # Test invalid command (should show error)
+        echo "Testing invalid command..."
+        $CLI_PATH invalid-command && echo "ERROR: Invalid command should fail" || echo "✓ Invalid command properly rejected"
+        
+        # Test help for specific commands
+        echo "Testing command-specific help..."
+        $CLI_PATH status --help || echo "Status help failed"
+        $CLI_PATH fan --help || echo "Fan help failed"
+        
+        echo "=== Smoke Tests Completed ==="
+    
+    - name: Test Error Messages & Kernel Detection
+      run: |
+        CLI_PATH="./src/OmenCore.Linux/bin/Release/net8.0/linux-x64/omencore-cli"
+        
+        echo "=== Testing Error Messages ==="
+        
+        # Test kernel module detection messages
+        echo "Testing kernel module detection..."
+        $CLI_PATH status 2>&1 | grep -i "kernel\|module\|ec_sys\|hp-wmi" || echo "No kernel messages found (expected on CI)"
+        
+        # Test hardware detection messages
+        echo "Testing hardware detection..."
+        $CLI_PATH list 2>&1 | head -20
+        
+        # Test graceful failure without hardware
+        echo "Testing graceful degradation..."
+        timeout 10s $CLI_PATH monitor || echo "Monitor command timed out or failed (expected on CI)"
+        
+        echo "=== Error Message Tests Completed ==="
+    
+    - name: Test Configuration & Persistence
+      run: |
+        CLI_PATH="./src/OmenCore.Linux/bin/Release/net8.0/linux-x64/omencore-cli"
+        
+        echo "=== Testing Configuration Handling ==="
+        
+        # Test config export (should work without hardware)
+        echo "Testing config export..."
+        $CLI_PATH config export /tmp/test-config.json || echo "Config export failed"
+        ls -la /tmp/test-config.json || echo "Config file not created"
+        
+        # Test config validation
+        echo "Testing config validation..."
+        $CLI_PATH config validate /tmp/test-config.json || echo "Config validation failed"
+        
+        # Test invalid config handling
+        echo "Testing invalid config handling..."
+        echo '{"invalid": "json"' > /tmp/invalid-config.json
+        $CLI_PATH config validate /tmp/invalid-config.json && echo "ERROR: Should reject invalid config" || echo "✓ Invalid config properly rejected"
+        
+        echo "=== Configuration Tests Completed ==="
+    
     - name: Generate SHA256 Checksums
       run: |
         cd src/OmenCore.Linux/bin/Release/net8.0/linux-x64

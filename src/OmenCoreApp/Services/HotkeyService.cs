@@ -55,6 +55,7 @@ namespace OmenCore.Services
         public event EventHandler? OpenFanControlRequested;
         public event EventHandler? OpenDashboardRequested;
         public event EventHandler? TakeScreenshotRequested;
+        public event EventHandler? ApplySettingsRequested;
 
         public bool IsEnabled
         {
@@ -173,6 +174,9 @@ namespace OmenCore.Services
             
             // Ctrl+Shift+O = Show/hide OmenCore window
             RegisterHotkey(HotkeyAction.ToggleWindow, ModifierKeys.Control | ModifierKeys.Shift, Key.O);
+            
+            // Ctrl+S = Apply settings
+            RegisterHotkey(HotkeyAction.ApplySettings, ModifierKeys.Control, Key.S);
             
             _logging.Info($"Registered {_registeredHotkeys.Count} default hotkeys");
         }
@@ -331,6 +335,9 @@ namespace OmenCore.Services
                 case HotkeyAction.TakeScreenshot:
                     TakeScreenshotRequested?.Invoke(this, EventArgs.Empty);
                     break;
+                case HotkeyAction.ApplySettings:
+                    ApplySettingsRequested?.Invoke(this, EventArgs.Empty);
+                    break;
             }
         }
 
@@ -368,7 +375,8 @@ namespace OmenCore.Services
         ToggleWindow,
         OpenFanControl,
         OpenDashboard,
-        TakeScreenshot
+        TakeScreenshot,
+        ApplySettings
     }
 
     /// <summary>

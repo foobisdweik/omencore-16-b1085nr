@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.6.0] - 2026-01-18 - Monitoring Dashboard Overhaul 📊🔧
+
+**Complete rewrite of hardware monitoring tab with direct MainViewModel integration**
+
+### 📊 Monitoring Dashboard Overhaul
+- **Direct MainViewModel Integration**: Removed complex service injection, dashboard now binds directly to MainViewModel properties
+- **Real-time Current Metrics**: Live display of CPU/GPU temperatures, power consumption, battery health, and efficiency metrics
+- **Auto-display Charts Grid**: All historical charts (Power, Temperature, Battery, Fan) display simultaneously without button clicks
+- **Enhanced Data Binding**: Uses LatestMonitoringSample and HardwareMonitoringService properties for reliable data flow
+- **Improved Chart Rendering**: Canvas-based charts with filled areas, grid lines, and statistical summaries
+
+### 🔧 Technical Improvements
+- **Service Initialization Fix**: Dashboard loads after MainViewModel is fully initialized, preventing null reference issues
+- **Simplified Architecture**: Eliminated dependency injection complexity in favor of direct ViewModel binding
+- **Async Operation Handling**: Proper await patterns for all monitoring operations
+- **Debug Logging**: Comprehensive logging for troubleshooting monitoring data flow
+
+### 🐛 Bug Fixes
+- **Empty Tables Issue**: Fixed monitoring tab showing empty current metrics tables
+- **Chart Display**: Charts now display historical data immediately on tab load
+- **Data Binding**: Reliable connection between monitoring service and UI controls
+
+### 📋 Known Issues
+- Windows Defender may flag LibreHardwareMonitor/WinRing0 (known false positive - use PawnIO for Secure Boot)
+- MSI Afterburner shared memory conflicts (detection added, resolution planned for v2.6.0)
+- Some older Linux kernels may have limited HP WMI integration
+
+---
+
+## [2.5.0] - 2026-01-17 - Advanced RGB Lighting & Hardware Monitoring 🎨📊
+
+**Comprehensive RGB lighting integration, temperature-responsive effects, power monitoring, and fan curve visualization**
+
+### 🎨 Advanced RGB Lighting System
+- **Temperature-Responsive Lighting**: Keyboard and RGB devices change colors based on CPU/GPU temperatures with configurable thresholds
+- **Performance Mode Sync**: RGB lighting automatically syncs with performance modes (Performance/Balanced/Silent)
+- **Throttling Indicators**: Flashing red lighting alerts when thermal throttling is detected
+- **6 New Lighting Presets**: Wave Blue/Red, Breathing Green, Reactive Purple, Spectrum Flow, Audio Reactive
+- **Multi-Vendor Support**: Enhanced integration with HP OMEN, Corsair, Logitech, and Razer devices
+
+### 📊 Hardware Monitoring Enhancements
+- **Power Consumption Tracking**: Real-time power monitoring with efficiency metrics and trend analysis
+- **Battery Health Monitoring**: Comprehensive battery assessment with wear level and cycle count tracking
+- **Live Fan Curve Visualization**: Interactive charts showing temperature vs fan speed relationships
+- **Cross-Device RGB Sync**: Hardware state changes sync across all connected RGB peripherals
+
+### 🛡️ Reliability & Verification
+- **Power Limit Verification**: Reads back EC registers to verify power limits applied successfully
+- **Enhanced Diagnostics**: Improved logging and conflict detection for better troubleshooting
+- **GPU Power Boost Integration**: Combined WMI BIOS + NVAPI control for accurate power management
+
+### 🔧 Technical Improvements
+- **Fan Control Stability**: Enhanced hysteresis and GPU power boost integration prevents oscillation
+- **Accurate RPM Reading**: Realistic temperature-based fan curve estimation for auto/BIOS mode
+- **PawnIO Promotion**: Better Secure Boot compatibility guidance and automatic driver selection
+
+### 📋 Known Issues
+- Windows Defender may flag LibreHardwareMonitor/WinRing0 (known false positive - use PawnIO for Secure Boot)
+- MSI Afterburner shared memory conflicts (detection added, resolution planned for v2.6.0)
+- Some older Linux kernels may have limited HP WMI integration
+
+---
+
 ## [2.3.2] - 2026-01-14 - Critical Safety & Bug Fix Release 🛡️
 
 **Desktop safety protection + Linux GUI fix + Multiple bug fixes**

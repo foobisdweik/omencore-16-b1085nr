@@ -657,11 +657,34 @@ namespace OmenCore.Hardware
                 data[2] = 0x01; // DState = D1
                 data[3] = 0x00; // PeakTemperature
 
+                _logging?.Info($"Sending GPU power command: Level={level}, CustomTgp={data[0]}, PPAB={data[1]}, DState={data[2]}");
+                
                 var result = SendBiosCommand(BiosCmd.Default, CMD_GPU_SET_POWER, data, 0);
                 if (result != null)
                 {
                     _logging?.Info($"✓ GPU power set to: {level} (CustomTgp={data[0]}, PPAB={data[1]})");
                     return true;
+                }
+                else
+                {
+                    _logging?.Warn($"GPU power command returned null - BIOS may not support this command or returned error");
+                    
+                    // Try getting current GPU power to verify if the command was partially successful
+                    var currentPower = GetGpuPower();
+                    if (currentPower.HasValue)
+                    {
+                        _logging?.Info($"Current GPU power after command: CustomTgp={currentPower.Value.customTgp}, PPAB={currentPower.Value.ppab}");
+                        
+                        // Check if the values match what we tried to set
+                        bool customTgpMatch = (level == GpuPowerLevel.Minimum) ? !currentPower.Value.customTgp : currentPower.Value.customTgp;
+                        bool ppabMatch = (level == GpuPowerLevel.Maximum || level == GpuPowerLevel.Extended3 || level == GpuPowerLevel.Extended4) ? currentPower.Value.ppab : !currentPower.Value.ppab;
+                        
+                        if (customTgpMatch && ppabMatch)
+                        {
+                            _logging?.Info($"✓ GPU power appears to be set correctly despite command returning null");
+                            return true;
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -1105,8 +1128,16 @@ namespace OmenCore.Hardware
                     }
                     else
                     {
-                        // Log error but don't spam
-                        LogThrottledError($"BIOS command {command}:{commandType:X2} returned code {returnCode}");
+                        // Log error with more detail for GPU commands
+                        string errorMsg = $"BIOS command {command}:{commandType:X2} returned code {returnCode}";
+                        
+                        // Add GPU power specific hints
+                        if (commandType == CMD_GPU_SET_POWER)
+                        {
+                            errorMsg += " (GPU SetPower). Return codes: 1=NotImplemented, 2=InvalidArgs, 3=HardwareError, 4=NotSupported";
+                        }
+                        
+                        LogThrottledError(errorMsg);
                     }
                 }
             }

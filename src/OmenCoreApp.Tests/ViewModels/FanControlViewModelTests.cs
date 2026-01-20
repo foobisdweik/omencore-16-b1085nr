@@ -53,7 +53,8 @@ namespace OmenCoreApp.Tests.ViewModels
             var hwMonitor = new OmenCore.Hardware.LibreHardwareMonitorImpl();
             var thermalProvider = new OmenCore.Hardware.ThermalSensorProvider(hwMonitor);
             var controller = new TestFanController();
-            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+            var notificationService = new NotificationService(logging);
+            var fanService = new FanService(controller, thermalProvider, logging, notificationService, 1000);
 
             var vm = new OmenCore.ViewModels.FanControlViewModel(fanService, configService, logging)
             {

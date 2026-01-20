@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using System.Linq;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
@@ -27,6 +28,7 @@ class Program
     private static DateTime _lastUpdate = DateTime.MinValue;
     private static int _parentProcessId = -1;
     private static readonly Dictionary<string, DateTime> _lastErrorLog = new(); // Rate-limit error logging
+    private static bool _hasInitialized = false; // Track if we've done at least one full hardware update cycle
 
     static async Task Main(string[] args)
     {
@@ -229,6 +231,23 @@ class Program
                 // Also log to file
                 File.AppendAllText(logPath, $"[{DateTime.Now:O}] [GPU Detected] {gpuType}: {hw.Name}\n");
                 File.AppendAllText(logPath, $"  Temp sensors: [{string.Join(", ", tempSensors.Select(s => $"{s.Name}={s.Value:F0}°C"))}]\n");
+            }
+        }
+        
+        // Log Memory sensors
+        foreach (var hw in _computer.Hardware)
+        {
+            if (hw.HardwareType == HardwareType.Memory)
+            {
+                hw.Update();
+                var dataSensors = hw.Sensors.Where(s => s.SensorType == SensorType.Data).ToList();
+                
+                Console.WriteLine($"[Memory Detected] {hw.Name}");
+                Console.WriteLine($"  Data sensors ({dataSensors.Count}): [{string.Join(", ", dataSensors.Select(s => $"{s.Name}={s.Value:F0}MB"))}]");
+                
+                // Also log to file
+                File.AppendAllText(logPath, $"[{DateTime.Now:O}] [Memory Detected] {hw.Name}\n");
+                File.AppendAllText(logPath, $"  Data sensors ({dataSensors.Count}): [{string.Join(", ", dataSensors.Select(s => $"{s.Name}={s.Value:F0}MB"))}]\n");
             }
         }
     }
@@ -450,6 +469,13 @@ class Program
             sample.Timestamp = DateTime.Now;
             _lastSample = sample;
             _lastUpdate = DateTime.Now;
+            
+            // Mark as initialized after first update cycle completes
+            if (!_hasInitialized && sample.CpuTemperature > 0)
+            {
+                _hasInitialized = true;
+                Console.WriteLine("[Worker] Hardware monitoring initialized - first sample complete");
+            }
         }
     }
 
@@ -474,13 +500,27 @@ class Program
                 // Always update temperature, even if 0 (indicates sensor failure/unavailable)
                 // This prevents stuck readings when sensors become temporarily unavailable
                 sample.CpuTemperature = cpuTemp;
+                Console.WriteLine($"CPU Temp: {cpuTemp}°C");
                 
                 var cpuLoad = GetSensorValue(hardware, SensorType.Load, "CPU Total");
-                if (cpuLoad > 0) sample.CpuLoad = cpuLoad;
+                // Always assign load - 0 is a valid idle reading
+                sample.CpuLoad = cpuLoad;
                 
                 var cpuPower = GetSensorValueMulti(hardware, SensorType.Power, 
                     "CPU Package", "Package Power");
                 if (cpuPower > 0) sample.CpuPower = cpuPower;
+                
+                // Collect CPU core clocks
+                var coreClocks = hardware.Sensors
+                    .Where(s => s.SensorType == SensorType.Clock && 
+                           (s.Name.StartsWith("CPU Core #") || s.Name.StartsWith("Core #")))
+                    .Select(s => (double)(s.Value ?? 0))
+                    .Where(v => v > 0)
+                    .ToList();
+                if (coreClocks.Count > 0)
+                {
+                    sample.CpuCoreClocks = coreClocks;
+                }
                 break;
                 
             case HardwareType.GpuNvidia:
@@ -488,14 +528,18 @@ class Program
                 // GPU Temperature - prefer Core over Hotspot (more stable)
                 var gpuTemp = GetSensorValueMulti(hardware, SensorType.Temperature, 
                     "GPU Core", "Core");
-                if (gpuTemp > 0) sample.GpuTemperature = gpuTemp;
+                // Always update temperature, even if 0 (indicates sensor failure/unavailable)
+                sample.GpuTemperature = gpuTemp;
+                Console.WriteLine($"GPU Temp: {gpuTemp}°C");
                 
                 var gpuHotspot = GetSensorValueMulti(hardware, SensorType.Temperature, 
                     "GPU Hot Spot", "Hot Spot");
-                if (gpuHotspot > 0) sample.GpuHotspot = gpuHotspot;
+                // Always update hotspot, even if 0
+                sample.GpuHotspot = gpuHotspot;
                 
                 var gpuLoad = GetSensorValueMulti(hardware, SensorType.Load, "GPU Core");
-                if (gpuLoad > 0) sample.GpuLoad = gpuLoad;
+                // Always assign load - 0 is a valid idle reading
+                sample.GpuLoad = gpuLoad;
                 
                 var gpuPower = GetSensorValueMulti(hardware, SensorType.Power, "GPU Power");
                 if (gpuPower > 0) sample.GpuPower = gpuPower;
@@ -531,7 +575,9 @@ class Program
                 {
                     var intelTemp = GetSensorValueMulti(hardware, SensorType.Temperature, 
                         "GPU Core", "GPU Package", "GPU");
-                    if (intelTemp > 0) sample.GpuTemperature = intelTemp;
+                    // Always update temperature, even if 0
+                    sample.GpuTemperature = intelTemp;
+                    Console.WriteLine($"Intel GPU Temp: {intelTemp}°C");
                     
                     if (isArc || string.IsNullOrEmpty(sample.GpuName))
                         sample.GpuName = hardware.Name;
@@ -561,8 +607,9 @@ class Program
             case HardwareType.Memory:
                 var ramUsed = GetSensorValue(hardware, SensorType.Data, "Memory Used");
                 var ramAvail = GetSensorValue(hardware, SensorType.Data, "Memory Available");
-                if (ramUsed > 0) sample.RamUsage = ramUsed;
-                if (ramUsed > 0 && ramAvail > 0) sample.RamTotal = ramUsed + ramAvail;
+                // Assign memory usage if sensors exist (even if 0 bytes used)
+                sample.RamUsage = ramUsed;
+                if (ramUsed >= 0 && ramAvail >= 0) sample.RamTotal = ramUsed + ramAvail;
                 break;
                 
             case HardwareType.Storage:
@@ -618,11 +665,15 @@ class Program
     {
         foreach (var name in names)
         {
-            var value = GetSensorValue(hardware, type, name);
-            if (value > 0) return value;
+            var sensor = hardware.Sensors.FirstOrDefault(s => s.SensorType == type && s.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
+            if (sensor != null)
+            {
+                return sensor.Value ?? 0;  // Return actual value even if 0
+            }
         }
         // Fallback to any sensor of this type
-        return GetSensorValue(hardware, type);
+        var fallback = hardware.Sensors.FirstOrDefault(s => s.SensorType == type);
+        return fallback?.Value ?? 0;
     }
 
     private static async Task RunPipeServer()
@@ -678,6 +729,12 @@ class Program
                 {
                     lock (_lock)
                     {
+                        // Mark sample as stale if we haven't initialized yet (first update not complete)
+                        if (!_hasInitialized)
+                        {
+                            _lastSample.IsFresh = false;
+                            _lastSample.StaleCount = 999;  // High stale count to signal "not initialized"
+                        }
                         response = JsonSerializer.Serialize(_lastSample);
                     }
                 }
@@ -755,6 +812,7 @@ public class HardwareSample
     public double CpuTemperature { get; set; }
     public double CpuLoad { get; set; }
     public double CpuPower { get; set; }
+    public List<double> CpuCoreClocks { get; set; } = new();
     
     // GPU
     public string GpuName { get; set; } = "";

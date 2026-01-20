@@ -80,7 +80,20 @@ namespace OmenCore.Hardware
             0xCF, // Power limit control
         };
 
-        public bool IsAvailable => _handle is { IsInvalid: false };
+        public bool IsAvailable
+        {
+            get
+            {
+                try
+                {
+                    return _handle != null && !_handle.IsInvalid && !_handle.IsClosed;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return false;
+                }
+            }
+        }
 
         public bool Initialize(string devicePath)
         {
@@ -264,21 +277,28 @@ namespace OmenCore.Hardware
         /// </summary>
         private byte ReadPortByte(ushort port)
         {
-            var inBuf = new PortByteInput { Port = (uint)port };
-            var outBuf = new PortByteOutput { Value = 0 };
-            
-            bool ok = Native.DeviceIoControl(_handle!,
-                Native.IOCTL_OLS_READ_IO_PORT_BYTE,
-                ref inBuf, Marshal.SizeOf<PortByteInput>(),
-                ref outBuf, Marshal.SizeOf<PortByteOutput>(),
-                out _, IntPtr.Zero);
-                
-            if (!ok)
+            try
             {
-                throw new Win32Exception(Marshal.GetLastWin32Error(), $"Port read failed at 0x{port:X4}");
+                var inBuf = new PortByteInput { Port = (uint)port };
+                var outBuf = new PortByteOutput { Value = 0 };
+                
+                bool ok = Native.DeviceIoControl(_handle!,
+                    Native.IOCTL_OLS_READ_IO_PORT_BYTE,
+                    ref inBuf, Marshal.SizeOf<PortByteInput>(),
+                    ref outBuf, Marshal.SizeOf<PortByteOutput>(),
+                    out _, IntPtr.Zero);
+                    
+                if (!ok)
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), $"Port read failed at 0x{port:X4}");
+                }
+                
+                return (byte)outBuf.Value;
             }
-            
-            return (byte)outBuf.Value;
+            catch (ObjectDisposedException)
+            {
+                throw new InvalidOperationException("WinRing0 handle has been disposed");
+            }
         }
         
         /// <summary>
@@ -286,17 +306,24 @@ namespace OmenCore.Hardware
         /// </summary>
         private void WritePortByte(ushort port, byte value)
         {
-            var inBuf = new PortByteInOut { Port = (uint)port, Value = value };
-            
-            bool ok = Native.DeviceIoControl(_handle!,
-                Native.IOCTL_OLS_WRITE_IO_PORT_BYTE,
-                ref inBuf, Marshal.SizeOf<PortByteInOut>(),
-                IntPtr.Zero, 0,
-                out _, IntPtr.Zero);
-                
-            if (!ok)
+            try
             {
-                throw new Win32Exception(Marshal.GetLastWin32Error(), $"Port write failed at 0x{port:X4}");
+                var inBuf = new PortByteInOut { Port = (uint)port, Value = value };
+                
+                bool ok = Native.DeviceIoControl(_handle!,
+                    Native.IOCTL_OLS_WRITE_IO_PORT_BYTE,
+                    ref inBuf, Marshal.SizeOf<PortByteInOut>(),
+                    IntPtr.Zero, 0,
+                    out _, IntPtr.Zero);
+                    
+                if (!ok)
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), $"Port write failed at 0x{port:X4}");
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                throw new InvalidOperationException("WinRing0 handle has been disposed");
             }
         }
 
@@ -309,6 +336,11 @@ namespace OmenCore.Hardware
             if (!IsAvailable)
             {
                 throw new InvalidOperationException($"WinRing0 driver {_devicePath} is not ready");
+            }
+            // Additional check for disposed handle
+            if (_handle == null || _handle.IsClosed)
+            {
+                throw new InvalidOperationException($"WinRing0 driver {_devicePath} handle is closed");
             }
         }
         

@@ -51,13 +51,51 @@ namespace OmenCoreApp.Tests.ViewModels
             {
                 return Task.FromResult((avg: 820 + fanIndex * 100, min: 800 + fanIndex * 100, max: 860 + fanIndex * 100));
             }
+
+            public Task<FanApplyResult> ApplyWithEnhancedVerificationAsync(int fanIndex, int targetPercent, bool autoRevertOnFailure = true, CancellationToken ct = default)
+            {
+                LastCalledFanIndex = fanIndex;
+                LastAppliedPercent = targetPercent;
+                var result = new FanApplyResult
+                {
+                    FanIndex = fanIndex,
+                    FanName = fanIndex == 0 ? "CPU Fan" : "GPU Fan",
+                    RequestedPercent = targetPercent,
+                    ActualRpmAfter = targetPercent * 50,
+                    ExpectedRpm = targetPercent * 50,
+                    AppliedLevel = targetPercent,
+                    WmiCallSucceeded = true,
+                    VerificationPassed = true
+                };
+
+                return Task.FromResult(result);
+            }
+
+            public Task<FanCalibrationResult> PerformFanCalibrationAsync(int fanIndex, CancellationToken ct = default)
+            {
+                var result = new FanCalibrationResult
+                {
+                    FanIndex = fanIndex,
+                    FanName = fanIndex == 0 ? "CPU Fan" : "GPU Fan",
+                    Success = true,
+                    CalibrationPoints = new List<FanCalibrationPoint>
+                    {
+                        new FanCalibrationPoint { RequestedPercent = 0, MeasuredRpm = 0, AppliedLevel = 0, VerificationPassed = true },
+                        new FanCalibrationPoint { RequestedPercent = 50, MeasuredRpm = 2500, AppliedLevel = 50, VerificationPassed = true },
+                        new FanCalibrationPoint { RequestedPercent = 100, MeasuredRpm = 5000, AppliedLevel = 100, VerificationPassed = true }
+                    }
+                };
+
+                return Task.FromResult(result);
+            }
         }
 
         [Fact]
         public async Task ApplyAndVerify_AddsHistory_AndUpdatesState()
         {
             var logging = new LoggingService(); logging.Initialize();
-            var fakeFanService = new FanService(new DummyFanController(), new ThermalSensorProvider(new LibreHardwareMonitorImpl()), logging, 1000);
+            var notificationService = new NotificationService(logging);
+            var fakeFanService = new FanService(new DummyFanController(), new ThermalSensorProvider(new LibreHardwareMonitorImpl()), logging, notificationService, 1000);
             var verifier = new TestVerifier();
 
             var vm = new FanDiagnosticsViewModel(verifier, fakeFanService, logging)
@@ -81,7 +119,8 @@ namespace OmenCoreApp.Tests.ViewModels
         public void RefreshState_SetsCurrentValues()
         {
             var logging = new LoggingService(); logging.Initialize();
-            var fakeFanService = new FanService(new DummyFanController(), new ThermalSensorProvider(new LibreHardwareMonitorImpl()), logging, 1000);
+            var notificationService = new NotificationService(logging);
+            var fakeFanService = new FanService(new DummyFanController(), new ThermalSensorProvider(new LibreHardwareMonitorImpl()), logging, notificationService, 1000);
             var verifier = new TestVerifier();
 
             var vm = new FanDiagnosticsViewModel(verifier, fakeFanService, logging)

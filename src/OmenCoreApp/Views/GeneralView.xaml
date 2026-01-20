@@ -7,8 +7,7 @@
              xmlns:utils="clr-namespace:OmenCore.Utils"
              mc:Ignorable="d" 
              d:DesignHeight="700" d:DesignWidth="1000">
-    <ScrollViewer Style="{StaticResource SmoothScrollViewer}" 
-                  utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="1.2">
+    <ScrollViewer Style="{StaticResource SmoothScrollViewer}">
         <Grid Margin="20">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>

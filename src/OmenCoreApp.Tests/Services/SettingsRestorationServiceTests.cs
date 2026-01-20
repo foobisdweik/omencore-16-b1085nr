@@ -60,7 +60,8 @@ namespace OmenCoreApp.Tests.Services
             var hwMonitor = new LibreHardwareMonitorImpl();
             var thermalProvider = new ThermalSensorProvider(hwMonitor);
             var controller = new TestFanController();
-            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+            var notificationService = new NotificationService(logging);
+            var fanService = new FanService(controller, thermalProvider, logging, notificationService, 1000);
 
             var svc = new SettingsRestorationService(logging, configService, null, fanService);
             var sequencer = new StartupSequencer(logging);
@@ -89,7 +90,8 @@ namespace OmenCoreApp.Tests.Services
             var hwMonitor = new LibreHardwareMonitorImpl();
             var thermalProvider = new ThermalSensorProvider(hwMonitor);
             var controller = new TestFanController();
-            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+            var notificationService = new NotificationService(logging);
+var fanService = new FanService(controller, thermalProvider, logging, notificationService, 1000);
 
             var svc = new SettingsRestorationService(logging, configService, null, fanService);
             var sequencer = new StartupSequencer(logging);
@@ -113,7 +115,8 @@ namespace OmenCoreApp.Tests.Services
             var hwMonitor = new LibreHardwareMonitorImpl();
             var thermalProvider = new ThermalSensorProvider(hwMonitor);
             var controller = new TestFanController();
-            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+            var notificationService = new NotificationService(logging);
+var fanService = new FanService(controller, thermalProvider, logging, notificationService, 1000);
 
             var vm = new OmenCore.ViewModels.FanControlViewModel(fanService, configService, logging);
 
@@ -147,7 +150,8 @@ namespace OmenCoreApp.Tests.Services
             var hwMonitor = new LibreHardwareMonitorImpl();
             var thermalProvider = new ThermalSensorProvider(hwMonitor);
             var controller = new TestFanController();
-            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+            var notificationService = new NotificationService(logging);
+var fanService = new FanService(controller, thermalProvider, logging, notificationService, 1000);
 
             fanService.ApplyMaxCooling();
 
@@ -166,7 +170,8 @@ namespace OmenCoreApp.Tests.Services
             var hwMonitor = new LibreHardwareMonitorImpl();
             var thermalProvider = new ThermalSensorProvider(hwMonitor);
             var controller = new TestFanController();
-            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+            var notificationService = new NotificationService(logging);
+var fanService = new FanService(controller, thermalProvider, logging, notificationService, 1000);
 
             var maxPreset = new FanPreset { Name = "Max", Mode = FanMode.Max, Curve = new System.Collections.Generic.List<FanCurvePoint> { new FanCurvePoint { TemperatureC = 0, FanPercent = 100 } } };
             fanService.ApplyPreset(maxPreset, immediate: true);
@@ -195,7 +200,8 @@ namespace OmenCoreApp.Tests.Services
             var hwMonitor = new LibreHardwareMonitorImpl();
             var thermalProvider = new ThermalSensorProvider(hwMonitor);
             var controller = new TestFanController();
-            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+            var notificationService = new NotificationService(logging);
+var fanService = new FanService(controller, thermalProvider, logging, notificationService, 1000);
 
             var svc = new SettingsRestorationService(logging, configService, null, fanService);
             var result = await svc.ForceReapplyFanPresetAsync();
@@ -219,7 +225,8 @@ namespace OmenCoreApp.Tests.Services
             var hwMonitor = new LibreHardwareMonitorImpl();
             var thermalProvider = new ThermalSensorProvider(hwMonitor);
             var controller = new TestFanController();
-            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+            var notificationService = new NotificationService(logging);
+var fanService = new FanService(controller, thermalProvider, logging, notificationService, 1000);
 
             var vm = new OmenCore.ViewModels.FanControlViewModel(fanService, configService, logging);
 
@@ -240,7 +247,8 @@ namespace OmenCoreApp.Tests.Services
             var hwMonitor = new LibreHardwareMonitorImpl();
             var thermalProvider = new ThermalSensorProvider(hwMonitor);
             var controller = new TestFanController();
-            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+            var notificationService = new NotificationService(logging);
+var fanService = new FanService(controller, thermalProvider, logging, notificationService, 1000);
 
             // Enable smoothing: duration 500ms, step 100ms
             fanService.SetSmoothingSettings(new FanTransitionSettings { EnableSmoothing = true, SmoothingDurationMs = 500, SmoothingStepMs = 100 });
@@ -272,7 +280,8 @@ namespace OmenCoreApp.Tests.Services
             var hwMonitor = new LibreHardwareMonitorImpl();
             var thermalProvider = new ThermalSensorProvider(hwMonitor);
             var controller = new TestFanController();
-            var fanService = new FanService(controller, thermalProvider, logging, 1000);
+            var notificationService = new NotificationService(logging);
+var fanService = new FanService(controller, thermalProvider, logging, notificationService, 1000);
 
             fanService.SetSmoothingSettings(new FanTransitionSettings { EnableSmoothing = true, SmoothingDurationMs = 500, SmoothingStepMs = 100 });
 

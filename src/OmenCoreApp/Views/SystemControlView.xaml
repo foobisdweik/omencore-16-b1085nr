@@ -20,7 +20,7 @@
                        Style="{StaticResource Caption}"/>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" Style="{StaticResource SmoothScrollViewer}" utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="1.2">
+        <ScrollViewer Grid.Row="1" Style="{StaticResource SmoothScrollViewer}">
             <StackPanel>
                 <!-- Performance Mode Section -->
                 <Border Style="{StaticResource SurfaceCard}" Padding="20" Margin="0,0,0,20"
@@ -575,12 +575,22 @@
                 <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,20">
                     <StackPanel>
                         <TextBlock Text="GPU Power Boost (TGP/Dynamic Boost)" FontSize="20" FontWeight="SemiBold" 
-                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"
+                                   ToolTip="Control GPU Total Graphics Power (TGP) and Dynamic Boost. Higher levels allow more GPU wattage for better performance."/>
                         
                         <TextBlock Text="Control GPU Total Graphics Power (TGP) and Dynamic Boost (PPAB). Higher settings enable more GPU wattage for better gaming performance. Extended option is for RTX 5080 and newer GPUs that may support +25W boost." 
                                    FontSize="12" 
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    Margin="0,0,0,16" TextWrapping="Wrap"/>
+
+                        <Border Style="{StaticResource StatusBadgeOk}"
+                                Margin="0,0,0,12"
+                                Visibility="{Binding ShowGpuFullPowerPill, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="{Binding GpuFullPowerText}" 
+                                       FontSize="12" 
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                        </Border>
 
                         <!-- Current Status -->
                         <Grid Margin="0,0,0,16">
@@ -618,13 +628,15 @@
                                       Style="{StaticResource ModernComboBox}"
                                       ItemsSource="{Binding GpuPowerBoostLevels}"
                                       SelectedItem="{Binding GpuPowerBoostLevel}"
-                                      Margin="0,0,12,0"/>
+                                      Margin="0,0,12,0"
+                                      ToolTip="{Binding GpuPowerBoostDescription}"/>
                             
                             <Button Grid.Column="2" 
                                     Content="Apply" 
                                     Style="{StaticResource ModernButton}"
                                     Command="{Binding ApplyGpuPowerBoostCommand}"
-                                    Padding="16,8"/>
+                                    Padding="16,8"
+                                    ToolTip="Apply the selected GPU power boost level"/>
                         </Grid>
 
                         <TextBlock Text="{Binding GpuPowerBoostDescription}" 
@@ -643,12 +655,12 @@
                 
                 <!-- GPU Overclocking Section (NVAPI) -->
                 <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,20"
-                        Visibility="{Binding GpuOcAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        Visibility="{Binding GpuNvapiAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <StackPanel>
                         <TextBlock Text="GPU Overclocking (NVIDIA)" FontSize="20" FontWeight="SemiBold" 
                                    Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
                         
-                        <TextBlock Text="Adjust GPU core and memory clock offsets for improved gaming performance. Use at your own risk - improper settings can cause instability or crashes." 
+                        <TextBlock Text="Adjust GPU power limits and clock offsets for improved gaming performance. Clock offsets require overclocking support from your GPU. Use at your own risk - improper settings can cause instability or crashes." 
                                    FontSize="12" 
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    Margin="0,0,0,16" TextWrapping="Wrap"/>
@@ -673,7 +685,8 @@
                         </Grid>
 
                         <!-- Core Clock Offset -->
-                        <StackPanel Margin="0,0,0,16">
+                        <StackPanel Margin="0,0,0,16"
+                                    Visibility="{Binding GpuOcAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
                             <Grid Margin="0,0,0,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -700,7 +713,8 @@
                         </StackPanel>
 
                         <!-- Memory Clock Offset -->
-                        <StackPanel Margin="0,0,0,16">
+                        <StackPanel Margin="0,0,0,16"
+                                    Visibility="{Binding GpuOcAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
                             <Grid Margin="0,0,0,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -750,7 +764,8 @@
                         </StackPanel>
 
                         <!-- Voltage Offset -->
-                        <StackPanel Margin="0,0,0,16">
+                        <StackPanel Margin="0,0,0,16"
+                                    Visibility="{Binding GpuOcAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
                             <Grid Margin="0,0,0,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>

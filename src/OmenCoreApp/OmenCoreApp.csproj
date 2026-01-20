@@ -106,4 +106,11 @@
       <Link>LogitechLedEnginesWrapper.dll</Link>
     </Content>
   </ItemGroup>
+
+  <!-- Ensure ModernStyles.xaml is compiled as a WPF resource (BAML) and embedded -->
+  <ItemGroup>
+    <Page Update="Styles\ModernStyles.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+  </ItemGroup>
 </Project>

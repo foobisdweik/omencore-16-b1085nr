@@ -99,13 +99,24 @@ public static class StatusCommand
         {
             Console.WriteLine("║  EC Access: ✗ Unavailable                                  ║");
             Console.WriteLine("║                                                            ║");
-            Console.WriteLine("║  ⚠️  Neither ec_sys nor hp-wmi detected.                   ║");
+            Console.WriteLine("║  🔧 TROUBLESHOOTING STEPS:                                 ║");
             Console.WriteLine("║                                                            ║");
-            Console.WriteLine("║  Try one of:                                               ║");
-            Console.WriteLine("║    sudo modprobe ec_sys write_support=1                    ║");
-            Console.WriteLine("║    sudo modprobe hp-wmi  (for 2023+ models)                ║");
+            Console.WriteLine("║  1. Check kernel modules:                                  ║");
+            Console.WriteLine("║     sudo modprobe ec_sys write_support=1                   ║");
+            Console.WriteLine("║     sudo modprobe hp-wmi                                   ║");
             Console.WriteLine("║                                                            ║");
-            Console.WriteLine("║  Fedora 43+: ec_sys not in kernel, use hp-wmi              ║");
+            Console.WriteLine("║  2. Verify hardware access:                                ║");
+            Console.WriteLine("║     ls -la /sys/kernel/debug/ec/ec0/io                     ║");
+            Console.WriteLine("║     ls -la /sys/devices/platform/hp-wmi/                   ║");
+            Console.WriteLine("║                                                            ║");
+            Console.WriteLine("║  3. Check kernel version & distribution:                   ║");
+            Console.WriteLine("║     uname -a                                               ║");
+            Console.WriteLine("║     cat /etc/os-release                                     ║");
+            Console.WriteLine("║                                                            ║");
+            Console.WriteLine("║  4. For Fedora 43+ / RHEL 10+:                             ║");
+            Console.WriteLine("║     ec_sys removed - use hp-wmi only                       ║");
+            Console.WriteLine("║                                                            ║");
+            Console.WriteLine("║  📖 See: https://github.com/theantipopau/omencore/wiki/Linux");
         }
         
         // Temperatures

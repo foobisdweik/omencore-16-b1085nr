@@ -23,6 +23,7 @@ namespace OmenCore.Services
         private readonly IFanController _fanController;
         private readonly ThermalSensorProvider _thermalProvider;
         private readonly LoggingService _logging;
+        private readonly NotificationService _notificationService;
         private readonly TimeSpan _monitorPollPeriod;
         private readonly ObservableCollection<ThermalSample> _thermalSamples = new();
         private readonly ObservableCollection<FanTelemetry> _fanTelemetry = new();
@@ -96,6 +97,23 @@ namespace OmenCore.Services
         private DateTime _lastFanChangeRequest = DateTime.MinValue;
         private int _pendingFanPercent = -1;
         private bool _pendingIncrease = false;
+
+        // GPU power boost integration - adjust fan curves based on GPU power level
+        private string _gpuPowerBoostLevel = "Medium";
+        public string GpuPowerBoostLevel
+        {
+            get => _gpuPowerBoostLevel;
+            set
+            {
+                if (_gpuPowerBoostLevel != value)
+                {
+                    _gpuPowerBoostLevel = value;
+                    _logging.Info($"GPU Power Boost level updated to: {_gpuPowerBoostLevel} - adjusting fan curves accordingly");
+                    // Force a curve re-evaluation on next cycle
+                    _lastCurveUpdate = DateTime.MinValue;
+                }
+            }
+        }
 
         public ReadOnlyObservableCollection<ThermalSample> ThermalSamples { get; }
         public ReadOnlyObservableCollection<FanTelemetry> FanTelemetry { get; }
@@ -197,11 +215,12 @@ namespace OmenCore.Services
         /// <summary>
         /// Create FanService with the new IFanController interface.
         /// </summary>
-        public FanService(IFanController controller, ThermalSensorProvider thermalProvider, LoggingService logging, int pollMs)
+        public FanService(IFanController controller, ThermalSensorProvider thermalProvider, LoggingService logging, NotificationService notificationService, int pollMs)
         {
             _fanController = controller;
             _thermalProvider = thermalProvider;
             _logging = logging;
+            _notificationService = notificationService;
             _monitorPollPeriod = TimeSpan.FromMilliseconds(Math.Max(MonitorMinIntervalMs, pollMs));
             ThermalSamples = new ReadOnlyObservableCollection<ThermalSample>(_thermalSamples);
             FanTelemetry = new ReadOnlyObservableCollection<FanTelemetry>(_fanTelemetry);
@@ -212,8 +231,8 @@ namespace OmenCore.Services
         /// <summary>
         /// Legacy constructor for compatibility with existing FanController.
         /// </summary>
-        public FanService(FanController controller, ThermalSensorProvider thermalProvider, LoggingService logging, int pollMs)
-            : this(new EcFanControllerWrapper(controller, null!, logging), thermalProvider, logging, pollMs)
+        public FanService(FanController controller, ThermalSensorProvider thermalProvider, LoggingService logging, NotificationService notificationService, int pollMs)
+            : this(new EcFanControllerWrapper(controller, null!, logging), thermalProvider, logging, notificationService, pollMs)
         {
         }
 
@@ -654,6 +673,9 @@ namespace OmenCore.Services
                     
                     _thermalProtectionActive = true;
                     _logging.Warn($"⚠️ THERMAL EMERGENCY: {maxTemp:F0}°C - forcing fans to 100%!");
+                    
+                    // Notify user of thermal protection activation
+                    _notificationService?.ShowThermalProtectionActivated(maxTemp, "Emergency - Max Fans");
                 }
                 
                 // Force max fans immediately
@@ -673,6 +695,9 @@ namespace OmenCore.Services
                     
                     _thermalProtectionActive = true;
                     _logging.Warn($"⚠️ THERMAL WARNING: {maxTemp:F0}°C - boosting fan speed");
+                    
+                    // Notify user of thermal protection activation
+                    _notificationService?.ShowThermalProtectionActivated(maxTemp, "Warning - Boosted Fans");
                 }
                 
                 // Calculate thermal protection target: threshold = 85%, scaling to 100% at 88°C
@@ -801,6 +826,12 @@ namespace OmenCore.Services
                 return ApplyIndependentCurvesAsync(cpuTemp, gpuTemp, immediate, forceRefresh, now);
             }
             
+            // Route to appropriate curve handler
+            if (hasIndependentCurves)
+            {
+                return ApplyIndependentCurvesAsync(cpuTemp, gpuTemp, immediate, forceRefresh, now);
+            }
+            
             lock (_curveLock)
             {
                 if (_activeCurve == null)
@@ -820,6 +851,10 @@ namespace OmenCore.Services
                         return Task.CompletedTask;
                     var targetFanPercent = targetPoint.FanPercent;
                     
+                    // Adjust fan speed based on GPU power boost level
+                    // Higher power boost levels generate more heat, so slightly increase fan speed
+                    targetFanPercent = AdjustFanPercentForGpuPowerBoost(targetFanPercent, gpuTemp);
+                    
                     // If immediate flag passed, bypass hysteresis and smoothing and apply now
                     if (immediate)
                     {
@@ -829,7 +864,7 @@ namespace OmenCore.Services
                             _lastHysteresisTemp = maxTemp;
                             _pendingFanPercent = -1;
                             _lastCurveUpdate = now;
-                            _logging.Info($"Immediate curve applied: {targetFanPercent}% @ {maxTemp:F1}°C");
+                            _logging.Info($"Immediate curve applied: {targetFanPercent}% @ {maxTemp:F1}°C (GPU boost: {_gpuPowerBoostLevel})");
                         }
 
                         return Task.CompletedTask;
@@ -880,7 +915,21 @@ namespace OmenCore.Services
                         // If smoothing disabled or this is a force refresh or we have no previous applied value, just set directly
                         if (!_smoothingEnabled || _lastAppliedFanPercent < 0 || forceRefresh)
                         {
-                            if (_fanController.SetFanSpeed(targetFanPercent))
+                            // Add retry logic for fan control hardening
+                            const int maxRetries = 2;
+                            bool success = false;
+                            
+                            for (int retry = 0; retry <= maxRetries && !success; retry++)
+                            {
+                                success = _fanController.SetFanSpeed(targetFanPercent);
+                                if (!success && retry < maxRetries)
+                                {
+                                    _logging.Warn($"Fan speed command failed (attempt {retry + 1}/{maxRetries + 1}), retrying...");
+                                    System.Threading.Thread.Sleep(300); // Brief delay before retry
+                                }
+                            }
+                            
+                            if (success)
                             {
                                 _lastAppliedFanPercent = targetFanPercent;
                                 _lastHysteresisTemp = maxTemp;
@@ -895,6 +944,10 @@ namespace OmenCore.Services
                                 {
                                     _logging.Info($"Curve applied: {targetFanPercent}% @ {maxTemp:F1}°C (level: {fanLevel})");
                                 }
+                            }
+                            else
+                            {
+                                _logging.Error($"Failed to set fan speed to {targetFanPercent}% after {maxRetries + 1} attempts");
                             }
                         }
                         else
@@ -1142,6 +1195,38 @@ namespace OmenCore.Services
             return result;
         }
 
+        /// <summary>
+        /// Adjust fan percentage based on GPU power boost level to account for increased heat generation.
+        /// Higher power boost levels require slightly higher fan speeds for optimal cooling.
+        /// </summary>
+        private int AdjustFanPercentForGpuPowerBoost(int baseFanPercent, double gpuTemp)
+        {
+            if (gpuTemp < 50) // Only adjust when GPU is under load
+                return baseFanPercent;
+
+            int adjustment = _gpuPowerBoostLevel switch
+            {
+                "Minimum" => 0,    // Base TGP - no adjustment needed
+                "Medium" => 2,     // Custom TGP - slight increase
+                "Maximum" => 5,    // Custom TGP + Dynamic Boost - moderate increase
+                "Extended" => 8,   // Extended boost - significant increase for higher wattage
+                _ => 0
+            };
+
+            // Scale adjustment based on GPU temperature - more adjustment at higher temps
+            double tempFactor = Math.Min(1.0, (gpuTemp - 50) / 30); // 0-1 scale over 50-80°C
+            int scaledAdjustment = (int)(adjustment * tempFactor);
+
+            int adjustedPercent = Math.Min(100, baseFanPercent + scaledAdjustment);
+
+            if (scaledAdjustment > 0)
+            {
+                _logging.Debug($"GPU power boost adjustment: {baseFanPercent}% + {scaledAdjustment}% = {adjustedPercent}% (boost: {_gpuPowerBoostLevel}, GPU: {gpuTemp:F1}°C)");
+            }
+
+            return adjustedPercent;
+        }
+
         #endregion
 
         /// <summary>
@@ -1186,12 +1271,44 @@ namespace OmenCore.Services
 
         public void Dispose()
         {
+            // Restore system auto-control before shutting down
+            // This returns fans to BIOS/Windows default control instead of staying at last manual setting
+            try
+            {
+                if (_fanController.IsAvailable)
+                {
+                    // Use full EC reset which is more thorough than RestoreAutoControl
+                    // This resets fan state, timer, and BIOS control registers
+                    _logging.Info("Resetting EC to restore BIOS fan control on shutdown...");
+                    
+                    // First, try RestoreAutoControl for immediate effect
+                    _fanController.RestoreAutoControl();
+                    
+                    // Wait briefly for EC to process
+                    System.Threading.Thread.Sleep(100);
+                    
+                    // Then do full reset to ensure BIOS takes over
+                    if (_fanController.ResetEcToDefaults())
+                    {
+                        _logging.Info("FanService disposed (EC reset complete, BIOS should now control fans)");
+                    }
+                    else
+                    {
+                        _logging.Warn("FanService disposed (EC reset returned false, fans may not restore properly)");
+                    }
+                }
+                else
+                {
+                    _logging.Info("FanService disposed (fan controller not available, no auto-control restoration)");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to restore auto-control on dispose: {ex.Message}");
+            }
+            
             DisableCurve();
             Stop();
-            
-            // Don't restore auto control on exit - preserve user's fan settings
-            // This prevents fans ramping up when user closes app while in Quiet mode
-            _logging.Info("FanService disposed (preserving current fan settings)");
         }
     }
 }

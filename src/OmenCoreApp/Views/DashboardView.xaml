@@ -43,8 +43,7 @@
     </UserControl.Resources>
     
     <ScrollViewer Style="{StaticResource SmoothScrollViewer}" 
-                  Padding="0,0,12,0"
-                  utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="1.2">
+                  Padding="0,0,12,0">
         <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -190,6 +189,8 @@
                 <ColumnDefinition Width="*" MinWidth="160"/>
                 <ColumnDefinition Width="*" MinWidth="160"/>
                 <ColumnDefinition Width="*" MinWidth="160"/>
+                <ColumnDefinition Width="*" MinWidth="160"/>
+                <ColumnDefinition Width="*" MinWidth="160"/>
             </Grid.ColumnDefinitions>
 
             <!-- CPU Card -->
@@ -313,7 +314,7 @@
             </Border>
             
             <!-- Battery Card -->
-            <Border Grid.Column="4" Style="{StaticResource SurfaceCard}" Padding="18,16" Margin="10,0,0,0"
+            <Border Grid.Column="4" Style="{StaticResource SurfaceCard}" Padding="18,16" Margin="5,0"
                     ToolTip="Battery charge level and power status. Keep battery between 20-80% for longevity.">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -338,6 +339,64 @@
                                Style="{StaticResource BodyText}"
                                FontSize="13"
                                LineHeight="18"/>
+                </Grid>
+            </Border>
+            
+            <!-- Power Consumption Card -->
+            <Border Grid.Column="5" Style="{StaticResource SurfaceCard}" Padding="18,16" Margin="5,0"
+                    ToolTip="System power consumption from CPU and GPU. Higher values indicate more intensive workloads.">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚡" FontSize="14" Margin="0,0,8,0"/>
+                            <TextBlock Text="POWER" Style="{StaticResource Label}"/>
+                        </StackPanel>
+                        <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Background="#FFD700"
+                                CornerRadius="8" Padding="8,3"
+                                ToolTip="Total system power">
+                            <TextBlock Text="{Binding PowerConsumptionSummary, Converter={StaticResource PowerToTotalConverter}, FallbackValue=--W}"
+                                       Style="{StaticResource MonospaceValue}" FontSize="11" Foreground="Black"/>
+                        </Border>
+                    </Grid>
+                    <TextBlock Grid.Row="2" Text="{Binding PowerConsumptionSummary}" 
+                               Style="{StaticResource BodyText}"
+                               FontSize="12"
+                               LineHeight="16"/>
+                </Grid>
+            </Border>
+            
+            <!-- Fan Curve Card -->
+            <Border Grid.Column="6" Style="{StaticResource SurfaceCard}" Padding="18,16" Margin="10,0,0,0"
+                    ToolTip="Live fan curve showing temperature vs fan speed relationship.">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="💨" FontSize="14" Margin="0,0,8,0"/>
+                            <TextBlock Text="FAN CURVE" Style="{StaticResource Label}"/>
+                        </StackPanel>
+                        <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Background="#87CEEB"
+                                CornerRadius="8" Padding="8,3"
+                                ToolTip="Current fan speeds">
+                            <TextBlock Text="{Binding FanCurveSummary, Converter={StaticResource FanSpeedConverter}, FallbackValue=-- RPM}"
+                                       Style="{StaticResource MonospaceValue}" FontSize="11" Foreground="Black"/>
+                        </Border>
+                    </Grid>
+                    <TextBlock Grid.Row="2" Text="{Binding FanCurveSummary}" 
+                               Style="{StaticResource BodyText}"
+                               FontSize="12"
+                               LineHeight="16"/>
                 </Grid>
             </Border>
         </Grid>
@@ -483,6 +542,44 @@
                     </Grid>
                     <controls:GpuVcChart Samples="{Binding MonitoringSamples}" 
                                           Height="200"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Fan Curve Chart -->
+            <Border Grid.Row="2" Grid.Column="1" Style="{StaticResource SurfaceCard}" Padding="20" Margin="10,10,0,0">
+                <StackPanel>
+                    <Grid Margin="0,0,0,16">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="💨" FontSize="14" Margin="0,0,8,0"/>
+                            <TextBlock Text="FAN CURVE" Style="{StaticResource Label}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <StackPanel Margin="0,0,16,0">
+                                <TextBlock Text="CPU FAN" 
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextTertiaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding FanCurvePoints, Converter={StaticResource LatestFanSpeedConverter}, ConverterParameter=cpu, FallbackValue=-- RPM}" 
+                                           Style="{StaticResource MonospaceValue}"
+                                           FontSize="16"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="GPU FAN" 
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextTertiaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding FanCurvePoints, Converter={StaticResource LatestFanSpeedConverter}, ConverterParameter=gpu, FallbackValue=-- RPM}" 
+                                           Style="{StaticResource MonospaceValue}"
+                                           FontSize="16"
+                                           Foreground="#45C7FF"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                    <controls:FanCurveChart Points="{Binding FanCurvePoints}" 
+                                             Height="200"/>
                 </StackPanel>
             </Border>
         </Grid>

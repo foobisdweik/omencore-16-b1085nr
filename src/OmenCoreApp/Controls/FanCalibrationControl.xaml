@@ -1,0 +1,118 @@
+<UserControl x:Class="OmenCore.Controls.FanCalibrationControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:OmenCore.Controls"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="800"
+             Background="{DynamicResource DarkBackgroundBrush}">
+
+    <UserControl.Resources>
+        <Style x:Key="CalibrationButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Height" Value="35"/>
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="Padding" Value="15,5"/>
+        </Style>
+
+        <Style x:Key="StatusTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Margin" Value="0,2"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,10">
+            <StackPanel Margin="15">
+                <TextBlock Text="Fan Calibration" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" Margin="0,0,0,10"/>
+                <TextBlock Text="Calibrate fan RPM curves for accurate speed control on your specific laptop model." FontSize="14" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"/>
+                <TextBlock Text="This process will test fan speeds from 0% to 100% and may take several minutes." FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,5,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Main Content -->
+        <Border Grid.Row="1" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="15">
+
+                    <!-- Model Info -->
+                    <GroupBox Header="Model Information" Margin="0,0,0,15">
+                        <StackPanel Margin="10">
+                            <TextBlock x:Name="ModelInfoText" Text="Detecting laptop model..." Style="{StaticResource StatusTextStyle}"/>
+                            <TextBlock x:Name="CalibrationStatusText" Text="No calibration data found" Style="{StaticResource StatusTextStyle}" Foreground="{DynamicResource WarningBrush}"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Fan Selection -->
+                    <GroupBox Header="Fan Selection" Margin="0,0,0,15">
+                        <StackPanel Margin="10">
+                            <TextBlock Text="Select which fan to calibrate:" Style="{StaticResource StatusTextStyle}" Margin="0,0,0,10"/>
+                            <ComboBox x:Name="FanSelector" SelectionChanged="FanSelector_SelectionChanged" Margin="0,0,0,10">
+                                <ComboBoxItem Content="CPU Fan (Fan 0)" Tag="0"/>
+                                <ComboBoxItem Content="GPU Fan (Fan 1)" Tag="1"/>
+                            </ComboBox>
+                            <TextBlock x:Name="FanStatusText" Text="Select a fan to see current status" Style="{StaticResource StatusTextStyle}"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Calibration Progress -->
+                    <GroupBox Header="Calibration Progress" Margin="0,0,0,15" x:Name="ProgressGroup" Visibility="Collapsed">
+                        <StackPanel Margin="10">
+                            <ProgressBar x:Name="CalibrationProgress" Height="20" Margin="0,0,0,10"/>
+                            <TextBlock x:Name="ProgressText" Text="Preparing calibration..." Style="{StaticResource StatusTextStyle}"/>
+                            <TextBlock x:Name="CurrentTestText" Text="" Style="{StaticResource StatusTextStyle}" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Results Display -->
+                    <GroupBox Header="Calibration Results" Margin="0,0,0,15" x:Name="ResultsGroup" Visibility="Collapsed">
+                        <StackPanel Margin="10">
+                            <TextBlock x:Name="ResultsSummaryText" Text="Calibration completed successfully" Style="{StaticResource StatusTextStyle}" FontWeight="SemiBold"/>
+                            <DataGrid x:Name="CalibrationResultsGrid" AutoGenerateColumns="False" Height="200" Margin="0,10,0,0" IsReadOnly="True">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Target %" Binding="{Binding RequestedPercent}" Width="80"/>
+                                    <DataGridTextColumn Header="Applied Level" Binding="{Binding AppliedLevel}" Width="100"/>
+                                    <DataGridTextColumn Header="Measured RPM" Binding="{Binding MeasuredRpm}" Width="100"/>
+                                    <DataGridTextColumn Header="RPM Range" Binding="{Binding RpmRange}" Width="100"/>
+                                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="80"/>
+                                    <DataGridTextColumn Header="Duration" Binding="{Binding DurationFormatted}" Width="100"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Warnings -->
+                    <Border Background="{DynamicResource WarningBackgroundBrush}" BorderBrush="{DynamicResource WarningBrush}" BorderThickness="1" CornerRadius="4" Margin="0,0,0,15" Padding="10">
+                        <StackPanel>
+                            <TextBlock Text="⚠️ Important Notes:" FontWeight="SemiBold" Foreground="{DynamicResource WarningBrush}" Margin="0,0,0,5"/>
+                            <TextBlock Text="• Calibration may take 5-10 minutes per fan" Style="{StaticResource StatusTextStyle}"/>
+                            <TextBlock Text="• Fans will run at various speeds - ensure proper ventilation" Style="{StaticResource StatusTextStyle}"/>
+                            <TextBlock Text="• Do not interrupt the calibration process" Style="{StaticResource StatusTextStyle}"/>
+                            <TextBlock Text="• Calibration data is stored locally and can be shared with the community" Style="{StaticResource StatusTextStyle}"/>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Action Buttons -->
+        <Border Grid.Row="2" Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Margin="0,10,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="15">
+                <Button x:Name="StartCalibrationButton" Content="Start Calibration" Style="{StaticResource CalibrationButtonStyle}" Background="{DynamicResource AccentBrush}" Foreground="White" Click="StartCalibrationButton_Click"/>
+                <Button x:Name="StopCalibrationButton" Content="Stop" Style="{StaticResource CalibrationButtonStyle}" Background="{DynamicResource ErrorBrush}" Foreground="White" Click="StopCalibrationButton_Click" Visibility="Collapsed"/>
+                <Button x:Name="LoadCalibrationButton" Content="Load Existing" Style="{StaticResource CalibrationButtonStyle}" Click="LoadCalibrationButton_Click"/>
+                <Button x:Name="SaveCalibrationButton" Content="Save Results" Style="{StaticResource CalibrationButtonStyle}" Click="SaveCalibrationButton_Click" Visibility="Collapsed"/>
+                <Button x:Name="ClearCalibrationButton" Content="Clear Data" Style="{StaticResource CalibrationButtonStyle}" Background="{DynamicResource WarningBrush}" Foreground="White" Click="ClearCalibrationButton_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

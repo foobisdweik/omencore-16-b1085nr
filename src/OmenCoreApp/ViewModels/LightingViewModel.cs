@@ -25,6 +25,8 @@ namespace OmenCore.ViewModels
         private readonly ConfigurationService? _configService;
         private readonly LoggingService _logging;
         private readonly OmenCore.Services.Rgb.RgbManager? _rgbManager;
+        private readonly HardwareMonitoringService? _hardwareMonitoringService;
+        private readonly PerformanceModeService? _performanceModeService;
         
         private CorsairDevice? _selectedCorsairDevice;
         private CorsairLightingPreset? _selectedCorsairPreset;
@@ -45,6 +47,27 @@ namespace OmenCore.ViewModels
         private KeyboardPreset? _selectedKeyboardPreset;
         private bool _colorsLoadedFromConfig; // Track if colors were loaded from saved config
         private bool _applyKeyboardColorsOnStartup = true;
+        
+        // Temperature-responsive lighting
+        private bool _temperatureResponsiveLightingEnabled;
+        private bool _performanceModeSyncedLightingEnabled;
+        private bool _throttlingIndicatorLightingEnabled;
+        private double _cpuTempThresholdLow = 40;
+        private double _cpuTempThresholdMedium = 70;
+        private double _cpuTempThresholdHigh = 85;
+        private double _gpuTempThresholdLow = 35;
+        private double _gpuTempThresholdMedium = 65;
+        private double _gpuTempThresholdHigh = 80;
+        private string _tempLowColorHex = "#00FF00"; // Green
+        private string _tempMediumColorHex = "#FFFF00"; // Yellow
+        private string _tempHighColorHex = "#FF0000"; // Red
+        private string _throttlingColorHex = "#FF4500"; // Orange-Red
+        
+        // Performance mode colors
+        private string _balancedModeColorHex = "#0096FF"; // Blue
+        private string _performanceModeColorHex = "#FF0000"; // Red
+        private string _quietModeColorHex = "#800080"; // Purple
+        private string _customModeColorHex = "#00FFFF"; // Cyan
         
         // Empty collections for when services are not available
         private static readonly ReadOnlyObservableCollection<CorsairDevice> _emptyCorsairDevices = 
@@ -285,6 +308,255 @@ namespace OmenCore.ViewModels
         
         #endregion
 
+        #region Temperature-Responsive Lighting Properties
+        
+        public bool TemperatureResponsiveLightingEnabled
+        {
+            get => _temperatureResponsiveLightingEnabled;
+            set
+            {
+                if (_temperatureResponsiveLightingEnabled != value)
+                {
+                    _temperatureResponsiveLightingEnabled = value;
+                    OnPropertyChanged();
+                    if (value)
+                    {
+                        StartTemperatureMonitoring();
+                    }
+                    else
+                    {
+                        StopTemperatureMonitoring();
+                    }
+                }
+            }
+        }
+        
+        public bool PerformanceModeSyncedLightingEnabled
+        {
+            get => _performanceModeSyncedLightingEnabled;
+            set
+            {
+                if (_performanceModeSyncedLightingEnabled != value)
+                {
+                    _performanceModeSyncedLightingEnabled = value;
+                    OnPropertyChanged();
+                    if (value)
+                    {
+                        StartPerformanceModeMonitoring();
+                    }
+                    else
+                    {
+                        StopPerformanceModeMonitoring();
+                    }
+                }
+            }
+        }
+        
+        public bool ThrottlingIndicatorLightingEnabled
+        {
+            get => _throttlingIndicatorLightingEnabled;
+            set
+            {
+                if (_throttlingIndicatorLightingEnabled != value)
+                {
+                    _throttlingIndicatorLightingEnabled = value;
+                    OnPropertyChanged();
+                    if (value)
+                    {
+                        StartThrottlingMonitoring();
+                    }
+                    else
+                    {
+                        StopThrottlingMonitoring();
+                    }
+                }
+            }
+        }
+        
+        public double CpuTempThresholdLow
+        {
+            get => _cpuTempThresholdLow;
+            set
+            {
+                if (_cpuTempThresholdLow != value)
+                {
+                    _cpuTempThresholdLow = Math.Clamp(value, 20, 80);
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public double CpuTempThresholdMedium
+        {
+            get => _cpuTempThresholdMedium;
+            set
+            {
+                if (_cpuTempThresholdMedium != value)
+                {
+                    _cpuTempThresholdMedium = Math.Clamp(value, 40, 90);
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public double CpuTempThresholdHigh
+        {
+            get => _cpuTempThresholdHigh;
+            set
+            {
+                if (_cpuTempThresholdHigh != value)
+                {
+                    _cpuTempThresholdHigh = Math.Clamp(value, 60, 100);
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public double GpuTempThresholdLow
+        {
+            get => _gpuTempThresholdLow;
+            set
+            {
+                if (_gpuTempThresholdLow != value)
+                {
+                    _gpuTempThresholdLow = Math.Clamp(value, 20, 70);
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public double GpuTempThresholdMedium
+        {
+            get => _gpuTempThresholdMedium;
+            set
+            {
+                if (_gpuTempThresholdMedium != value)
+                {
+                    _gpuTempThresholdMedium = Math.Clamp(value, 35, 85);
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public double GpuTempThresholdHigh
+        {
+            get => _gpuTempThresholdHigh;
+            set
+            {
+                if (_gpuTempThresholdHigh != value)
+                {
+                    _gpuTempThresholdHigh = Math.Clamp(value, 50, 95);
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public string TempLowColorHex
+        {
+            get => _tempLowColorHex;
+            set
+            {
+                if (_tempLowColorHex != value)
+                {
+                    _tempLowColorHex = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public string TempMediumColorHex
+        {
+            get => _tempMediumColorHex;
+            set
+            {
+                if (_tempMediumColorHex != value)
+                {
+                    _tempMediumColorHex = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public string TempHighColorHex
+        {
+            get => _tempHighColorHex;
+            set
+            {
+                if (_tempHighColorHex != value)
+                {
+                    _tempHighColorHex = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public string ThrottlingColorHex
+        {
+            get => _throttlingColorHex;
+            set
+            {
+                if (_throttlingColorHex != value)
+                {
+                    _throttlingColorHex = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public string BalancedModeColorHex
+        {
+            get => _balancedModeColorHex;
+            set
+            {
+                if (_balancedModeColorHex != value)
+                {
+                    _balancedModeColorHex = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public string PerformanceModeColorHex
+        {
+            get => _performanceModeColorHex;
+            set
+            {
+                if (_performanceModeColorHex != value)
+                {
+                    _performanceModeColorHex = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public string QuietModeColorHex
+        {
+            get => _quietModeColorHex;
+            set
+            {
+                if (_quietModeColorHex != value)
+                {
+                    _quietModeColorHex = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        public string CustomModeColorHex
+        {
+            get => _customModeColorHex;
+            set
+            {
+                if (_customModeColorHex != value)
+                {
+                    _customModeColorHex = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        #endregion
+
         public CorsairDevice? SelectedCorsairDevice
         {
             get => _selectedCorsairDevice;
@@ -509,7 +781,7 @@ namespace OmenCore.ViewModels
         public ICommand SetZone3ColorCommand { get; }
         public ICommand SetZone4ColorCommand { get; }
 
-        public LightingViewModel(CorsairDeviceService? corsairService, LogitechDeviceService? logitechService, LoggingService logging, KeyboardLightingService? keyboardLightingService = null, ConfigurationService? configService = null, RazerService? razerService = null, OmenCore.Services.Rgb.RgbManager? rgbManager = null)
+        public LightingViewModel(CorsairDeviceService? corsairService, LogitechDeviceService? logitechService, LoggingService logging, KeyboardLightingService? keyboardLightingService = null, ConfigurationService? configService = null, RazerService? razerService = null, OmenCore.Services.Rgb.RgbManager? rgbManager = null, HardwareMonitoringService? hardwareMonitoringService = null, PerformanceModeService? performanceModeService = null)
         {
             _corsairService = corsairService;
             _logitechService = logitechService;
@@ -518,6 +790,8 @@ namespace OmenCore.ViewModels
             _configService = configService;
             _logging = logging;
             _rgbManager = rgbManager;
+            _hardwareMonitoringService = hardwareMonitoringService;
+            _performanceModeService = performanceModeService;
             
             // Load saved keyboard colors from config
             LoadKeyboardColorsFromConfig();
@@ -599,6 +873,14 @@ namespace OmenCore.ViewModels
             KeyboardPresets.Add(new KeyboardPreset { Name = "Purple Haze", Zone1 = "#9400D3", Zone2 = "#8B008B", Zone3 = "#9932CC", Zone4 = "#9400D3" });
             KeyboardPresets.Add(new KeyboardPreset { Name = "White", Zone1 = "#FFFFFF", Zone2 = "#FFFFFF", Zone3 = "#FFFFFF", Zone4 = "#FFFFFF" });
             
+            // New OMEN Light Studio style presets
+            KeyboardPresets.Add(new KeyboardPreset { Name = "Wave Blue", Zone1 = "#0033FF", Zone2 = "#0066FF", Zone3 = "#0099FF", Zone4 = "#00CCFF" });
+            KeyboardPresets.Add(new KeyboardPreset { Name = "Wave Red", Zone1 = "#FF0000", Zone2 = "#FF3300", Zone3 = "#FF6600", Zone4 = "#FF9900" });
+            KeyboardPresets.Add(new KeyboardPreset { Name = "Breathing Green", Zone1 = "#00FF00", Zone2 = "#00FF00", Zone3 = "#00FF00", Zone4 = "#00FF00" });
+            KeyboardPresets.Add(new KeyboardPreset { Name = "Reactive Purple", Zone1 = "#6600FF", Zone2 = "#9900FF", Zone3 = "#CC00FF", Zone4 = "#FF00FF" });
+            KeyboardPresets.Add(new KeyboardPreset { Name = "Spectrum Flow", Zone1 = "#FF0000", Zone2 = "#FFFF00", Zone3 = "#00FF00", Zone4 = "#00FFFF" });
+            KeyboardPresets.Add(new KeyboardPreset { Name = "Audio Reactive", Zone1 = "#FF4500", Zone2 = "#FF6600", Zone3 = "#FF8700", Zone4 = "#FFA800" });
+            
             // Only select default preset if we didn't load colors from config
             // (selecting a preset overwrites the colors, which would discard saved colors)
             if (!_colorsLoadedFromConfig)
@@ -620,6 +902,18 @@ namespace OmenCore.ViewModels
             // System RGB controls
             SystemColorHex = "#FF0000";
             ApplyToSystemCommand = new AsyncRelayCommand(async _ => await ApplyColorToSystemAsync());
+            
+            // Initialize temperature-responsive lighting monitoring
+            if (_hardwareMonitoringService != null)
+            {
+                _hardwareMonitoringService.SampleUpdated += OnMonitoringSampleUpdated;
+            }
+            
+            // Initialize performance mode monitoring
+            if (_performanceModeService != null)
+            {
+                _performanceModeService.ModeApplied += OnPerformanceModeApplied;
+            }
         }
 
         private void OpenColorPickerForZone(int zoneNumber, string zoneName)
@@ -1394,6 +1688,262 @@ namespace OmenCore.ViewModels
             catch { }
             return System.Drawing.Color.Red;
         }
+        
+        #region Temperature-Responsive Lighting Methods
+        
+        private void StartTemperatureMonitoring()
+        {
+            if (_hardwareMonitoringService != null)
+            {
+                _logging.Info("Started temperature-responsive lighting monitoring");
+            }
+        }
+        
+        private void StopTemperatureMonitoring()
+        {
+            if (_hardwareMonitoringService != null)
+            {
+                _logging.Info("Stopped temperature-responsive lighting monitoring");
+            }
+        }
+        
+        private void StartPerformanceModeMonitoring()
+        {
+            if (_performanceModeService != null)
+            {
+                _logging.Info("Started performance mode synced lighting monitoring");
+            }
+        }
+        
+        private void StopPerformanceModeMonitoring()
+        {
+            if (_performanceModeService != null)
+            {
+                _logging.Info("Stopped performance mode synced lighting monitoring");
+            }
+        }
+        
+        private void StartThrottlingMonitoring()
+        {
+            if (_hardwareMonitoringService != null)
+            {
+                _logging.Info("Started throttling indicator lighting monitoring");
+            }
+        }
+        
+        private void StopThrottlingMonitoring()
+        {
+            if (_hardwareMonitoringService != null)
+            {
+                _logging.Info("Stopped throttling indicator lighting monitoring");
+            }
+        }
+        
+        private void OnMonitoringSampleUpdated(object? sender, MonitoringSample sample)
+        {
+            if (!TemperatureResponsiveLightingEnabled && !ThrottlingIndicatorLightingEnabled)
+                return;
+            
+            // Temperature-responsive lighting
+            if (TemperatureResponsiveLightingEnabled)
+            {
+                ApplyTemperatureBasedLighting(sample);
+            }
+            
+            // Throttling indicators
+            if (ThrottlingIndicatorLightingEnabled && sample.IsThrottling)
+            {
+                ApplyThrottlingLighting(sample);
+            }
+        }
+        
+        private void OnPerformanceModeApplied(object? sender, string modeName)
+        {
+            if (!PerformanceModeSyncedLightingEnabled)
+                return;
+            
+            ApplyPerformanceModeLighting(modeName);
+        }
+        
+        private async void ApplyTemperatureBasedLighting(MonitoringSample sample)
+        {
+            try
+            {
+                // Determine color based on highest temperature (CPU or GPU)
+                var maxTemp = Math.Max(sample.CpuTemperatureC, sample.GpuTemperatureC);
+                string colorHex;
+                
+                if (maxTemp >= Math.Max(CpuTempThresholdHigh, GpuTempThresholdHigh))
+                {
+                    colorHex = TempHighColorHex;
+                }
+                else if (maxTemp >= Math.Max(CpuTempThresholdMedium, GpuTempThresholdMedium))
+                {
+                    colorHex = TempMediumColorHex;
+                }
+                else
+                {
+                    colorHex = TempLowColorHex;
+                }
+                
+                // Apply to keyboard lighting
+                if (_keyboardLightingService?.IsAvailable == true)
+                {
+                    var color = ParseDrawingColor(colorHex);
+                    _keyboardLightingService.SetAllZoneColors(new[] { color, color, color, color });
+                }
+                
+                // Apply to system RGB
+                if (_rgbManager != null)
+                {
+                    await _rgbManager.ApplyEffectToAllAsync($"color:{colorHex}");
+                }
+                
+                // Apply to Corsair devices
+                if (_corsairService != null && CorsairDevices.Count > 0)
+                {
+                    await _corsairService.ApplyLightingToAllAsync(colorHex);
+                }
+                
+                // Apply to Logitech devices
+                if (_logitechService != null && LogitechDevices.Count > 0)
+                {
+                    foreach (var device in LogitechDevices)
+                    {
+                        await _logitechService.ApplyStaticColorAsync(device, colorHex, LogitechBrightness);
+                    }
+                }
+                
+                // Apply to Razer devices
+                if (_razerService?.IsAvailable == true && _razerDevices.Count > 0)
+                {
+                    var color = System.Drawing.ColorTranslator.FromHtml(colorHex);
+                    await Task.Run(() => _razerService.SetStaticColor(color.R, color.G, color.B));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Error("Failed to apply temperature-based lighting", ex);
+            }
+        }
+        
+        private async void ApplyThrottlingLighting(MonitoringSample sample)
+        {
+            try
+            {
+                // Apply throttling color to indicate thermal/power throttling
+                var color = ParseDrawingColor(ThrottlingColorHex);
+                
+                // Apply to keyboard lighting with pulsing effect
+                if (_keyboardLightingService?.IsAvailable == true)
+                {
+                    _keyboardLightingService.SetAllZoneColors(new[] { color, color, color, color });
+                }
+                
+                // Apply to system RGB with pulsing
+                if (_rgbManager != null)
+                {
+                    await _rgbManager.ApplyEffectToAllAsync($"pulse:{ThrottlingColorHex}:1000");
+                }
+                
+                // Apply to Corsair devices
+                if (_corsairService != null && CorsairDevices.Count > 0)
+                {
+                    await _corsairService.ApplyLightingToAllAsync(ThrottlingColorHex);
+                }
+                
+                // Apply to Logitech devices
+                if (_logitechService != null && LogitechDevices.Count > 0)
+                {
+                    foreach (var device in LogitechDevices)
+                    {
+                        await _logitechService.ApplyStaticColorAsync(device, ThrottlingColorHex, LogitechBrightness);
+                    }
+                }
+                
+                // Apply to Razer devices
+                if (_razerService?.IsAvailable == true && _razerDevices.Count > 0)
+                {
+                    var razerColor = System.Drawing.ColorTranslator.FromHtml(ThrottlingColorHex);
+                    await Task.Run(() => _razerService.SetStaticColor(razerColor.R, razerColor.G, razerColor.B));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Error("Failed to apply throttling indicator lighting", ex);
+            }
+        }
+        
+        private async void ApplyPerformanceModeLighting(string modeName)
+        {
+            try
+            {
+                string colorHex;
+                
+                // Map performance mode to color
+                switch (modeName.ToLower())
+                {
+                    case "balanced":
+                        colorHex = BalancedModeColorHex;
+                        break;
+                    case "performance":
+                    case "high performance":
+                        colorHex = PerformanceModeColorHex;
+                        break;
+                    case "quiet":
+                    case "power saver":
+                        colorHex = QuietModeColorHex;
+                        break;
+                    default:
+                        colorHex = CustomModeColorHex;
+                        break;
+                }
+                
+                var color = ParseDrawingColor(colorHex);
+                
+                // Apply to keyboard lighting
+                if (_keyboardLightingService?.IsAvailable == true)
+                {
+                    _keyboardLightingService.SetAllZoneColors(new[] { color, color, color, color });
+                }
+                
+                // Apply to system RGB
+                if (_rgbManager != null)
+                {
+                    await _rgbManager.ApplyEffectToAllAsync($"color:{colorHex}");
+                }
+                
+                // Apply to Corsair devices
+                if (_corsairService != null && CorsairDevices.Count > 0)
+                {
+                    await _corsairService.ApplyLightingToAllAsync(colorHex);
+                }
+                
+                // Apply to Logitech devices
+                if (_logitechService != null && LogitechDevices.Count > 0)
+                {
+                    foreach (var device in LogitechDevices)
+                    {
+                        await _logitechService.ApplyStaticColorAsync(device, colorHex, LogitechBrightness);
+                    }
+                }
+                
+                // Apply to Razer devices
+                if (_razerService?.IsAvailable == true && _razerDevices.Count > 0)
+                {
+                    var razerColor = System.Drawing.ColorTranslator.FromHtml(colorHex);
+                    await Task.Run(() => _razerService.SetStaticColor(razerColor.R, razerColor.G, razerColor.B));
+                }
+                
+                _logging.Info($"Applied performance mode lighting for '{modeName}' with color {colorHex}");
+            }
+            catch (Exception ex)
+            {
+                _logging.Error($"Failed to apply performance mode lighting for '{modeName}'", ex);
+            }
+        }
+        
+        #endregion
         
         #endregion
     }

@@ -6,14 +6,13 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Styles/ModernStyles.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/OmenCore;component/Styles/ModernStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
             
             <!-- Legacy compatibility -->
             <Color x:Key="OmenRed">#FFE6002E</Color>
             <Color x:Key="OmenGray">#FF1D1F27</Color>
             <SolidColorBrush x:Key="ChromeBrush" Color="{StaticResource OmenGray}" />
-            <BitmapImage x:Key="AppLogo" UriSource="pack://application:,,,/logo.png" />
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" xmlns:local="clr-namespace:OmenCore.Utils" />
@@ -26,6 +25,7 @@
             <local:LoadToColorConverter x:Key="LoadToColorConverter" xmlns:local="clr-namespace:OmenCore.Utils" />
             <local:BoolToYesNoConverter x:Key="BoolToYesNo" xmlns:local="clr-namespace:OmenCore.Utils" />
             <local:BoolToColorConverter x:Key="BoolToColor" xmlns:local="clr-namespace:OmenCore.Utils" />
+            <local:HexToBrushConverter x:Key="HexToBrushConverter" xmlns:local="clr-namespace:OmenCore.Utils" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

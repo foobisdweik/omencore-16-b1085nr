@@ -23,6 +23,8 @@ namespace OmenCore.ViewModels
         private double _currentTemperature;
         private double _currentCpuTemperature;
         private double _currentGpuTemperature;
+        private bool _thermalProtectionActive;
+        private DateTime _lastTelemetryTimestamp = DateTime.MinValue;
         private bool _suppressApplyOnSelection;
         private bool _independentCurvesEnabled;
         private string _curveEditTarget = "Both"; // "Both", "CPU", "GPU"
@@ -42,6 +44,37 @@ namespace OmenCore.ViewModels
         
         public ReadOnlyObservableCollection<ThermalSample> ThermalSamples => _fanService.ThermalSamples;
         public ReadOnlyObservableCollection<FanTelemetry> FanTelemetry => _fanService.FanTelemetry;
+
+        /// <summary>
+        /// Whether thermal protection is currently overriding user curves.
+        /// </summary>
+        public bool ThermalProtectionActive
+        {
+            get => _thermalProtectionActive;
+            private set
+            {
+                if (_thermalProtectionActive != value)
+                {
+                    _thermalProtectionActive = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(ThermalProtectionStatusText));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Human-readable label for thermal protection state.
+        /// </summary>
+        public string ThermalProtectionStatusText => ThermalProtectionActive
+            ? "Thermal protection is overriding fan curves until temps drop"
+            : "Thermal protection is idle";
+
+        /// <summary>
+        /// Last time fan telemetry was refreshed.
+        /// </summary>
+        public string LastTelemetryUpdatedText => _lastTelemetryTimestamp == DateTime.MinValue
+            ? "No data yet"
+            : $"Last updated: {_lastTelemetryTimestamp:HH:mm:ss}";
         
         /// <summary>
         /// Whether independent CPU/GPU fan curves are enabled.
@@ -390,6 +423,7 @@ namespace OmenCore.ViewModels
             
             // Subscribe to thermal samples to update current temperature
             ((INotifyCollectionChanged)_fanService.ThermalSamples).CollectionChanged += ThermalSamples_CollectionChanged;
+            ((INotifyCollectionChanged)_fanService.FanTelemetry).CollectionChanged += FanTelemetry_CollectionChanged;
             
             // Initialize built-in presets
             FanPresets.Add(new FanPreset 
@@ -482,7 +516,22 @@ namespace OmenCore.ViewModels
                 CurrentTemperature = Math.Max(latest.CpuCelsius, latest.GpuCelsius);
                 CurrentCpuTemperature = latest.CpuCelsius;
                 CurrentGpuTemperature = latest.GpuCelsius;
+
+                // Update thermal protection and timestamp alongside temperature samples
+                ThermalProtectionActive = _fanService.IsThermalProtectionActive;
+                _lastTelemetryTimestamp = DateTime.Now;
+                OnPropertyChanged(nameof(LastTelemetryUpdatedText));
             }
+        }
+
+        private void FanTelemetry_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            // Refresh telemetry timestamp when RPM readings change
+            _lastTelemetryTimestamp = DateTime.Now;
+            OnPropertyChanged(nameof(LastTelemetryUpdatedText));
+
+            // Mirror thermal protection state in case only fan telemetry updates
+            ThermalProtectionActive = _fanService.IsThermalProtectionActive;
         }
         
         /// <summary>
@@ -1397,6 +1446,7 @@ namespace OmenCore.ViewModels
             {
                 // Unsubscribe from thermal samples collection
                 ((INotifyCollectionChanged)_fanService.ThermalSamples).CollectionChanged -= ThermalSamples_CollectionChanged;
+                ((INotifyCollectionChanged)_fanService.FanTelemetry).CollectionChanged -= FanTelemetry_CollectionChanged;
             }
             
             _disposed = true;

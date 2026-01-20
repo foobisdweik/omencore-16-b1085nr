@@ -41,6 +41,8 @@ namespace OmenCore.Hardware
         private DateTime _lastRestartAttempt = DateTime.MinValue;
         private bool _disposed;
         private bool _enabled = true;
+        private DateTime _lastPermanentDisable = DateTime.MinValue;
+        private const int PermanentDisableCooldownMinutes = 30; // Allow re-enable after 30 minutes
         
         /// <summary>
         /// Whether the worker is currently connected and responding
@@ -216,14 +218,22 @@ namespace OmenCore.Hardware
                 var json = await SendRequestAsync("GET");
                 if (string.IsNullOrEmpty(json) || json == "UNKNOWN")
                 {
+                    _logger?.Invoke($"[Worker] Empty/unknown response from worker");
                     return _cachedSample;
                 }
+                
+                _logger?.Invoke($"[Worker] Received JSON ({json.Length} bytes): GPU={json.Contains("GpuTemperature", StringComparison.OrdinalIgnoreCase)}");
                 
                 var sample = JsonSerializer.Deserialize<HardwareSample>(json);
                 if (sample != null)
                 {
+                    _logger?.Invoke($"[Worker] Deserialized sample: CPU={sample.CpuTemperature}°C, GPU={sample.GpuTemperature}°C, CPULoad={sample.CpuLoad}%, GPULoad={sample.GpuLoad}%, RAM={sample.RamUsage}GB");
                     _cachedSample = sample;
                     _lastSuccessfulRead = DateTime.Now;
+                }
+                else
+                {
+                    _logger?.Invoke($"[Worker] Failed to deserialize sample from JSON");
                 }
                 
                 return sample ?? _cachedSample;
@@ -261,16 +271,33 @@ namespace OmenCore.Hardware
         
         private async Task<bool> TryRestartWorkerAsync()
         {
+            // Check if we're in permanent disable cooldown
+            if (!_enabled && DateTime.Now - _lastPermanentDisable < TimeSpan.FromMinutes(PermanentDisableCooldownMinutes))
+            {
+                var remaining = TimeSpan.FromMinutes(PermanentDisableCooldownMinutes) - (DateTime.Now - _lastPermanentDisable);
+                _logger?.Invoke($"[Worker] In permanent disable cooldown. {remaining.TotalMinutes:F1} minutes remaining.");
+                return false;
+            }
+            
+            // Re-enable if cooldown expired
+            if (!_enabled && DateTime.Now - _lastPermanentDisable >= TimeSpan.FromMinutes(PermanentDisableCooldownMinutes))
+            {
+                _logger?.Invoke($"[Worker] Permanent disable cooldown expired, re-enabling worker");
+                _enabled = true;
+                _restartAttempts = 0; // Reset restart counter
+            }
+            
             // Check cooldown
             if (DateTime.Now - _lastRestartAttempt < TimeSpan.FromMilliseconds(RestartCooldownMs))
                 return false;
             
-            // Check max attempts
+            // Check max attempts - use exponential backoff after max attempts
             if (_restartAttempts >= MaxRestartAttempts)
             {
                 if (_restartAttempts == MaxRestartAttempts)
                 {
-                    _logger?.Invoke($"[Worker] Max restart attempts ({MaxRestartAttempts}) reached, disabling worker");
+                    _logger?.Invoke($"[Worker] Max restart attempts ({MaxRestartAttempts}) reached, entering cooldown period");
+                    _lastPermanentDisable = DateTime.Now;
                     _enabled = false;
                     _restartAttempts++;
                 }
@@ -380,6 +407,7 @@ namespace OmenCore.Hardware
         public double CpuTemperature { get; set; }
         public double CpuLoad { get; set; }
         public double CpuPower { get; set; }
+        public List<double> CpuCoreClocks { get; set; } = new();
         
         // GPU
         public string GpuName { get; set; } = "";

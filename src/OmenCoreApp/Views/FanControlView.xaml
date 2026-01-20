@@ -560,6 +560,32 @@
                         <TextBlock Text="REAL-TIME STATUS" 
                                    Style="{StaticResource Label}" 
                                    Margin="0,0,0,12"/>
+                        <!-- Status ribbon: telemetry timestamp + thermal protection pill -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding LastTelemetryUpdatedText}"
+                                       Style="{StaticResource Caption}" 
+                                       VerticalAlignment="Center"/>
+                            <Border Grid.Column="1"
+                                    Background="#1A4CAF50"
+                                    BorderBrush="{StaticResource BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="8,4"
+                                    Visibility="{Binding ThermalProtectionActive, Converter={StaticResource BoolToVisibility}}"
+                                    ToolTip="{Binding ThermalProtectionStatusText}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🛡️" FontSize="12" Margin="0,0,6,0"/>
+                                    <TextBlock Text="Thermal Protection Active"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource SuccessBrush}"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
                         
                         <ItemsControl ItemsSource="{Binding FanTelemetry}">
                             <ItemsControl.ItemTemplate>
@@ -590,10 +616,14 @@
                                                                Foreground="{StaticResource AccentBrush}" 
                                                                Margin="0,0,10,0"
                                                                VerticalAlignment="Center"/>
-                                                    <TextBlock Text="{Binding SpeedRpm, StringFormat='{}{0} RPM'}" 
-                                                               FontSize="11" 
-                                                               Foreground="{StaticResource TextSecondaryBrush}" 
-                                                               VerticalAlignment="Center"/>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding SpeedRpm, StringFormat='{}{0} RPM'}" 
+                                                                   FontSize="11" 
+                                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                        <Border Background="{StaticResource SurfaceMediumBrush}" CornerRadius="4" Padding="6,2" Margin="6,0,0,0">
+                                                            <TextBlock Text="{Binding RpmSourceDisplay}" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                        </Border>
+                                                    </StackPanel>
                                                 </StackPanel>
                                             </Grid>
                                             

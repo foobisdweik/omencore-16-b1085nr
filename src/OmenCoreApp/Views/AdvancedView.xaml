@@ -10,7 +10,6 @@
              mc:Ignorable="d" 
              d:DesignHeight="800" d:DesignWidth="1000">
     <ScrollViewer Style="{StaticResource SmoothScrollViewer}" 
-                  utils:ScrollSpeedBehavior.ScrollSpeedMultiplier="1.2"
                   Padding="0,0,12,0">
         <StackPanel Margin="20,20,20,40">
             <!-- Header -->
@@ -84,7 +83,7 @@
                             <TextBlock Text="Active Mode:" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" 
                                        VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBlock Grid.Column="1" 
-                                       Text="{Binding SystemControl.CurrentPerformanceModeName}" 
+                                       Text="{Binding SystemControl.CurrentPerformanceModeIndicator}" 
                                        FontSize="14" FontWeight="SemiBold"
                                        Foreground="{StaticResource AccentBrush}"
                                        VerticalAlignment="Center"/>
@@ -390,6 +389,158 @@
                                 Command="{Binding SystemControl.ApplyGpuPowerBoostCommand}"
                                 Padding="16,8"/>
                     </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- GPU Overclocking Section (NVAPI) -->
+            <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16"
+                    Visibility="{Binding SystemControl.GpuNvapiAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel>
+                    <TextBlock Text="GPU Overclocking (NVIDIA)" FontSize="20" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+                    <TextBlock Text="Adjust GPU power limits and clock offsets for improved gaming performance. Clock offsets require overclocking support from your GPU. Use at your own risk - improper settings can cause instability or crashes."
+                               FontSize="12"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,0,0,16" TextWrapping="Wrap"/>
+
+                    <!-- Status -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" Text="Status:"
+                                   FontSize="14"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Margin="0,0,12,0"/>
+
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding SystemControl.GpuOcStatus}"
+                                   FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   TextWrapping="Wrap"/>
+                    </Grid>
+
+                    <!-- Power Limit -->
+                    <StackPanel Margin="0,0,0,16">
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Power Limit:"
+                                       FontSize="14"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       ToolTip="Fine-tune GPU TDP limits. Works alongside power boost levels for precise power control."/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding SystemControl.GpuPowerLimitText}"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}"/>
+                        </Grid>
+                        <Slider Value="{Binding SystemControl.GpuPowerLimitPercent, Mode=TwoWay}"
+                                Minimum="{Binding SystemControl.GpuPowerLimitMin}"
+                                Maximum="{Binding SystemControl.GpuPowerLimitMax}"
+                                TickFrequency="5"
+                                IsSnapToTickEnabled="True"
+                                TickPlacement="BottomRight"
+                                ToolTip="{Binding SystemControl.GpuPowerLimitText, StringFormat='Current: {0} TDP limit'}"/>
+                        <TextBlock Text="100% = Default TDP. Lower values reduce power/heat, higher allows more boost."
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                    <!-- Core Clock Offset -->
+                    <StackPanel Margin="0,0,0,16"
+                                Visibility="{Binding SystemControl.GpuOcAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Core Clock Offset:"
+                                       FontSize="14"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding SystemControl.GpuCoreClockOffsetText}"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}"/>
+                        </Grid>
+                        <Slider Value="{Binding SystemControl.GpuCoreClockOffset, Mode=TwoWay}"
+                                Minimum="{Binding SystemControl.GpuCoreOffsetMin}"
+                                Maximum="{Binding SystemControl.GpuCoreOffsetMax}"
+                                TickFrequency="25"
+                                IsSnapToTickEnabled="True"
+                                TickPlacement="BottomRight"/>
+                        <TextBlock Text="Negative values = undervolt, Positive = overclock"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                    <!-- Memory Clock Offset -->
+                    <StackPanel Margin="0,0,0,16"
+                                Visibility="{Binding SystemControl.GpuOcAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Memory Clock Offset:"
+                                       FontSize="14"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding SystemControl.GpuMemoryClockOffsetText}"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}"/>
+                        </Grid>
+                        <Slider Value="{Binding SystemControl.GpuMemoryClockOffset, Mode=TwoWay}"
+                                Minimum="{Binding SystemControl.GpuMemoryOffsetMin}"
+                                Maximum="{Binding SystemControl.GpuMemoryOffsetMax}"
+                                TickFrequency="50"
+                                IsSnapToTickEnabled="True"
+                                TickPlacement="BottomRight"/>
+                        <TextBlock Text="Negative values = undervolt, Positive = overclock"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                    <!-- Voltage Offset -->
+                    <StackPanel Margin="0,0,0,16"
+                                Visibility="{Binding SystemControl.GpuOcAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Voltage Offset:"
+                                       FontSize="14"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding SystemControl.GpuVoltageOffsetText}"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}"/>
+                        </Grid>
+                        <Slider Value="{Binding SystemControl.GpuVoltageOffsetMv, Mode=TwoWay}"
+                                Minimum="-200"
+                                Maximum="100"
+                                TickFrequency="10"
+                                IsSnapToTickEnabled="True"
+                                TickPlacement="BottomRight"/>
+                        <TextBlock Text="Negative = undervolt (reduce heat/power), Positive = overvolt (stability). -50 to -100mV recommended for undervolting."
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                    <TextBlock Text="⚠ WARNING: GPU overclocking can cause crashes, artifacts, or system instability. Settings persist after OmenCore restart but reset after Windows reboot."
+                               FontSize="11"
+                               Foreground="#FF9800"
+                               FontWeight="SemiBold"
+                               Margin="0,8,0,0"
+                               TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
 

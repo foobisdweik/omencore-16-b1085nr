@@ -131,6 +131,10 @@ public static class DiagnoseCommand
         var ec = new LinuxEcController();
         info.DetectedAccessMethod = ec.AccessMethod;
         info.EcControllerAvailable = ec.IsAvailable;
+        
+        // Add detailed diagnostics from controller
+        var ecDiagnostics = ec.GetDiagnostics();
+        info.EcDiagnostics = ecDiagnostics;
 
         // Recommendations
         if (!info.IsRoot)
@@ -165,6 +169,8 @@ public static class DiagnoseCommand
         {
             info.Recommendations.Add("If you have a 2023+ OMEN (wf0000 / 13th gen HX), try hp-wmi: sudo modprobe hp-wmi");
             info.Recommendations.Add("If you have an older OMEN, try ec_sys: sudo modprobe ec_sys write_support=1");
+            info.Recommendations.Add("Check kernel version: uname -a (6.5+ recommended for newer models)");
+            info.Recommendations.Add("For Fedora 43+/RHEL 10+: ec_sys removed from kernel, use hp-wmi only");
         }
 
         if (info.DetectedAccessMethod == "hp-wmi" && !info.HpWmiFan1OutputExists && !info.HpWmiFan2OutputExists)
@@ -384,6 +390,7 @@ public class DiagnoseInfo
 
     public string DetectedAccessMethod { get; set; } = "none";
     public bool EcControllerAvailable { get; set; }
+    public Dictionary<string, object>? EcDiagnostics { get; set; }
 
     public List<string> Notes { get; set; } = new();
     public List<string> Recommendations { get; set; } = new();
