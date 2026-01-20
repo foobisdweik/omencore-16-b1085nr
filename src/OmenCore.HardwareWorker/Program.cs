@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
@@ -29,6 +30,12 @@ class Program
     private static int _parentProcessId = -1;
     private static readonly Dictionary<string, DateTime> _lastErrorLog = new(); // Rate-limit error logging
     private static bool _hasInitialized = false; // Track if we've done at least one full hardware update cycle
+    
+    // PawnIO fallback for CPU temp when LibreHardwareMonitor fails (Defender blocks WinRing0)
+    private static PawnIOCpuTemp? _pawnIOCpuTemp;
+    private static bool _pawnIOFallbackActive = false;
+    private static int _consecutiveNullCpuTemp = 0;
+    private const int NullTempThresholdForFallback = 3; // Switch to PawnIO after 3 null readings
 
     static async Task Main(string[] args)
     {
@@ -166,6 +173,26 @@ class Program
         
         _computer.Open();
         Console.WriteLine("LibreHardwareMonitor initialized.");
+        
+        // Initialize PawnIO fallback for CPU temp (in case Defender blocks WinRing0)
+        try
+        {
+            _pawnIOCpuTemp = new PawnIOCpuTemp();
+            if (_pawnIOCpuTemp.IsAvailable)
+            {
+                Console.WriteLine("PawnIO CPU temp fallback available.");
+                File.AppendAllText(GetLogPath(), $"[{DateTime.Now:O}] PawnIO CPU temp fallback initialized (available if WinRing0 blocked)\n");
+            }
+            else
+            {
+                Console.WriteLine("PawnIO not available (WinRing0 will be used for CPU temp).");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"PawnIO init failed: {ex.Message}");
+            _pawnIOCpuTemp = null;
+        }
         
         // Log detected GPUs for diagnostics
         LogDetectedHardware();
@@ -496,6 +523,56 @@ class Program
                     "CCD1", "CCD 1",                                        // AMD CCD fallback
                     "CCDs Max", "CCDs Average",                             // AMD multi-CCD
                     "CPU", "SoC", "Socket");                                // Generic fallbacks
+                
+                // PawnIO fallback: If LibreHardwareMonitor returns 0 (WinRing0 blocked by Defender),
+                // try reading CPU temp via PawnIO MSR instead
+                if (cpuTemp <= 0 && _pawnIOCpuTemp != null && _pawnIOCpuTemp.IsAvailable)
+                {
+                    _consecutiveNullCpuTemp++;
+                    
+                    if (_consecutiveNullCpuTemp >= NullTempThresholdForFallback)
+                    {
+                        if (!_pawnIOFallbackActive)
+                        {
+                            _pawnIOFallbackActive = true;
+                            File.AppendAllText(GetLogPath(), 
+                                $"[{DateTime.Now:O}] ⚠️ LibreHardwareMonitor CPU temp null for {_consecutiveNullCpuTemp} readings. " +
+                                $"Switching to PawnIO fallback (WinRing0 likely blocked by Defender).\n");
+                            Console.WriteLine("Switching to PawnIO CPU temp fallback");
+                        }
+                        
+                        try
+                        {
+                            cpuTemp = _pawnIOCpuTemp.ReadCpuTemperature();
+                            if (cpuTemp > 0)
+                            {
+                                Console.WriteLine($"CPU Temp (PawnIO): {cpuTemp}°C");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            // Rate-limit PawnIO error logging
+                            var errorKey = "PawnIO_CpuTemp";
+                            if (!_lastErrorLog.TryGetValue(errorKey, out var lastLog) || 
+                                DateTime.Now - lastLog > TimeSpan.FromMinutes(5))
+                            {
+                                _lastErrorLog[errorKey] = DateTime.Now;
+                                File.AppendAllText(GetLogPath(), $"[{DateTime.Now:O}] PawnIO CPU temp read failed: {ex.Message}\n");
+                            }
+                        }
+                    }
+                }
+                else if (cpuTemp > 0)
+                {
+                    // LibreHardwareMonitor working again - reset fallback state
+                    if (_pawnIOFallbackActive)
+                    {
+                        _pawnIOFallbackActive = false;
+                        File.AppendAllText(GetLogPath(), 
+                            $"[{DateTime.Now:O}] ✓ LibreHardwareMonitor CPU temp restored. Disabling PawnIO fallback.\n");
+                    }
+                    _consecutiveNullCpuTemp = 0;
+                }
                 
                 // Always update temperature, even if 0 (indicates sensor failure/unavailable)
                 // This prevents stuck readings when sensors become temporarily unavailable
@@ -841,4 +918,308 @@ public class HardwareSample
     
     // Fans (name -> RPM)
     public Dictionary<string, double> FanSpeeds { get; set; } = new();
+}
+
+/// <summary>
+/// PawnIO-based CPU temperature reader as fallback when LibreHardwareMonitor fails.
+/// LibreHardwareMonitor uses WinRing0 which Windows Defender often blocks.
+/// PawnIO is a signed driver that works with Secure Boot and Defender.
+/// </summary>
+[SupportedOSPlatform("windows")]
+public sealed class PawnIOCpuTemp : IDisposable
+{
+    private IntPtr _handle = IntPtr.Zero;
+    private IntPtr _pawnIOLib = IntPtr.Zero;
+    private bool _moduleLoaded;
+    private bool _disposed;
+    private int _tjMax = 100; // Default TjMax, will try to detect actual value
+    
+    // MSR addresses
+    private const uint MSR_IA32_THERM_STATUS = 0x19C;      // Per-core temperature
+    private const uint MSR_IA32_TEMPERATURE_TARGET = 0x1A2; // TjMax
+    private const uint MSR_IA32_PACKAGE_THERM_STATUS = 0x1B1; // Package temperature (Intel only)
+    
+    // Embedded IntelMSR module binary
+    private static byte[]? _intelMsrModule;
+    
+    // Function delegates
+    private delegate int PawnioOpen(out IntPtr handle);
+    private delegate int PawnioLoad(IntPtr handle, byte[] blob, IntPtr size);
+    private delegate int PawnioExecute(IntPtr handle, string name, ulong[] input, IntPtr inSize, ulong[] output, IntPtr outSize, out IntPtr returnSize);
+    private delegate int PawnioClose(IntPtr handle);
+    
+    private PawnioOpen? _pawnioOpen;
+    private PawnioLoad? _pawnioLoad;
+    private PawnioExecute? _pawnioExecute;
+    private PawnioClose? _pawnioClose;
+    
+    public bool IsAvailable => _handle != IntPtr.Zero && _moduleLoaded;
+    
+    public PawnIOCpuTemp()
+    {
+        Initialize();
+    }
+    
+    private bool Initialize()
+    {
+        try
+        {
+            // Try bundled PawnIOLib.dll first (in drivers folder next to exe)
+            string appDir = AppDomain.CurrentDomain.BaseDirectory;
+            string bundledLibPath = Path.Combine(appDir, "drivers", "PawnIOLib.dll");
+            string? libPath = null;
+            
+            if (File.Exists(bundledLibPath))
+            {
+                libPath = bundledLibPath;
+            }
+            else
+            {
+                // Fall back to PawnIO installation
+                string? pawnIOPath = FindPawnIOInstallation();
+                if (pawnIOPath != null)
+                {
+                    string installedLibPath = Path.Combine(pawnIOPath, "PawnIOLib.dll");
+                    if (File.Exists(installedLibPath))
+                    {
+                        libPath = installedLibPath;
+                    }
+                }
+            }
+            
+            if (libPath == null) return false;
+            
+            _pawnIOLib = NativeMethods.LoadLibrary(libPath);
+            if (_pawnIOLib == IntPtr.Zero) return false;
+            
+            // Resolve functions
+            if (!ResolveFunctions()) return false;
+            
+            // Open PawnIO handle
+            int hr = _pawnioOpen!(out _handle);
+            if (hr < 0 || _handle == IntPtr.Zero) return false;
+            
+            // Load IntelMSR module
+            if (!LoadMsrModule())
+            {
+                _pawnioClose!(_handle);
+                _handle = IntPtr.Zero;
+                return false;
+            }
+            
+            _moduleLoaded = true;
+            
+            // Try to detect TjMax
+            try
+            {
+                _tjMax = ReadTjMax();
+            }
+            catch
+            {
+                _tjMax = 100; // Default for most Intel CPUs
+            }
+            
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    
+    private string? FindPawnIOInstallation()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO");
+            if (key != null)
+            {
+                string? installLocation = key.GetValue("InstallLocation") as string;
+                if (!string.IsNullOrEmpty(installLocation) && Directory.Exists(installLocation))
+                {
+                    return installLocation;
+                }
+            }
+        }
+        catch { }
+        
+        string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "PawnIO");
+        if (Directory.Exists(defaultPath)) return defaultPath;
+        
+        return null;
+    }
+    
+    private bool ResolveFunctions()
+    {
+        IntPtr openPtr = NativeMethods.GetProcAddress(_pawnIOLib, "pawnio_open");
+        IntPtr loadPtr = NativeMethods.GetProcAddress(_pawnIOLib, "pawnio_load");
+        IntPtr executePtr = NativeMethods.GetProcAddress(_pawnIOLib, "pawnio_execute");
+        IntPtr closePtr = NativeMethods.GetProcAddress(_pawnIOLib, "pawnio_close");
+        
+        if (openPtr == IntPtr.Zero || loadPtr == IntPtr.Zero || 
+            executePtr == IntPtr.Zero || closePtr == IntPtr.Zero)
+        {
+            return false;
+        }
+        
+        _pawnioOpen = Marshal.GetDelegateForFunctionPointer<PawnioOpen>(openPtr);
+        _pawnioLoad = Marshal.GetDelegateForFunctionPointer<PawnioLoad>(loadPtr);
+        _pawnioExecute = Marshal.GetDelegateForFunctionPointer<PawnioExecute>(executePtr);
+        _pawnioClose = Marshal.GetDelegateForFunctionPointer<PawnioClose>(closePtr);
+        
+        return true;
+    }
+    
+    private bool LoadMsrModule()
+    {
+        try
+        {
+            string appDir = AppDomain.CurrentDomain.BaseDirectory;
+            string[] moduleNames = { "IntelMSR.bin", "IntelMSR.amx" };
+            
+            foreach (var moduleName in moduleNames)
+            {
+                string modulePath = Path.Combine(appDir, "drivers", moduleName);
+                if (File.Exists(modulePath))
+                {
+                    _intelMsrModule = File.ReadAllBytes(modulePath);
+                    break;
+                }
+            }
+            
+            if (_intelMsrModule == null || _intelMsrModule.Length == 0)
+            {
+                string? pawnIOPath = FindPawnIOInstallation();
+                if (pawnIOPath != null)
+                {
+                    foreach (var moduleName in moduleNames)
+                    {
+                        string installedModule = Path.Combine(pawnIOPath, "modules", moduleName);
+                        if (File.Exists(installedModule))
+                        {
+                            _intelMsrModule = File.ReadAllBytes(installedModule);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (_intelMsrModule == null || _intelMsrModule.Length == 0) return false;
+            
+            int hr = _pawnioLoad!(_handle, _intelMsrModule, (IntPtr)_intelMsrModule.Length);
+            return hr >= 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    
+    /// <summary>
+    /// Read CPU temperature using MSR 0x19C (IA32_THERM_STATUS) or 0x1B1 (Package).
+    /// Returns temperature in Celsius.
+    /// </summary>
+    public double ReadCpuTemperature()
+    {
+        if (!IsAvailable) return 0;
+        
+        try
+        {
+            // Try package temperature first (MSR 0x1B1) - more stable than per-core
+            ulong pkgTherm = ReadMsr(MSR_IA32_PACKAGE_THERM_STATUS);
+            
+            // Check if reading is valid (bit 31 = Reading Valid)
+            if ((pkgTherm & 0x80000000) != 0)
+            {
+                // Digital Readout is bits 22:16 (7 bits)
+                int digitalReadout = (int)((pkgTherm >> 16) & 0x7F);
+                double temp = _tjMax - digitalReadout;
+                if (temp > 0 && temp < 150) return temp;
+            }
+            
+            // Fallback to core 0 temperature (MSR 0x19C)
+            ulong thermStatus = ReadMsr(MSR_IA32_THERM_STATUS);
+            
+            // Check if reading is valid (bit 31 = Reading Valid)
+            if ((thermStatus & 0x80000000) != 0)
+            {
+                // Digital Readout is bits 22:16 (7 bits)
+                int digitalReadout = (int)((thermStatus >> 16) & 0x7F);
+                double temp = _tjMax - digitalReadout;
+                if (temp > 0 && temp < 150) return temp;
+            }
+            
+            return 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+    
+    /// <summary>
+    /// Read TjMax from MSR 0x1A2 (IA32_TEMPERATURE_TARGET).
+    /// TjMax is the maximum junction temperature - actual temp = TjMax - digital readout.
+    /// </summary>
+    private int ReadTjMax()
+    {
+        try
+        {
+            ulong value = ReadMsr(MSR_IA32_TEMPERATURE_TARGET);
+            // TjMax is in bits 23:16
+            int tjMax = (int)((value >> 16) & 0xFF);
+            if (tjMax > 50 && tjMax < 150) return tjMax;
+        }
+        catch { }
+        
+        return 100; // Default for most Intel CPUs
+    }
+    
+    private ulong ReadMsr(uint index)
+    {
+        ulong[] input = { index };
+        ulong[] output = new ulong[2]; // low, high
+        
+        int hr = _pawnioExecute!(_handle, "ioctl_msr_read", input, (IntPtr)1, output, (IntPtr)2, out IntPtr returnSize);
+        if (hr < 0)
+        {
+            throw new InvalidOperationException($"PawnIO MSR read failed: HRESULT 0x{hr:X8}");
+        }
+        
+        return output[0] | (output[1] << 32);
+    }
+    
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        
+        if (_handle != IntPtr.Zero && _pawnioClose != null)
+        {
+            try { _pawnioClose(_handle); } catch { }
+            _handle = IntPtr.Zero;
+        }
+        
+        if (_pawnIOLib != IntPtr.Zero)
+        {
+            try { NativeMethods.FreeLibrary(_pawnIOLib); } catch { }
+            _pawnIOLib = IntPtr.Zero;
+        }
+    }
+}
+
+/// <summary>
+/// Native methods for PawnIO library loading
+/// </summary>
+internal static class NativeMethods
+{
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern IntPtr LoadLibrary(string lpFileName);
+    
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool FreeLibrary(IntPtr hModule);
+    
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
+    public static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
 }

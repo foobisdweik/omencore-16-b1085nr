@@ -221,8 +221,6 @@
     <SolidColorBrush x:Key="CardBackgroundBrush" Color="{StaticResource SurfaceDark}" />
     <SolidColorBrush x:Key="WarningBackgroundBrush" Color="#1AFFAA33" />
     <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningOrange}" />
-    <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentRed}" />
-    <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningOrange}" />
     <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource ErrorRed}" />
     <SolidColorBrush x:Key="InfoBrush" Color="{StaticResource InfoBlue}" />
     <SolidColorBrush x:Key="SuccessLightBrush" Color="{StaticResource SuccessLight}" />
