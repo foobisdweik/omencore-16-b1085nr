@@ -160,6 +160,8 @@ Since the roadmap was created, the following items have been implemented or adva
 - **Improved Hysteresis**: Enhanced dead-zone and ramp delays for smoother fan transitions
 
 ### Driver Backend Improvements
+
+- **PawnIO CPU Temp Fallback**: If CPU temperature readings are unavailable due to Windows Defender blocking WinRing0/LibreHardwareMonitor, OmenCore now automatically falls back to reading CPU temperature via PawnIO (Secure Boot compatible). This ensures CPU temps are always visible, even if Defender or other security software blocks traditional drivers. The fallback is seamless and requires no user action. Detailed logs indicate when PawnIO fallback is active. This improves reliability for all users, especially on Secure Boot systems or after Defender updates.
 - **PawnIO Promotion**: Enhanced guidance for users with Secure Boot enabled (WinRing0 blocked)
 - **Auto-Detection**: Automatic selection between PawnIO, WinRing0, WMI BIOS, and OGH proxy
 - **Safety Checks**: Read-only verification after writes to critical EC registers
@@ -361,8 +363,8 @@ Special thanks to:
 
 | File | SHA256 Hash |
 |------|-------------|
-| `OmenCoreSetup-2.5.0.exe` | `17A2391818D7F3EF4AB272518D0F1564E2569A8907BAEFD25A870512FB1F8420` |
-| `OmenCore-2.5.0-win-x64.zip` | `BAA942FA447EE998B14EC3A575A448BA01F13628930CFED8BBB270CBEB1C9448` |
+| `OmenCoreSetup-2.5.0.exe` | `6EA513228973DA6E971C5B5AFB421A14920F024FD7F3CC37F862F79D9A9E4DC8` |
+| `OmenCore-2.5.0-win-x64.zip` | `DBC0D41827E8B97C0D6296E957AD62D861FBF6A4248E6013FA62DCDC8B0A7E1C` |
 | `OmenCore-2.5.0-linux-x64.zip` | `39786981FCED4CE267C3E432DD942589DFA69E068F31F0C0051BD6041A81508E` |
 
 **Verification Instructions:**
