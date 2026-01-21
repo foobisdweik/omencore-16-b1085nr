@@ -62,6 +62,29 @@ Optional quick test: temporarily stop OGH services (`sc stop HPOmenCap` and kill
 
 ---
 
+## Representative case — Elros (attached `HardwareWorker.log`)
+**Finding:** Elros' log shows **PawnIO CPU temp fallback** initialized and regular CPU/GPU temperature readings, but **no fan RPMs** and intermittent worker errors that may cause missed or ignored EC writes. Notable entries we saw:
+
+- `2026-01-21T08:12:15.3148685+08:00 PawnIO CPU temp fallback initialized (available if WinRing0 blocked)` ✅
+- `2026-01-21T07:23:11.9057847+08:00 Error updating Primary: Cannot access a disposed object. Object name: 'Microsoft.Win32.SafeHandles.SafeFileHandle'.` ⚠️
+- `2026-01-21T07:24:19.7366536+08:00 [CPU Detected] ... Temp sensors (35): [Core Max=°C, Core Average=°C, ...]` (example of a corrupted/empty sample)
+
+**Implications:**
+- Worker lifecycle issues (parent process exits / disposed handle errors) may cause EC writes to be missed or verification reads to fail briefly. If a fan command coincides with a worker restart or dispose, the command may not be executed.
+- Temp sensors are present (CPU + GPU), so missing fan RPMs are likely due to either HW not exposing RPMs via LibreHardwareMonitor or EC/OGH not returning RPM reads — we need both write verification and RPM read verification.
+
+**Follow-up requested from user (Elros):**
+1. Reproduce the issue with **Debug** logging enabled and re-run the in-app **Fan Diagnostic** mode. Note exact local timestamps of when you apply **Max** and when you run diagnostics.
+2. Export Diagnostics (Compressed ZIP) and include `HardwareWorker.log` and `OmenCore.log` — upload here if possible.
+3. If you can, repeat the Max apply while watching for worker restarts (or check Task Manager for `OmenCore.HardwareWorker.exe` restarts). Note times.
+
+**Developer actions to investigate this case:**
+- Add targeted logging around worker shutdown/dispose paths and guard EC writes to ensure they fail loudly if the worker is not alive.
+- Detect and log corrupted/empty samples (samples whose sensors report `°C`) with timestamps and treat them as failures that trigger a short reinitialize + retry for the next Max apply attempt.
+- If worker restarts are found to coincide with Max application, add a confirmation flow: apply Max → readback → if worker restart or readback invalid, retry apply up to N times with small backoff.
+
+---
+
 ## Next steps for me (I can do):
 - Add a short PR that improves Max mode robustness: add retries + read-back verification + extra debug logs (small, self-contained change). I’ll include unit tests for the retry behavior.
 - Prepare a short template for reporters to fill out when they open tickets (time applied, OS, model, OGH installed/running, PawnIO/WinRing0 present).
