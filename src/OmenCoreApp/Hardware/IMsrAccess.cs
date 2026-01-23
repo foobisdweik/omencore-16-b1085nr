@@ -66,5 +66,47 @@ namespace OmenCore.Hardware
         /// Get the effective temperature limit (TjMax - TCC offset).
         /// </summary>
         int GetEffectiveTempLimit();
+        
+        // ==========================================
+        // Throttling Detection (EDP)
+        // ==========================================
+        
+        /// <summary>
+        /// Read CPU thermal throttling status from MSR.
+        /// Returns true if CPU is thermally throttling.
+        /// </summary>
+        bool ReadThermalThrottlingStatus();
+        
+        /// <summary>
+        /// Read CPU power throttling status from MSR.
+        /// Returns true if CPU is power limit throttling.
+        /// </summary>
+        bool ReadPowerThrottlingStatus();
+        
+        // ==========================================
+        // Power Limit Control (EDP Override)
+        // ==========================================
+        
+        /// <summary>
+        /// Read current package power limit (PL1) in watts.
+        /// </summary>
+        double ReadPackagePowerLimit();
+        
+        /// <summary>
+        /// Set package power limit (PL1) in watts.
+        /// </summary>
+        /// <param name="watts">Power limit in watts</param>
+        void SetPackagePowerLimit(double watts);
+        
+        /// <summary>
+        /// Read current package power limit time window in seconds.
+        /// </summary>
+        double ReadPackagePowerTimeWindow();
+        
+        /// <summary>
+        /// Set package power limit time window in seconds.
+        /// </summary>
+        /// <param name="seconds">Time window in seconds</param>
+        void SetPackagePowerTimeWindow(double seconds);
     }
 }

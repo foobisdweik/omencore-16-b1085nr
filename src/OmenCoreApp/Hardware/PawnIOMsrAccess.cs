@@ -365,6 +365,171 @@ namespace OmenCore.Hardware
             int offset = ReadTccOffset();
             return tjMax - offset;
         }
+        
+        // ==========================================
+        // Throttling Detection (EDP)
+        // ==========================================
+        
+        /// <summary>
+        /// Read CPU thermal throttling status from MSR.
+        /// Returns true if CPU is thermally throttling.
+        /// </summary>
+        public bool ReadThermalThrottlingStatus()
+        {
+            if (!IsAvailable) return false;
+            
+            try
+            {
+                // MSR 0x19C: IA32_THERM_STATUS
+                // Bit 0: Thermal Status (1 = thermal throttling active)
+                // Bit 1: Thermal Status Log
+                // Bit 2: PROCHOT or ForcePR Status
+                // Bit 3: PROCHOT or ForcePR Status Log
+                // Bit 4: Critical Temperature Status
+                // Bit 5: Critical Temperature Status Log
+                // Bit 6: Thermal Threshold #1 Status
+                // Bit 7: Thermal Threshold #1 Status Log
+                // Bit 8: Thermal Threshold #2 Status
+                // Bit 9: Thermal Threshold #2 Status Log
+                // Bit 10: Power Limit Status
+                // Bit 11: Power Limit Status Log
+                // Bit 12: Current Limit Status
+                // Bit 13: Current Limit Status Log
+                // Bit 14: Cross Domain Limit Status
+                // Bit 15: Cross Domain Limit Status Log
+                ulong status = ReadMsr(0x19C);
+                return (status & 0x1) != 0; // Bit 0: Thermal Status
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Read CPU power throttling status from MSR.
+        /// Returns true if CPU is power limit throttling.
+        /// </summary>
+        public bool ReadPowerThrottlingStatus()
+        {
+            if (!IsAvailable) return false;
+            
+            try
+            {
+                // MSR 0x19C: IA32_THERM_STATUS
+                // Bit 10: Power Limit Status (1 = power limit throttling active)
+                ulong status = ReadMsr(0x19C);
+                return (status & (1UL << 10)) != 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
+        // ==========================================
+        // Power Limit Control (EDP Override)
+        // ==========================================
+        
+        /// <summary>
+        /// Read current package power limit (PL1) in watts.
+        /// </summary>
+        public double ReadPackagePowerLimit()
+        {
+            if (!IsAvailable) return 0;
+            
+            try
+            {
+                // MSR 0x610: MSR_PKG_POWER_LIMIT
+                // Bits 14:0: Power Limit #1 in 1/8 Watt units
+                ulong limit = ReadMsr(0x610);
+                uint pl1 = (uint)(limit & 0x7FFF); // Bits 14:0
+                return pl1 / 8.0; // Convert to watts
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+        
+        /// <summary>
+        /// Set package power limit (PL1) in watts.
+        /// </summary>
+        /// <param name="watts">Power limit in watts</param>
+        public void SetPackagePowerLimit(double watts)
+        {
+            if (!IsAvailable) return;
+            
+            try
+            {
+                // MSR 0x610: MSR_PKG_POWER_LIMIT
+                // Read current value to preserve other settings
+                ulong current = ReadMsr(0x610);
+                
+                // Convert watts to 1/8 watt units
+                uint pl1 = (uint)(watts * 8);
+                pl1 = Math.Min(pl1, 0x7FFF); // Max 14 bits
+                
+                // Clear bits 14:0 and set new limit
+                ulong newValue = (current & ~0x7FFFUL) | pl1;
+                
+                WriteMsr(0x610, newValue);
+            }
+            catch
+            {
+                // Silent fail
+            }
+        }
+        
+        /// <summary>
+        /// Read current package power limit time window in seconds.
+        /// </summary>
+        public double ReadPackagePowerTimeWindow()
+        {
+            if (!IsAvailable) return 0;
+            
+            try
+            {
+                // MSR 0x610: MSR_PKG_POWER_LIMIT
+                // Bits 23:17: Time Window for Power Limit #1 in 2^Y seconds
+                ulong limit = ReadMsr(0x610);
+                uint timeWindow = (uint)((limit >> 17) & 0x7F); // Bits 23:17
+                return Math.Pow(2, timeWindow); // Convert to seconds
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+        
+        /// <summary>
+        /// Set package power limit time window in seconds.
+        /// </summary>
+        /// <param name="seconds">Time window in seconds</param>
+        public void SetPackagePowerTimeWindow(double seconds)
+        {
+            if (!IsAvailable) return;
+            
+            try
+            {
+                // MSR 0x610: MSR_PKG_POWER_LIMIT
+                // Read current value to preserve other settings
+                ulong current = ReadMsr(0x610);
+                
+                // Convert seconds to 2^Y format
+                int exponent = (int)Math.Round(Math.Log(seconds) / Math.Log(2));
+                exponent = Math.Clamp(exponent, 0, 0x7F); // 7 bits
+                
+                // Clear bits 23:17 and set new time window
+                ulong newValue = (current & ~(0x7FUL << 17)) | ((ulong)exponent << 17);
+                
+                WriteMsr(0x610, newValue);
+            }
+            catch
+            {
+                // Silent fail
+            }
+        }
 
         public void Dispose()
         {

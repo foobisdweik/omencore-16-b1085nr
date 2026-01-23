@@ -253,7 +253,8 @@ namespace OmenCore.ViewModels
 
         private void OnSampleUpdated(object? sender, MonitoringSample sample)
         {
-            LatestMonitoringSample = sample;
+            System.Windows.Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, 
+                () => LatestMonitoringSample = sample);
             
             // Throttle UI updates to prevent Dispatcher backlog during heavy load
             if (!_pendingUIUpdate)

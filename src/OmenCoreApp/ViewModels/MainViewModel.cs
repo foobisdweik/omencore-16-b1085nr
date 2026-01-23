@@ -1134,7 +1134,7 @@ namespace OmenCore.ViewModels
             _config = _configService.Load();
             
             // Initialize hardware monitor bridge first (needed by ThermalSensorProvider and FanController)
-            // Use out-of-process worker to isolate NVML/driver crashes from main app
+            // Switch back to out-of-process worker mode to use PawnIO CPU temperature fallback
             LibreHardwareMonitorImpl monitorBridge = new(
                 msg => _logging.Info($"[Monitor] {msg}"),
                 useWorker: true);

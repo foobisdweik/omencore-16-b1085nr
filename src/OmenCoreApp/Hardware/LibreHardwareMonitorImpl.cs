@@ -3,8 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.IO;
+using Microsoft.Win32;
 using LibreHardwareMonitor.Hardware;
 using OmenCore.Models;
+using OmenCore.Services;
 
 namespace OmenCore.Hardware
 {
@@ -73,6 +78,8 @@ namespace OmenCore.Hardware
         private const double CpuThermalThrottleThreshold = 95.0; // Most CPUs throttle around 95-100°C
         private const double GpuThermalThrottleThreshold = 83.0; // NVIDIA throttles around 83°C
         
+        private IMsrAccess? _msrAccess;
+        
         // DPC latency mitigation
         private bool _lowOverheadMode = false;
         private static readonly TimeSpan _normalCacheLifetime = TimeSpan.FromMilliseconds(100);
@@ -100,14 +107,22 @@ namespace OmenCore.Hardware
         private double _lastGpuTempReading = 0;
         private int _consecutiveSameGpuTempReadings = 0;
 
+        // PawnIO CPU temperature fallback
+        private PawnIOCpuTemp? _pawnIoCpuTemp;
+
+        // System RAM total for fallback when sensors are missing
+        private double _systemRamTotalGb = 0;
+
         /// <summary>
         /// Create an in-process hardware monitor (default).
         /// May crash from NVML issues during heavy GPU load.
         /// </summary>
-        public LibreHardwareMonitorImpl(Action<string>? logger = null)
+        public LibreHardwareMonitorImpl(Action<string>? logger = null, IMsrAccess? msrAccess = null)
         {
             _logger = logger;
+            _msrAccess = msrAccess;
             _useWorker = false;
+            InitializePawnIO();
             InitializeComputer();
         }
         
@@ -118,10 +133,13 @@ namespace OmenCore.Hardware
         /// </summary>
         /// <param name="logger">Logging callback</param>
         /// <param name="useWorker">Use out-of-process worker for crash isolation</param>
-        public LibreHardwareMonitorImpl(Action<string>? logger, bool useWorker)
+        /// <param name="msrAccess">Optional MSR access for enhanced throttling detection</param>
+        public LibreHardwareMonitorImpl(Action<string>? logger, bool useWorker, IMsrAccess? msrAccess = null)
         {
             _logger = logger;
+            _msrAccess = msrAccess;
             _useWorker = useWorker;
+            InitializePawnIO();
             
             if (_useWorker)
             {
@@ -205,6 +223,10 @@ namespace OmenCore.Hardware
                 _computer.Open();
                 _initialized = true;
                 _consecutiveZeroTempReadings = 0;
+                
+                // Cache system RAM total for fallback when sensors are missing
+                _systemRamTotalGb = GetTotalPhysicalMemoryGB();
+                
                 _logger?.Invoke("LibreHardwareMonitor initialized successfully");
                 
                 // Log detected GPUs for diagnostic purposes
@@ -214,6 +236,27 @@ namespace OmenCore.Hardware
             {
                 _initialized = false;
                 _logger?.Invoke($"LibreHardwareMonitor init failed: {ex.Message}. Using WMI fallback.");
+            }
+        }
+        
+        private void InitializePawnIO()
+        {
+            try
+            {
+                _pawnIoCpuTemp = new PawnIOCpuTemp();
+                if (_pawnIoCpuTemp.IsAvailable)
+                {
+                    _logger?.Invoke("PawnIO CPU temperature fallback initialized successfully");
+                }
+                else
+                {
+                    _logger?.Invoke("PawnIO CPU temperature fallback unavailable - will use LibreHardwareMonitor only");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.Invoke($"PawnIO CPU temperature fallback initialization failed: {ex.Message}");
+                _pawnIoCpuTemp = null;
             }
         }
         
@@ -464,23 +507,45 @@ namespace OmenCore.Hardware
                 {
                     if (_disposed) return; // Check before each hardware update
                     
-                    // Use safe GPU update for all discrete GPUs (NVIDIA/AMD/Intel Arc)
-                    bool isDiscreteGpu = hardware.HardwareType == HardwareType.GpuNvidia || 
-                        hardware.HardwareType == HardwareType.GpuAmd ||
-                        (hardware.HardwareType == HardwareType.GpuIntel && 
-                         hardware.Name.Contains("Arc", StringComparison.OrdinalIgnoreCase));
-                    
-                    if (isDiscreteGpu)
+                    try
                     {
-                        if (!TryUpdateGpuHardware(hardware))
+                        // Use safe GPU update for all discrete GPUs (NVIDIA/AMD/Intel Arc)
+                        bool isDiscreteGpu = hardware.HardwareType == HardwareType.GpuNvidia || 
+                            hardware.HardwareType == HardwareType.GpuAmd ||
+                            (hardware.HardwareType == HardwareType.GpuIntel && 
+                             hardware.Name.Contains("Arc", StringComparison.OrdinalIgnoreCase));
+                        
+                        if (isDiscreteGpu)
                         {
-                            // GPU update failed - continue to next hardware without processing this GPU
-                            continue;
+                            if (!TryUpdateGpuHardware(hardware))
+                            {
+                                // GPU update failed - continue to next hardware without processing this GPU
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            hardware.Update();
                         }
                     }
-                    else
+                    catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
                     {
-                        hardware.Update();
+                        // Handle SafeFileHandle disposal and other hardware access errors
+                        // This commonly happens when drives sleep or hardware becomes temporarily unavailable
+                        _logger?.Invoke($"[Hardware] Error updating {hardware.HardwareType} '{hardware.Name}': {ex.GetType().Name}: {ex.Message}");
+                        
+                        // If this is a SafeFileHandle/ObjectDisposedException, it likely means drives slept
+                        // Continue to next hardware instead of failing completely
+                        if (ex is ObjectDisposedException || ex.Message.Contains("SafeFileHandle") || ex.Message.Contains("disposed"))
+                        {
+                            _logger?.Invoke($"[Hardware] SafeFileHandle disposed - likely drive sleep. Skipping {hardware.Name} and using WMI BIOS fallback...");
+                            // Use WMI BIOS as fallback for temperature when drives sleep
+                            UpdateViaWmiBiosFallback();
+                            continue;
+                        }
+                        
+                        // For other exceptions, re-throw to trigger fallback
+                        throw;
                     }
 
                     switch (hardware.HardwareType)
@@ -628,6 +693,21 @@ namespace OmenCore.Hardware
                                 }
                             }
                             
+                            // If still 0 after all LibreHardwareMonitor attempts, try PawnIO MSR fallback
+                            if (_cachedCpuTemp == 0 && _pawnIoCpuTemp != null && _pawnIoCpuTemp.IsAvailable)
+                            {
+                                double pawnIoTemp = _pawnIoCpuTemp.ReadCpuTemperature();
+                                if (pawnIoTemp > 0 && pawnIoTemp < 150)
+                                {
+                                    _cachedCpuTemp = pawnIoTemp;
+                                    _logger?.Invoke($"Using PawnIO CPU temperature fallback: {_cachedCpuTemp:F1}°C");
+                                }
+                                else if (pawnIoTemp == 0)
+                                {
+                                    _logger?.Invoke("PawnIO CPU temperature fallback returned 0°C - MSR access may be unavailable");
+                                }
+                            }
+                            
                             // Track consecutive 0°C readings and auto-reinitialize if needed
                             if (_cachedCpuTemp == 0)
                             {
@@ -681,6 +761,12 @@ namespace OmenCore.Hardware
                                 ?? GetSensor(hardware, SensorType.Factor, "Power Throttling")
                                 ?? GetSensor(hardware, SensorType.Factor, "PROCHOT");
                             _cachedCpuPowerThrottling = powerThrottleSensor?.Value > 0;
+                            
+                            // MSR-based throttling detection as fallback/enhancement
+                            if (!_cachedCpuPowerThrottling && _msrAccess?.IsAvailable == true)
+                            {
+                                _cachedCpuPowerThrottling = _msrAccess.ReadPowerThrottlingStatus();
+                            }
                             
                             break;
 
@@ -880,7 +966,16 @@ namespace OmenCore.Hardware
                         case HardwareType.Memory:
                             _cachedRamUsage = GetSensor(hardware, SensorType.Data, "Memory Used")?.Value ?? 0;
                             var availableRam = GetSensor(hardware, SensorType.Data, "Memory Available")?.Value ?? 0;
-                            _cachedRamTotal = (_cachedRamUsage + availableRam) > 0 ? (_cachedRamUsage + availableRam) : 16;
+                            
+                            if (availableRam > 0)
+                            {
+                                _cachedRamTotal = (_cachedRamUsage + availableRam) > 0 ? (_cachedRamUsage + availableRam) : 16;
+                            }
+                            else
+                            {
+                                // Fallback to system total if available RAM sensor missing
+                                _cachedRamTotal = _systemRamTotalGb > 0 ? _systemRamTotalGb : 16;
+                            }
                             break;
 
                         case HardwareType.Storage:
@@ -1004,6 +1099,29 @@ namespace OmenCore.Hardware
 
         private MonitoringSample BuildSampleFromCache()
         {
+            // RAM fallback: if worker reported 0 RAM usage, try PerformanceCounter fallback
+            if (_cachedRamUsage <= 0 && _useWorker)
+            {
+                try
+                {
+                    using var ramCounter = new System.Diagnostics.PerformanceCounter("Memory", "Available MBytes");
+                    ramCounter.NextValue(); // First call returns 0
+                    System.Threading.Thread.Sleep(10);
+                    var availableMb = ramCounter.NextValue();
+                    var totalRamGb = GetTotalPhysicalMemoryGB();
+                    if (totalRamGb > 0)
+                    {
+                        _cachedRamUsage = totalRamGb - (availableMb / 1024.0);
+                        _cachedRamTotal = totalRamGb;
+                        _logger?.Invoke($"[Monitor] RAM fallback used: {availableMb:F0} MB available, {totalRamGb:F1} GB total, { _cachedRamUsage:F1} GB used");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Invoke($"[Monitor] RAM fallback failed: {ex.Message}");
+                }
+            }
+
             return new MonitoringSample
             {
                 CpuTemperatureC = Math.Round(_cachedCpuTemp, 1),
@@ -1063,7 +1181,16 @@ namespace OmenCore.Hardware
         }
 
         /// <summary>
-        /// Get current CPU package temperature in Celsius.
+        /// Set MSR access for enhanced throttling detection.
+        /// Can be called after construction if MSR access becomes available later.
+        /// </summary>
+        public void SetMsrAccess(IMsrAccess? msrAccess)
+        {
+            _msrAccess = msrAccess;
+        }
+
+        /// <summary>
+        /// Get current CPU temperature in Celsius.
         /// Ensures cache is fresh before returning value.
         /// </summary>
         public double GetCpuTemperature()
@@ -1071,26 +1198,6 @@ namespace OmenCore.Hardware
             EnsureCacheFresh();
             lock (_lock)
             {
-                if (_cachedCpuTemp == 0 && _logger != null)
-                {
-                    // Debug: Log available CPU temperature sensors
-                    if (_computer != null)
-                    {
-                        var cpuHardware = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Cpu);
-                        if (cpuHardware != null)
-                        {
-                            var tempSensors = cpuHardware.Sensors
-                                .Where(s => s.SensorType == SensorType.Temperature)
-                                .Select(s => $"{s.Name}={s.Value}")
-                                .ToList();
-                            _logger($"[CPU Debug] CPU temp is 0. Available sensors: [{string.Join(", ", tempSensors)}]");
-                        }
-                        else
-                        {
-                            _logger("[CPU Debug] No CPU hardware found");
-                        }
-                    }
-                }
                 return _cachedCpuTemp;
             }
         }
@@ -1258,6 +1365,39 @@ namespace OmenCore.Hardware
             return results;
         }
 
+        /// <summary>
+        /// Fallback update method using WMI BIOS when LibreHardwareMonitor fails.
+        /// Used when SafeFileHandle exceptions occur (drive sleep) or other hardware access issues.
+        /// </summary>
+        private void UpdateViaWmiBiosFallback()
+        {
+            try
+            {
+                // Try to get CPU temperature from WMI BIOS
+                var wmiBios = new HpWmiBios(_logger != null ? new LoggingService() : null);
+                var wmiTemp = wmiBios.GetTemperature();
+                
+                if (wmiTemp.HasValue && wmiTemp.Value > 0)
+                {
+                    _cachedCpuTemp = wmiTemp.Value;
+                    _logger?.Invoke($"[Fallback] Using WMI BIOS temperature: {_cachedCpuTemp}°C");
+                }
+                else
+                {
+                    _logger?.Invoke("[Fallback] WMI BIOS temperature unavailable");
+                }
+                
+                // For GPU temp, we don't have WMI fallback yet, so leave cached values
+                // Fan speeds also remain cached
+                
+                wmiBios.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger?.Invoke($"[Fallback] WMI BIOS fallback failed: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
         private bool _disposed;
 
         public void Dispose()
@@ -1271,11 +1411,322 @@ namespace OmenCore.Hardware
                 _workerClient = null;
             }
             
+            // Clean up PawnIO
+            if (_pawnIoCpuTemp != null)
+            {
+                _pawnIoCpuTemp.Dispose();
+                _pawnIoCpuTemp = null;
+            }
+            
             if (_initialized && _computer != null)
             {
                 _computer.Close();
             }
         }
+    }
+
+    /// <summary>
+    /// PawnIO-based CPU temperature reader as fallback when LibreHardwareMonitor fails.
+    /// LibreHardwareMonitor uses WinRing0 which Windows Defender often blocks.
+    /// PawnIO is a signed driver that works with Secure Boot and Defender.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    internal sealed class PawnIOCpuTemp : IDisposable
+    {
+        private IntPtr _handle = IntPtr.Zero;
+        private IntPtr _pawnIOLib = IntPtr.Zero;
+        private bool _moduleLoaded;
+        private bool _disposed;
+        private int _tjMax = 100; // Default TjMax, will try to detect actual value
+        
+        // MSR addresses
+        private const uint MSR_IA32_THERM_STATUS = 0x19C;      // Per-core temperature
+        private const uint MSR_IA32_TEMPERATURE_TARGET = 0x1A2; // TjMax
+        private const uint MSR_IA32_PACKAGE_THERM_STATUS = 0x1B1; // Package temperature (Intel only)
+        
+        // Embedded IntelMSR module binary
+        private static byte[]? _intelMsrModule;
+        
+        // Function delegates
+        private delegate int PawnioOpen(out IntPtr handle);
+        private delegate int PawnioLoad(IntPtr handle, byte[] blob, IntPtr size);
+        private delegate int PawnioExecute(IntPtr handle, string name, ulong[] input, IntPtr inSize, ulong[] output, IntPtr outSize, out IntPtr returnSize);
+        private delegate int PawnioClose(IntPtr handle);
+        
+        private PawnioOpen? _pawnioOpen;
+        private PawnioLoad? _pawnioLoad;
+        private PawnioExecute? _pawnioExecute;
+        private PawnioClose? _pawnioClose;
+        
+        public bool IsAvailable => _handle != IntPtr.Zero && _moduleLoaded;
+        
+        public PawnIOCpuTemp()
+        {
+            Initialize();
+        }
+        
+        private bool Initialize()
+        {
+            try
+            {
+                // Try bundled PawnIOLib.dll first (in drivers folder next to exe)
+                string appDir = AppDomain.CurrentDomain.BaseDirectory;
+                string bundledLibPath = Path.Combine(appDir, "drivers", "PawnIOLib.dll");
+                string? libPath = null;
+                
+                if (File.Exists(bundledLibPath))
+                {
+                    libPath = bundledLibPath;
+                }
+                else
+                {
+                    // Fall back to PawnIO installation
+                    string? pawnIOPath = FindPawnIOInstallation();
+                    if (pawnIOPath != null)
+                    {
+                        string installedLibPath = Path.Combine(pawnIOPath, "PawnIOLib.dll");
+                        if (File.Exists(installedLibPath))
+                        {
+                            libPath = installedLibPath;
+                        }
+                    }
+                }
+                
+                if (libPath == null) return false;
+                
+                _pawnIOLib = NativeMethods.LoadLibrary(libPath);
+                if (_pawnIOLib == IntPtr.Zero) return false;
+                
+                // Resolve functions
+                if (!ResolveFunctions()) return false;
+                
+                // Open PawnIO handle
+                int hr = _pawnioOpen!(out _handle);
+                if (hr < 0 || _handle == IntPtr.Zero) return false;
+                
+                // Load IntelMSR module
+                if (!LoadMsrModule())
+                {
+                    _pawnioClose!(_handle);
+                    _handle = IntPtr.Zero;
+                    return false;
+                }
+                
+                _moduleLoaded = true;
+                
+                // Try to detect TjMax
+                try
+                {
+                    _tjMax = ReadTjMax();
+                }
+                catch
+                {
+                    _tjMax = 100; // Default for most Intel CPUs
+                }
+                
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
+        private string? FindPawnIOInstallation()
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO");
+                if (key != null)
+                {
+                    string? installLocation = key.GetValue("InstallLocation") as string;
+                    if (!string.IsNullOrEmpty(installLocation) && Directory.Exists(installLocation))
+                    {
+                        return installLocation;
+                    }
+                }
+            }
+            catch { }
+            
+            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "PawnIO");
+            if (Directory.Exists(defaultPath)) return defaultPath;
+            
+            return null;
+        }
+        
+        private bool ResolveFunctions()
+        {
+            IntPtr openPtr = NativeMethods.GetProcAddress(_pawnIOLib, "pawnio_open");
+            IntPtr loadPtr = NativeMethods.GetProcAddress(_pawnIOLib, "pawnio_load");
+            IntPtr executePtr = NativeMethods.GetProcAddress(_pawnIOLib, "pawnio_execute");
+            IntPtr closePtr = NativeMethods.GetProcAddress(_pawnIOLib, "pawnio_close");
+            
+            if (openPtr == IntPtr.Zero || loadPtr == IntPtr.Zero || 
+                executePtr == IntPtr.Zero || closePtr == IntPtr.Zero)
+            {
+                return false;
+            }
+            
+            _pawnioOpen = Marshal.GetDelegateForFunctionPointer<PawnioOpen>(openPtr);
+            _pawnioLoad = Marshal.GetDelegateForFunctionPointer<PawnioLoad>(loadPtr);
+            _pawnioExecute = Marshal.GetDelegateForFunctionPointer<PawnioExecute>(executePtr);
+            _pawnioClose = Marshal.GetDelegateForFunctionPointer<PawnioClose>(closePtr);
+            
+            return true;
+        }
+        
+        private bool LoadMsrModule()
+        {
+            try
+            {
+                string appDir = AppDomain.CurrentDomain.BaseDirectory;
+                string[] moduleNames = { "IntelMSR.bin", "IntelMSR.amx" };
+                
+                foreach (var moduleName in moduleNames)
+                {
+                    string modulePath = Path.Combine(appDir, "drivers", moduleName);
+                    if (File.Exists(modulePath))
+                    {
+                        _intelMsrModule = File.ReadAllBytes(modulePath);
+                        break;
+                    }
+                }
+                
+                if (_intelMsrModule == null || _intelMsrModule.Length == 0)
+                {
+                    string? pawnIOPath = FindPawnIOInstallation();
+                    if (pawnIOPath != null)
+                    {
+                        foreach (var moduleName in moduleNames)
+                        {
+                            string installedModule = Path.Combine(pawnIOPath, "modules", moduleName);
+                            if (File.Exists(installedModule))
+                            {
+                                _intelMsrModule = File.ReadAllBytes(installedModule);
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (_intelMsrModule == null || _intelMsrModule.Length == 0) return false;
+                
+                int hr = _pawnioLoad!(_handle, _intelMsrModule, (IntPtr)_intelMsrModule.Length);
+                return hr >= 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// Read CPU temperature using MSR 0x19C (IA32_THERM_STATUS) or 0x1B1 (Package).
+        /// Returns temperature in Celsius.
+        /// </summary>
+        public double ReadCpuTemperature()
+        {
+            if (!IsAvailable) return 0;
+            
+            try
+            {
+                // Try package temperature first (MSR 0x1B1) - more stable than per-core
+                ulong pkgTherm = ReadMsr(MSR_IA32_PACKAGE_THERM_STATUS);
+                
+                // Check if reading is valid (bit 31 = Reading Valid)
+                if ((pkgTherm & 0x80000000) != 0)
+                {
+                    // Digital Readout is bits 22:16 (7 bits)
+                    int digitalReadout = (int)((pkgTherm >> 16) & 0x7F);
+                    double temp = _tjMax - digitalReadout;
+                    if (temp > 0 && temp < 150) return temp;
+                }
+                
+                // Fallback to core 0 temperature (MSR 0x19C)
+                ulong thermStatus = ReadMsr(MSR_IA32_THERM_STATUS);
+                
+                // Check if reading is valid (bit 31 = Reading Valid)
+                if ((thermStatus & 0x80000000) != 0)
+                {
+                    // Digital Readout is bits 22:16 (7 bits)
+                    int digitalReadout = (int)((thermStatus >> 16) & 0x7F);
+                    double temp = _tjMax - digitalReadout;
+                    if (temp > 0 && temp < 150) return temp;
+                }
+                
+                return 0;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+        
+        /// <summary>
+        /// Read TjMax from MSR 0x1A2 (IA32_TEMPERATURE_TARGET).
+        /// TjMax is the maximum junction temperature - actual temp = TjMax - digital readout.
+        /// </summary>
+        private int ReadTjMax()
+        {
+            try
+            {
+                ulong value = ReadMsr(MSR_IA32_TEMPERATURE_TARGET);
+                // TjMax is in bits 23:16
+                int tjMax = (int)((value >> 16) & 0xFF);
+                if (tjMax > 50 && tjMax < 150) return tjMax;
+            }
+            catch { }
+            
+            return 100; // Default for most Intel CPUs
+        }
+        
+        private ulong ReadMsr(uint index)
+        {
+            ulong[] input = { index };
+            ulong[] output = new ulong[2]; // low, high
+            
+            int hr = _pawnioExecute!(_handle, "ioctl_msr_read", input, (IntPtr)1, output, (IntPtr)2, out IntPtr returnSize);
+            if (hr < 0)
+            {
+                throw new InvalidOperationException($"PawnIO MSR read failed: HRESULT 0x{hr:X8}");
+            }
+            
+            return output[0] | (output[1] << 32);
+        }
+        
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            
+            if (_handle != IntPtr.Zero && _pawnioClose != null)
+            {
+                try { _pawnioClose(_handle); } catch { }
+                _handle = IntPtr.Zero;
+            }
+            
+            if (_pawnIOLib != IntPtr.Zero)
+            {
+                try { NativeMethods.FreeLibrary(_pawnIOLib); } catch { }
+                _pawnIOLib = IntPtr.Zero;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Native methods for PawnIO library loading
+    /// </summary>
+    internal static class NativeMethods
+    {
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        public static extern IntPtr LoadLibrary(string lpFileName);
+        
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool FreeLibrary(IntPtr hModule);
+        
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
+        public static extern IntPtr GetProcAddress(IntPtr hModule, string lpProcName);
     }
 
     /// <summary>

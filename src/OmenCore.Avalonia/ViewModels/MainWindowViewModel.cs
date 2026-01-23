@@ -36,7 +36,7 @@ public partial class MainWindowViewModel : ObservableObject
     private string _fanMode = "Auto";
 
     [ObservableProperty]
-    private string _appVersion = "2.5.0";
+    private string _appVersion = "2.5.1";
 
     // Navigation state
     [ObservableProperty]

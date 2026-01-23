@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using OmenCore.Models;
+using OmenCore.Services;
 
 namespace OmenCore.Hardware
 {
@@ -10,6 +11,7 @@ namespace OmenCore.Hardware
         private readonly IEcAccess _ecAccess;
         private readonly IReadOnlyDictionary<string, int> _registerMap;
         private readonly LibreHardwareMonitorImpl _bridge;
+        private readonly LoggingService? _logging;
         
         // EC registers for reading actual fan RPM (from omen-fan project)
         private const ushort REG_FAN1_RPM = 0x34;  // Fan 1 speed in units of 100 RPM
@@ -18,11 +20,13 @@ namespace OmenCore.Hardware
         // Track last set fan percentage for fallback estimation only
         private int _lastSetFanPercent = -1;
 
-        public FanController(IEcAccess ecAccess, IReadOnlyDictionary<string, int> registerMap, LibreHardwareMonitorImpl bridge)
+        public FanController(IEcAccess ecAccess, IReadOnlyDictionary<string, int> registerMap, LibreHardwareMonitorImpl bridge, LoggingService? logging = null)
         {
             _ecAccess = ecAccess;
             _registerMap = registerMap;
             _bridge = bridge;
+            _logging = logging;
+            _logging?.Debug("FanController initialized (EC access ready: " + _ecAccess.IsAvailable + ")");
         }
 
         public bool IsEcReady => _ecAccess.IsAvailable;
@@ -212,84 +216,66 @@ namespace OmenCore.Hardware
         /// <summary>
         /// Read actual fan RPM from HP OMEN EC registers.
         /// Tries multiple register sets for compatibility with different models.
+        /// Made protected virtual so test subclasses can override read behavior.
         /// </summary>
-        private (int fan1Rpm, int fan2Rpm) ReadActualFanRpm()
+        protected virtual (int fan1Rpm, int fan2Rpm) ReadActualFanRpm()
         {
             if (!_ecAccess.IsAvailable)
                 return (0, 0);
 
             try
             {
-                // Try primary registers (0x34/0x35) - units of 100 RPM
-                var fan1Unit = _ecAccess.ReadByte(REG_FAN1_RPM);
-                var fan2Unit = _ecAccess.ReadByte(REG_FAN2_RPM);
-                
-                // DEBUG: Log what we read from primary registers
-                System.Diagnostics.Debug.WriteLine($"[FanController] Primary registers - Fan1: {fan1Unit}, Fan2: {fan2Unit}");
-
-                if (fan1Unit > 0 || fan2Unit > 0)
-                {
-                    // Convert from 100 RPM units to actual RPM
-                    var fan1Rpm = fan1Unit * 100;
-                    var fan2Rpm = fan2Unit * 100;
-                    System.Diagnostics.Debug.WriteLine($"[FanController] Using primary registers - Fan1RPM: {fan1Rpm}, Fan2RPM: {fan2Rpm}");
-                    return (fan1Rpm, fan2Rpm);
-                }
-
-                // Try alternative registers (0x4A-0x4B for Fan1, 0x4C-0x4D for Fan2) - 16-bit RPM
+                // Try alternative registers first (0x4A-0x4B for Fan1, 0x4C-0x4D for Fan2) - 16-bit RPM
                 try
                 {
                     var fan1Low = _ecAccess.ReadByte(0x4A);
                     var fan1High = _ecAccess.ReadByte(0x4B);
                     var fan2Low = _ecAccess.ReadByte(0x4C);
                     var fan2High = _ecAccess.ReadByte(0x4D);
-                    
-                    System.Diagnostics.Debug.WriteLine($"[FanController] Alt registers - F1L:{fan1Low} F1H:{fan1High} F2L:{fan2Low} F2H:{fan2High}");
+                    _logging?.Debug($"EC Read alt RPM regs: 0x4A=0x{fan1Low:X2}, 0x4B=0x{fan1High:X2}, 0x4C=0x{fan2Low:X2}, 0x4D=0x{fan2High:X2}");
 
                     var fan1Rpm = (fan1High << 8) | fan1Low;
                     var fan2Rpm = (fan2High << 8) | fan2Low;
 
                     if (fan1Rpm > 0 || fan2Rpm > 0)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[FanController] Using alt registers - Fan1RPM: {fan1Rpm}, Fan2RPM: {fan2Rpm}");
+                        _logging?.Info($"EC RPMs (alt regs): Fan1={fan1Rpm} RPM, Fan2={fan2Rpm} RPM");
                         return (fan1Rpm, fan2Rpm);
                     }
                 }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"[FanController] Alt register read failed: {ex.Message}");
-                    // Alternative registers not available
                 }
 
-                // Try OMEN 17-ck2xxx specific registers (placeholder - research needed)
-                // TODO: Research actual EC registers for OMEN 17-ck2xxx fan RPM
-                // Example: Some OMEN models use 0x60/0x61 for CPU fan, 0x62/0x63 for GPU fan
-                try
+                // Try primary registers (0x34/0x35) - units of 100 RPM (write registers, may return set values)
+                var fan1Unit = _ecAccess.ReadByte(REG_FAN1_RPM);
+                var fan2Unit = _ecAccess.ReadByte(REG_FAN2_RPM);
+                _logging?.Debug($"EC Read primary RPM regs: 0x{REG_FAN1_RPM:X2}=0x{fan1Unit:X2}, 0x{REG_FAN2_RPM:X2}=0x{fan2Unit:X2}");
+
+                if (fan1Unit > 0 || fan2Unit > 0)
                 {
-                    var fan1RpmAlt = _ecAccess.ReadByte(0x60) | (_ecAccess.ReadByte(0x61) << 8);
-                    var fan2RpmAlt = _ecAccess.ReadByte(0x62) | (_ecAccess.ReadByte(0x63) << 8);
-                    System.Diagnostics.Debug.WriteLine($"[FanController] Model-specific registers - Fan1RPM: {fan1RpmAlt}, Fan2RPM: {fan2RpmAlt}");
-
-
-                    if (fan1RpmAlt > 0 || fan2RpmAlt > 0)
-                    {
-                        return (fan1RpmAlt, fan2RpmAlt);
-                    }
-                }
-                catch
-                {
-                    // Model-specific registers not available
+                    // Convert from 100 RPM units to actual RPM
+                    var fan1Rpm = fan1Unit * 100;
+                    var fan2Rpm = fan2Unit * 100;
+                    _logging?.Info($"EC RPMs (primary): Fan1={fan1Rpm} RPM, Fan2={fan2Rpm} RPM");
+                    return (fan1Rpm, fan2Rpm);
                 }
 
-                System.Diagnostics.Debug.WriteLine($"[FanController] All register attempts failed, returning (0, 0)");
+                // No registers returned a value
                 return (0, 0);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[FanController] ReadActualFanRpm exception: {ex.Message}");
+                _logging?.Warn($"EC ReadActualFanRpm failed: {ex.Message}");
                 return (0, 0);
             }
         }
+
+        /// <summary>
+        /// Public wrapper for tests and external verification logic to read EC RPMs.
+        /// </summary>
+        public (int fan1Rpm, int fan2Rpm) ReadActualFanRpmPublic() => ReadActualFanRpm();
 
         private int CalculateDutyFromRpm(int rpm, int fanIndex)
         {
@@ -310,49 +296,90 @@ namespace OmenCore.Hardware
             
             // HP OMEN EC register constants for fan control
             // Based on omen-fan project and OmenMon research
-            const ushort REG_FAN1_SPEED_PCT = 0x2E;   // Fan 1 speed 0-100%
-            const ushort REG_FAN2_SPEED_PCT = 0x2F;   // Fan 2 speed 0-100%
+            const ushort REG_FAN1_SPEED_PCT = 0x2C;   // Fan 1 set speed 0-100% (write register)
+            const ushort REG_FAN2_SPEED_PCT = 0x2D;   // Fan 2 set speed 0-100% (write register)
             const ushort REG_FAN1_SPEED_SET = 0x34;   // Fan 1 speed in units of 100 RPM (0-55)
             const ushort REG_FAN2_SPEED_SET = 0x35;   // Fan 2 speed in units of 100 RPM (0-55)
             const ushort REG_OMCC = 0x62;             // BIOS control: 0x06=Manual, 0x00=Auto
+            const ushort REG_XFCD = 0x63;             // Manual fan auto countdown [s]: 0x00=disable, 0xFF=max
             const ushort REG_FAN_BOOST = 0xEC;        // Fan boost: 0x00=OFF, 0x0C=ON
             
-            // Step 1: Enable manual fan control (disable BIOS auto-control)
-            _ecAccess.WriteByte(REG_OMCC, 0x06);
-            
-            // Step 2: Set fan speed via percentage register (0-100)
-            var pctValue = (byte)Math.Clamp(percent, 0, 100);
-            _ecAccess.WriteByte(REG_FAN1_SPEED_PCT, pctValue);
-            _ecAccess.WriteByte(REG_FAN2_SPEED_PCT, pctValue);
-            
-            // Step 3: Also set RPM-based register (units of 100 RPM, max 55 = 5500 RPM)
-            // Map 0-100% to 0-55 units
-            var rpmUnit = (byte)Math.Clamp(percent * 55 / 100, 0, 55);
-            _ecAccess.WriteByte(REG_FAN1_SPEED_SET, rpmUnit);
-            _ecAccess.WriteByte(REG_FAN2_SPEED_SET, rpmUnit);
-            
-            // Step 4: Enable fan boost for 100% (max mode)
-            if (percent >= 100)
+            try
             {
-                _ecAccess.WriteByte(REG_FAN_BOOST, 0x0C); // Enable max boost
-            }
-            else
-            {
-                _ecAccess.WriteByte(REG_FAN_BOOST, 0x00); // Disable boost
-            }
-            
-            // Also write to user-configured registers if different (for compatibility)
-            var duty = (byte)Math.Clamp(percent * 255 / 100, 0, 255);
-            foreach (var register in _registerMap.Values)
-            {
-                var regAddr = (ushort)register;
-                // Skip if we already wrote to this register
-                if (regAddr != REG_FAN1_SPEED_PCT && regAddr != REG_FAN2_SPEED_PCT &&
-                    regAddr != REG_FAN1_SPEED_SET && regAddr != REG_FAN2_SPEED_SET)
+                // Step 1: Enable manual fan control (disable BIOS auto-control)
+                _logging?.Debug($"EC Write: REG_OMCC (0x{REG_OMCC:X2}) <- 0x06 (manual)");
+                _ecAccess.WriteByte(REG_OMCC, 0x06);
+
+                // Step 2: Disable auto-revert countdown to keep manual mode active
+                _logging?.Debug($"EC Write: REG_XFCD (0x{REG_XFCD:X2}) <- 0x00 (disable countdown)");
+                _ecAccess.WriteByte(REG_XFCD, 0x00);
+
+                // Step 3: Set fan speed via percentage register (direct mapping, no inversion)
+                byte pctValue = (byte)Math.Clamp(percent, 0, 100);
+                byte rpmUnit = (byte)Math.Clamp(percent * 55 / 100, 0, 55);
+                _logging?.Debug($"EC Write: REG_FAN1_SPEED_PCT (0x{REG_FAN1_SPEED_PCT:X2}) <- 0x{pctValue:X2}");
+                _ecAccess.WriteByte(REG_FAN1_SPEED_PCT, pctValue);
+                _logging?.Debug($"EC Write: REG_FAN2_SPEED_PCT (0x{REG_FAN2_SPEED_PCT:X2}) <- 0x{pctValue:X2}");
+                _ecAccess.WriteByte(REG_FAN2_SPEED_PCT, pctValue);
+
+                // Step 4: Also set RPM-based register (units of 100 RPM, max 55 = 5500 RPM)
+                _logging?.Debug($"EC Write: REG_FAN1_SPEED_SET (0x{REG_FAN1_SPEED_SET:X2}) <- 0x{rpmUnit:X2}");
+                _ecAccess.WriteByte(REG_FAN1_SPEED_SET, rpmUnit);
+                _logging?.Debug($"EC Write: REG_FAN2_SPEED_SET (0x{REG_FAN2_SPEED_SET:X2}) <- 0x{rpmUnit:X2}");
+                _ecAccess.WriteByte(REG_FAN2_SPEED_SET, rpmUnit);
+
+                // Step 5: Enable fan boost for 100% (max mode)
+                if (percent >= 100)
                 {
-                    _ecAccess.WriteByte(regAddr, duty);
+                    _logging?.Debug($"EC Write: REG_FAN_BOOST (0x{REG_FAN_BOOST:X2}) <- 0x0C (enable boost)");
+                    _ecAccess.WriteByte(REG_FAN_BOOST, 0x0C); // Enable max boost
+                }
+                else
+                {
+                    _logging?.Debug($"EC Write: REG_FAN_BOOST (0x{REG_FAN_BOOST:X2}) <- 0x00 (disable boost)");
+                    _ecAccess.WriteByte(REG_FAN_BOOST, 0x00); // Disable boost
+                }
+
+                // Also write to user-configured registers if different (for compatibility)
+                var duty = (byte)Math.Clamp(percent * 255 / 100, 0, 255);
+                foreach (var register in _registerMap.Values)
+                {
+                    var regAddr = (ushort)register;
+                    // Skip if we already wrote to this register
+                    if (regAddr != REG_FAN1_SPEED_PCT && regAddr != REG_FAN2_SPEED_PCT &&
+                        regAddr != REG_FAN1_SPEED_SET && regAddr != REG_FAN2_SPEED_SET)
+                    {
+                        _logging?.Debug($"EC Write: 0x{regAddr:X2} <- 0x{duty:X2} (compat)");
+                        _ecAccess.WriteByte(regAddr, duty);
+                    }
+                }
+
+                // Readback a few registers for verification/logging
+                try
+                {
+                    var rb_omcc = _ecAccess.ReadByte(REG_OMCC);
+                    var rb_xfcd = _ecAccess.ReadByte(REG_XFCD);
+                    var rb_pct1 = _ecAccess.ReadByte(REG_FAN1_SPEED_PCT);
+                    var rb_boost = _ecAccess.ReadByte(REG_FAN_BOOST);
+                    _logging?.Debug($"EC Readback: 0x{REG_OMCC:X2}=0x{rb_omcc:X2}, 0x{REG_XFCD:X2}=0x{rb_xfcd:X2}, 0x{REG_FAN1_SPEED_PCT:X2}=0x{rb_pct1:X2}, 0x{REG_FAN_BOOST:X2}=0x{rb_boost:X2}");
+                }
+                catch (Exception ex)
+                {
+                    _logging?.Warn($"EC readback failed after WriteDuty: {ex.Message}");
                 }
             }
+            catch (Exception ex)
+            {
+                _logging?.Warn($"WriteDuty EC writes failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Public helper to set immediate percent via EC writes (used by wrapper verification fallback)
+        /// </summary>
+        public void SetImmediatePercent(int percent)
+        {
+            WriteDuty(percent);
         }
         
         /// <summary>
@@ -360,30 +387,118 @@ namespace OmenCore.Hardware
         /// </summary>
         public void SetMaxSpeed()
         {
-            const ushort REG_FAN1_SPEED_PCT = 0x2E;
-            const ushort REG_FAN2_SPEED_PCT = 0x2F;
+            const ushort REG_FAN1_SPEED_PCT = 0x2C;
+            const ushort REG_FAN2_SPEED_PCT = 0x2D;
             const ushort REG_FAN1_SPEED_SET = 0x34;
             const ushort REG_FAN2_SPEED_SET = 0x35;
             const ushort REG_OMCC = 0x62;
+            const ushort REG_XFCD = 0x63;
             const ushort REG_FAN_BOOST = 0xEC;
             
             _lastSetFanPercent = 100;
-            
-            // Enable manual control
-            _ecAccess.WriteByte(REG_OMCC, 0x06);
-            
-            // Set max percentage
-            _ecAccess.WriteByte(REG_FAN1_SPEED_PCT, 100);
-            _ecAccess.WriteByte(REG_FAN2_SPEED_PCT, 100);
-            
-            // Set max RPM units (55 = 5500 RPM)
-            _ecAccess.WriteByte(REG_FAN1_SPEED_SET, 55);
-            _ecAccess.WriteByte(REG_FAN2_SPEED_SET, 55);
-            
-            // Enable fan boost
-            _ecAccess.WriteByte(REG_FAN_BOOST, 0x0C);
+            try
+            {
+                _logging?.Debug($"EC SetMaxSpeed: enabling manual control and max values");
+                // Enable manual control
+                _ecAccess.WriteByte(REG_OMCC, 0x06);
+                // Disable auto-revert countdown
+                _ecAccess.WriteByte(REG_XFCD, 0x00);
+
+                // Set max percentage
+                _ecAccess.WriteByte(REG_FAN1_SPEED_PCT, 100);
+                _ecAccess.WriteByte(REG_FAN2_SPEED_PCT, 100);
+
+                // Set max RPM units
+                _ecAccess.WriteByte(REG_FAN1_SPEED_SET, 55);
+                _ecAccess.WriteByte(REG_FAN2_SPEED_SET, 55);
+
+                // Enable fan boost
+                _ecAccess.WriteByte(REG_FAN_BOOST, 0x0C);
+
+                // Readback key registers
+                try
+                {
+                    var rb1 = _ecAccess.ReadByte(REG_FAN1_SPEED_PCT);
+                    var rb2 = _ecAccess.ReadByte(REG_FAN2_SPEED_PCT);
+                    var rbBoost = _ecAccess.ReadByte(REG_FAN_BOOST);
+                    _logging?.Info($"EC SetMaxSpeed readback: PCT1=0x{rb1:X2}, PCT2=0x{rb2:X2}, BOOST=0x{rbBoost:X2}");
+                }
+                catch (Exception ex)
+                {
+                    _logging?.Warn($"EC SetMaxSpeed readback failed: {ex.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging?.Warn($"SetMaxSpeed EC writes failed: {ex.Message}");
+            }
         }
-        
+
+        /// <summary>
+        /// Set individual fan speeds via EC registers.
+        /// </summary>
+        public void SetFanSpeeds(int cpuPercent, int gpuPercent)
+        {
+            const ushort REG_FAN1_SPEED_PCT = 0x2C;   // Fan 1 set speed 0-100%
+            const ushort REG_FAN2_SPEED_PCT = 0x2D;   // Fan 2 set speed 0-100%
+            const ushort REG_FAN1_SPEED_SET = 0x34;   // Fan 1 speed in units of 100 RPM (0-55)
+            const ushort REG_FAN2_SPEED_SET = 0x35;   // Fan 2 speed in units of 100 RPM (0-55)
+            const ushort REG_OMCC = 0x62;             // BIOS control: 0x06=Manual, 0x00=Auto
+            const ushort REG_XFCD = 0x63;             // Manual fan auto countdown [s]: 0x00=disable
+            const ushort REG_FAN_BOOST = 0xEC;        // Fan boost: 0x00=OFF, 0x0C=ON
+
+            // Track last set percentage (average for compatibility)
+            _lastSetFanPercent = (cpuPercent + gpuPercent) / 2;
+
+            try
+            {
+                _logging?.Debug($"EC SetFanSpeeds: CPU={cpuPercent}%, GPU={gpuPercent}%");
+                // Step 1: Enable manual fan control (disable BIOS auto-control)
+                _ecAccess.WriteByte(REG_OMCC, 0x06);
+                // Step 2: Disable auto-revert countdown
+                _ecAccess.WriteByte(REG_XFCD, 0x00);
+
+                // Step 3: Set fan speeds via percentage registers (0-100)
+                var cpuPctValue = (byte)Math.Clamp(cpuPercent, 0, 100);
+                var gpuPctValue = (byte)Math.Clamp(gpuPercent, 0, 100);
+                _ecAccess.WriteByte(REG_FAN1_SPEED_PCT, cpuPctValue);
+                _ecAccess.WriteByte(REG_FAN2_SPEED_PCT, gpuPctValue);
+
+                // Step 4: Also set RPM-based registers (units of 100 RPM, max 55 = 5500 RPM)
+                // Map 0-100% to 0-55 units
+                var cpuRpmUnit = (byte)Math.Clamp(cpuPercent * 55 / 100, 0, 55);
+                var gpuRpmUnit = (byte)Math.Clamp(gpuPercent * 55 / 100, 0, 55);
+                _ecAccess.WriteByte(REG_FAN1_SPEED_SET, cpuRpmUnit);
+                _ecAccess.WriteByte(REG_FAN2_SPEED_SET, gpuRpmUnit);
+
+                // Step 5: Enable fan boost if either fan is at 100%
+                if (cpuPercent >= 100 || gpuPercent >= 100)
+                {
+                    _ecAccess.WriteByte(REG_FAN_BOOST, 0x0C); // Enable max boost
+                }
+                else
+                {
+                    _ecAccess.WriteByte(REG_FAN_BOOST, 0x00); // Disable boost
+                }
+
+                // Readback key registers for logging
+                try
+                {
+                    var rbCpu = _ecAccess.ReadByte(REG_FAN1_SPEED_PCT);
+                    var rbGpu = _ecAccess.ReadByte(REG_FAN2_SPEED_PCT);
+                    _logging?.Info($"EC SetFanSpeeds readback: CPU_PCT=0x{rbCpu:X2}, GPU_PCT=0x{rbGpu:X2}");
+                }
+                catch (Exception ex)
+                {
+                    _logging?.Warn($"EC SetFanSpeeds readback failed: {ex.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging?.Warn($"SetFanSpeeds EC writes failed: {ex.Message}");
+            }
+        }
+
         /// <summary>
         /// Restore BIOS automatic fan control.
         /// Uses full EC reset sequence to ensure BIOS properly takes over fan control.

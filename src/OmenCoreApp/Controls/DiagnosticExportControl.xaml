@@ -58,6 +58,7 @@
                             <CheckBox x:Name="IncludeSettingsCheck" Content="Settings &amp; Configuration" IsChecked="True" Margin="0,5"/>
                             <CheckBox x:Name="IncludePerformanceDataCheck" Content="Performance Mode Data" IsChecked="True" Margin="0,5"/>
                             <CheckBox x:Name="IncludeFanCalibrationCheck" Content="Fan Calibration Data (if available)" IsChecked="True" Margin="0,5"/>
+                            <CheckBox x:Name="IncludeFanVerificationCheck" Content="Fan Max Verification (runs a quick verification of 'Max' preset)" IsChecked="False" Margin="0,5"/>
                         </StackPanel>
                     </GroupBox>
 

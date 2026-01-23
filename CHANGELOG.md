@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty Tables Issue**: Fixed monitoring tab showing empty current metrics tables
 - **Chart Display**: Charts now display historical data immediately on tab load
 - **Data Binding**: Reliable connection between monitoring service and UI controls
+- **Fan Reset on Exit**: Fans now properly reset to BIOS/Windows auto control when app closes instead of staying at last manual setting
 
 ### 📋 Known Issues
 - Windows Defender may flag LibreHardwareMonitor/WinRing0 (known false positive - use PawnIO for Secure Boot)
@@ -39,6 +40,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.5.0] - 2026-01-17 - Advanced RGB Lighting & Hardware Monitoring 🎨📊
 
 **Comprehensive RGB lighting integration, temperature-responsive effects, power monitoring, and fan curve visualization**
+
+---
+
+## [2.5.1] - 2026-01-21 - Fan "Max" Reliability & Diagnostics 🔧🌀
+
+**Focus:** Make the "Max" fan preset robust and observable, avoid misleading UI state (showing 100% when fans aren't actually at max), and improve diagnostics for support.
+
+### Highlights
+- **Verify Max Applied**: After applying Max, the app now verifies fan RPM/duty and only shows 100% when verified.
+- **Retry + Fallbacks**: Added short retry loops and alternative sequences (SetFanMax / SetFanLevel) to handle vendor BIOS quirks.
+- **Diagnostics**: Diagnostic export can optionally run a quick fan Max verification and include the results for faster triage.
+- **Logging**: Improved debug + verification logs to help identify hardware/driver failures.
+
+### 🌀 Fan Control Improvements
+- **Fan Reset on Exit**: Fans now properly reset to BIOS/Windows auto control when app closes instead of staying at last manual setting
+- **Max Mode Verification**: Real-time verification that Max fan preset is actually applied with RPM feedback
+- **Enhanced Diagnostics**: Comprehensive fan diagnostics with hardware worker integration for accurate RPM readings
+- **BIOS Compatibility**: Improved handling of different BIOS versions and vendor-specific fan control quirks
+
+### 🔧 Technical Improvements
+- **PawnIO CPU Temperature Fallback**: HardwareWorker now falls back to PawnIO for CPU temperature if WinRing0/LibreHardwareMonitor fails
+- **Service Provider Access**: Added public ServiceProvider property for better service access patterns
+- **Shutdown Sequence**: Explicit fan auto-control restoration during application exit
+- **Error Handling**: Improved error handling for fan control operations with detailed logging
+
+### 🐛 Bug Fixes
+- **Fan State Persistence**: Fixed issue where fans would stay at manual speeds after application exit
+- **Max Preset Reliability**: Ensured Max fan preset actually achieves maximum fan speeds with verification
+- **UI State Accuracy**: Fan percentage display now accurately reflects actual fan speeds, not just intended settings
+
+### 📋 Known Issues
+- Windows Defender may flag LibreHardwareMonitor/WinRing0 (known false positive - use PawnIO for Secure Boot)
+- MSI Afterburner shared memory conflicts (detection added, resolution planned for v2.6.0)
+- Some older Linux kernels may have limited HP WMI integration
+
+### 📦 Installer Hashes (SHA256)
+
+**OmenCore v2.5.1 Release Artifacts**
+
+| File | SHA256 Hash |
+|------|-------------|
+| `OmenCoreSetup-2.5.1.exe` | `FB7391404867CABCBAE14D70E4BD9D7B31C76D22792BB4D9C0D9D571DA91F83A` |
+| `OmenCore-2.5.1-win-x64.zip` | `05055ABAC5ABBC811AF899E0F0AFEE708FE9C28C4079015FAFE85AA4EFE1989F` |
+| `OmenCore-2.5.1-linux-x64.zip` | `AD07B9610B6E49B383E5FA33E0855329256FFE333F4EB6F151B6F6A3F1EBD1BC` |
+
+**Verification Instructions:**
+- Windows: `Get-FileHash -Algorithm SHA256 OmenCoreSetup-2.5.1.exe`
+- Linux: `sha256sum OmenCore-2.5.1-linux-x64.zip`
+- Cross-platform: Compare against the hashes above to verify download integrity
 
 ### 🎨 Advanced RGB Lighting System
 - **Temperature-Responsive Lighting**: Keyboard and RGB devices change colors based on CPU/GPU temperatures with configurable thresholds

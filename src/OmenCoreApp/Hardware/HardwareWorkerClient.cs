@@ -43,6 +43,11 @@ namespace OmenCore.Hardware
         private bool _enabled = true;
         private DateTime _lastPermanentDisable = DateTime.MinValue;
         private const int PermanentDisableCooldownMinutes = 30; // Allow re-enable after 30 minutes
+
+        // Command queue for lifecycle protection
+        private readonly Queue<string> _pendingCommands = new();
+        private readonly object _commandQueueLock = new();
+        private bool _replayingCommands = false;
         
         /// <summary>
         /// Whether the worker is currently connected and responding
@@ -62,6 +67,66 @@ namespace OmenCore.Hardware
         public HardwareWorkerClient(Action<string>? logger = null)
         {
             _logger = logger;
+        }
+        
+        /// <summary>
+        /// Queue a command to be sent when worker is available
+        /// </summary>
+        public void QueueCommand(string command)
+        {
+            lock (_commandQueueLock)
+            {
+                if (_pendingCommands.Count < 10) // Limit queue size
+                {
+                    _pendingCommands.Enqueue(command);
+                    _logger?.Invoke($"[Worker] Queued command: {command} (queue size: {_pendingCommands.Count})");
+                }
+                else
+                {
+                    _logger?.Invoke($"[Worker] Command queue full, dropping: {command}");
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Replay queued commands after worker reconnection
+        /// </summary>
+        private async Task ReplayQueuedCommandsAsync()
+        {
+            if (_replayingCommands) return;
+            
+            _replayingCommands = true;
+            try
+            {
+                List<string> commandsToReplay;
+                lock (_commandQueueLock)
+                {
+                    commandsToReplay = _pendingCommands.ToList();
+                    _pendingCommands.Clear();
+                }
+                
+                if (commandsToReplay.Any())
+                {
+                    _logger?.Invoke($"[Worker] Replaying {commandsToReplay.Count} queued commands");
+                    
+                    foreach (var command in commandsToReplay)
+                    {
+                        try
+                        {
+                            var response = await SendRequestAsync(command);
+                            _logger?.Invoke($"[Worker] Replayed command '{command}' -> '{response}'");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.Invoke($"[Worker] Failed to replay command '{command}': {ex.Message}");
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                _replayingCommands = false;
+            }
         }
         
         /// <summary>
@@ -178,6 +243,10 @@ namespace OmenCore.Hardware
                 {
                     _logger?.Invoke("[Worker] Connected to hardware worker");
                     _restartAttempts = 0;
+                    
+                    // Replay any queued commands after successful reconnection
+                    _ = ReplayQueuedCommandsAsync();
+                    
                     return true;
                 }
                 

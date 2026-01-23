@@ -20,6 +20,7 @@ namespace OmenCore.Controls
     public partial class HardwareMonitoringDashboard : UserControl, INotifyPropertyChanged
     {
         private MainViewModel? _mainViewModel;
+        private DashboardViewModel? _dashboardViewModel;
         private readonly DispatcherTimer _updateTimer;
         private readonly DispatcherTimer _chartUpdateTimer;
         private readonly ObservableCollection<SystemAlert> _alerts;
@@ -73,13 +74,15 @@ namespace OmenCore.Controls
 
             // Get MainViewModel from new DataContext
             _mainViewModel = e.NewValue as MainViewModel;
+            _dashboardViewModel = _mainViewModel?.Dashboard;
+
+            // If dashboard VM not available yet, we'll listen for MainViewModel.Dashboard property changes
 
             if (_mainViewModel == null)
             {
                 App.Logging.Warn("[Dashboard.DataContextChanged] New DataContext is not MainViewModel, will try again on Loaded");
                 return;
             }
-
             App.Logging.Info("[Dashboard.DataContextChanged] Successfully cast DataContext to MainViewModel, calling InitializeWithViewModel()");
             InitializeWithViewModel();
         }
@@ -90,8 +93,16 @@ namespace OmenCore.Controls
             
             App.Logging.Info("[Dashboard] InitializeWithViewModel() called - starting timers and initial update");
             
-            // Subscribe to PropertyChanged to immediately catch LatestMonitoringSample updates
-            _mainViewModel.PropertyChanged += MainViewModel_PropertyChanged;
+            // Prefer subscribing to DashboardViewModel if available so the dashboard uses the same sample source as the tray
+            if (_dashboardViewModel != null)
+            {
+                _dashboardViewModel.PropertyChanged += DashboardViewModel_PropertyChanged;
+            }
+            else
+            {
+                // Dashboard VM not created yet; subscribe to MainViewModel to detect when it appears and to latest-sample updates
+                _mainViewModel.PropertyChanged += MainViewModel_PropertyChanged;
+            }
             
             // Start timers
             _updateTimer.Start();
@@ -115,11 +126,36 @@ namespace OmenCore.Controls
         {
             if (e.PropertyName == nameof(MainViewModel.LatestMonitoringSample))
             {
-                // Immediately update when new sample arrives
-                await Dispatcher.InvokeAsync(async () =>
+                // Immediately update when new sample arrives (fallback)
+                await Dispatcher.InvokeAsync(async () => await UpdateMetricsAsync());
+                return;
+            }
+
+            if (e.PropertyName == nameof(MainViewModel.Dashboard))
+            {
+                // Dashboard VM created later; attach to its PropertyChanged and stop listening to MainViewModel for this
+                try
                 {
-                    await UpdateMetricsAsync();
-                });
+                    _dashboardViewModel = _mainViewModel?.Dashboard;
+                    if (_dashboardViewModel != null && _mainViewModel != null)
+                    {
+                        _dashboardViewModel.PropertyChanged += DashboardViewModel_PropertyChanged;
+                        _mainViewModel.PropertyChanged -= MainViewModel_PropertyChanged;
+                        App.Logging.Info("[Dashboard] Attached to DashboardViewModel.PropertyChanged and detached MainViewModel listener");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    App.Logging.Warn($"[Dashboard] Failed to attach to DashboardViewModel: {ex.Message}");
+                }
+            }
+        }
+
+        private async void DashboardViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(DashboardViewModel.LatestMonitoringSample))
+            {
+                await Dispatcher.InvokeAsync(async () => await UpdateMetricsAsync());
             }
         }
 
@@ -194,8 +230,8 @@ namespace OmenCore.Controls
 
             try
             {
-                var sample = _mainViewModel.LatestMonitoringSample;
-                
+                var sample = _dashboardViewModel?.LatestMonitoringSample ?? _mainViewModel?.LatestMonitoringSample;
+
                 App.Logging.Info($"[Dashboard.UpdateMetrics] Called! LatestMonitoringSample={( sample == null ? "NULL" : $"CPU={sample.CpuTemperatureC}°C" )}");
 
                 if (sample == null)

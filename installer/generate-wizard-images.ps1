@@ -77,22 +77,22 @@ $format.Alignment = [System.Drawing.StringAlignment]::Center
 $titleRect = New-Object System.Drawing.RectangleF(0, 155, $largeWidth, 30)
 $largeGraphics.DrawString("OmenCore", $titleFont, $titleBrush, $titleRect, $format)
 
-# Version badge
-$versionFont = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-$versionBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 138, 43, 226))
-$versionRect = New-Object System.Drawing.RectangleF(0, 185, $largeWidth, 20)
-$largeGraphics.DrawString("v$version", $versionFont, $versionBrush, $versionRect, $format)
+# Version badge - REMOVED for generic branding
+# $versionFont = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+# $versionBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 138, 43, 226))
+# $versionRect = New-Object System.Drawing.RectangleF(0, 185, $largeWidth, 20)
+# $largeGraphics.DrawString("v$version", $versionFont, $versionBrush, $versionRect, $format)
 
-# Tagline
+# Tagline (moved up since version badge removed)
 $tagFont = New-Object System.Drawing.Font("Segoe UI", 9)
 $tagBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 160, 160, 180))
-$tagRect = New-Object System.Drawing.RectangleF(0, 210, $largeWidth, 20)
+$tagRect = New-Object System.Drawing.RectangleF(0, 185, $largeWidth, 20)  # Moved up from 210
 $largeGraphics.DrawString("Gaming Laptop Control", $tagFont, $tagBrush, $tagRect, $format)
 
-# Feature icons (small text hints) - using ASCII-safe symbols
+# Feature icons (small text hints) - moved up
 $featureFont = New-Object System.Drawing.Font("Segoe UI", 8)
 $featureBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 120, 120, 140))
-$y = 250
+$y = 220  # Moved up from 250
 $features = @("* Fan Control", "* Monitoring", "* Performance", "* RGB Lighting")
 foreach ($feature in $features) {
     $featureRect = New-Object System.Drawing.RectangleF(0, $y, $largeWidth, 15)

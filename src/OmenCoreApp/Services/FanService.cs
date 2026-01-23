@@ -176,6 +176,25 @@ namespace OmenCore.Services
             _diagnosticModeActive = false;
             _logging.Info("✓ Exited fan diagnostic mode - curve engine resumed");
         }
+
+        /// <summary>
+        /// Run a Max verification using the underlying fan controller and return the result and details.
+        /// </summary>
+        public (bool success, string details) VerifyMaxApplied()
+        {
+            try
+            {
+                if (_fanController == null)
+                    return (false, "No fan controller available");
+
+                var ok = _fanController.VerifyMaxApplied(out string details);
+                return (ok, details);
+            }
+            catch (Exception ex)
+            {
+                return (false, $"VerifyMaxApplied exception: {ex.Message}");
+            }
+        }
         
         /// <summary>
         /// Event raised when a preset is applied (for UI synchronization).
@@ -307,16 +326,9 @@ namespace OmenCore.Services
                 
                 if (isMaxPreset)
                 {
-                    // Max preset: Disable curve, let fans run at 100%
-                    DisableCurve();
+                    // Max preset: Apply max cooling mode
+                    ApplyMaxCooling();
                     _activePreset = preset;
-                    _logging.Info($"Preset '{preset.Name}' using maximum fan speed (curve disabled)");
-                    if (immediate)
-                    {
-                        // Apply immediate 100%
-                        _fanController.SetFanSpeed(100);
-                        _lastAppliedFanPercent = 100;
-                    }
                 }
                 else if (nameLower.Contains("auto") || nameLower.Contains("default"))
                 {
@@ -500,6 +512,50 @@ namespace OmenCore.Services
             }
 
             return true;
+        }
+        
+        /// <summary>
+        /// Apply multi-layer safety bounds clamping to prevent dangerous fan curves.
+        /// Implements emergency thermal protection at 88°C.
+        /// </summary>
+        private double ApplySafetyBoundsClamping(double fanPercent, double temperatureC)
+        {
+            // Emergency thermal protection: Force 100% fans at 88°C or above
+            if (temperatureC >= 88.0)
+            {
+                if (fanPercent < 100.0)
+                {
+                    _logging.Warn($"EMERGENCY: Temperature {temperatureC:F1}°C >= 88°C, forcing fans to 100% (was {fanPercent:F0}%)");
+                    return 100.0;
+                }
+            }
+            
+            // Critical thermal protection: Minimum 80% fans at 80°C or above
+            if (temperatureC >= 80.0)
+            {
+                return Math.Max(fanPercent, 80.0);
+            }
+            
+            // High thermal protection: Minimum 60% fans at 70°C or above
+            if (temperatureC >= 70.0)
+            {
+                return Math.Max(fanPercent, 60.0);
+            }
+            
+            // Medium thermal protection: Minimum 40% fans at 60°C or above
+            if (temperatureC >= 60.0)
+            {
+                return Math.Max(fanPercent, 40.0);
+            }
+            
+            // Low thermal protection: Minimum 20% fans at 50°C or above
+            if (temperatureC >= 50.0)
+            {
+                return Math.Max(fanPercent, 20.0);
+            }
+            
+            // Ensure minimum fan speed for any temperature
+            return Math.Max(fanPercent, 10.0);
         }
         
         /// <summary>
@@ -849,18 +905,21 @@ namespace OmenCore.Services
                                       
                     if (targetPoint == null)
                         return Task.CompletedTask;
-                    var targetFanPercent = targetPoint.FanPercent;
+                    double targetFanPercent = targetPoint.FanPercent;
                     
                     // Adjust fan speed based on GPU power boost level
                     // Higher power boost levels generate more heat, so slightly increase fan speed
-                    targetFanPercent = AdjustFanPercentForGpuPowerBoost(targetFanPercent, gpuTemp);
+                    targetFanPercent = AdjustFanPercentForGpuPowerBoost((int)targetFanPercent, gpuTemp);
+                    
+                    // Apply safety bounds clamping based on temperature
+                    targetFanPercent = ApplySafetyBoundsClamping(targetFanPercent, maxTemp);
                     
                     // If immediate flag passed, bypass hysteresis and smoothing and apply now
                     if (immediate)
                     {
-                        if (_fanController.SetFanSpeed(targetFanPercent))
+                        if (_fanController.SetFanSpeed((int)targetFanPercent))
                         {
-                            _lastAppliedFanPercent = targetFanPercent;
+                            _lastAppliedFanPercent = (int)targetFanPercent;
                             _lastHysteresisTemp = maxTemp;
                             _pendingFanPercent = -1;
                             _lastCurveUpdate = now;
@@ -887,10 +946,10 @@ namespace OmenCore.Services
                         bool isIncrease = targetFanPercent > _lastAppliedFanPercent;
                         double requiredDelay = isIncrease ? _hysteresis.RampUpDelay : _hysteresis.RampDownDelay;
                         
-                        if (_pendingFanPercent != targetFanPercent)
+                        if (_pendingFanPercent != (int)targetFanPercent)
                         {
                             // New target, start delay timer
-                            _pendingFanPercent = targetFanPercent;
+                            _pendingFanPercent = (int)targetFanPercent;
                             _pendingIncrease = isIncrease;
                             _lastFanChangeRequest = now;
                             _lastCurveUpdate = now;
@@ -921,7 +980,7 @@ namespace OmenCore.Services
                             
                             for (int retry = 0; retry <= maxRetries && !success; retry++)
                             {
-                                success = _fanController.SetFanSpeed(targetFanPercent);
+                                success = _fanController.SetFanSpeed((int)targetFanPercent);
                                 if (!success && retry < maxRetries)
                                 {
                                     _logging.Warn($"Fan speed command failed (attempt {retry + 1}/{maxRetries + 1}), retrying...");
@@ -931,7 +990,7 @@ namespace OmenCore.Services
                             
                             if (success)
                             {
-                                _lastAppliedFanPercent = targetFanPercent;
+                                _lastAppliedFanPercent = (int)targetFanPercent;
                                 _lastHysteresisTemp = maxTemp;
                                 _pendingFanPercent = -1;
                                 
@@ -954,7 +1013,7 @@ namespace OmenCore.Services
                         {
                             // Ramp to the new target asynchronously so we don't block the monitor loop
                             var cancellationToken = CancellationToken.None;
-                            _ = RampFanToPercentAsync(targetFanPercent, cancellationToken);
+                            _ = RampFanToPercentAsync((int)targetFanPercent, cancellationToken);
                             _lastHysteresisTemp = maxTemp;
                         }
                     }
@@ -997,6 +1056,10 @@ namespace OmenCore.Services
                     
                     int cpuFanPercent = cpuTargetPoint.FanPercent;
                     int gpuFanPercent = gpuTargetPoint.FanPercent;
+                    
+                    // Apply safety bounds clamping to both CPU and GPU fan speeds
+                    cpuFanPercent = (int)Math.Round(ApplySafetyBoundsClamping(cpuFanPercent, cpuTemp));
+                    gpuFanPercent = (int)Math.Round(ApplySafetyBoundsClamping(gpuFanPercent, gpuTemp));
                     
                     // Check if either fan needs updating
                     bool cpuChanged = cpuFanPercent != _lastAppliedCpuFanPercent;
@@ -1248,6 +1311,28 @@ namespace OmenCore.Services
             catch (Exception ex)
             {
                 _logging.Warn($"ForceSetFanSpeed({percent}) failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Force-set individual fan speeds directly on controller (used for diagnostics).
+        /// </summary>
+        public bool ForceSetFanSpeeds(int cpuPercent, int gpuPercent)
+        {
+            if (!FanWritesAvailable)
+            {
+                _logging.Warn("ForceSetFanSpeeds skipped; fan control unavailable");
+                return false;
+            }
+
+            try
+            {
+                return _fanController.SetFanSpeeds(cpuPercent, gpuPercent);
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"ForceSetFanSpeeds({cpuPercent}, {gpuPercent}) failed: {ex.Message}");
+                return false;
             }
         }
 

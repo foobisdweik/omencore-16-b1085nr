@@ -29,7 +29,8 @@ namespace OmenCore.Services.Diagnostics
         /// </summary>
         public async Task<string> CollectAndExportAsync(
             IEcAccess? ecAccess = null,
-            LibreHardwareMonitorImpl? hwMonitor = null)
+            LibreHardwareMonitorImpl? hwMonitor = null,
+            object? wmiController = null)
         {
             try
             {
@@ -44,7 +45,8 @@ namespace OmenCore.Services.Diagnostics
                     CollectLogsAsync(exportPath),
                     CollectSystemInfoAsync(exportPath),
                     CollectEcStateAsync(exportPath, ecAccess),
-                    CollectHardwareInfoAsync(exportPath, hwMonitor)
+                    CollectHardwareInfoAsync(exportPath, hwMonitor),
+                    CollectWmiCommandHistoryAsync(exportPath, wmiController)
                 };
 
                 await Task.WhenAll(tasks);
@@ -147,21 +149,67 @@ namespace OmenCore.Services.Diagnostics
                 sb.AppendLine($"Captured: {DateTime.Now:O}");
                 sb.AppendLine();
 
-                // Read key EC registers (safe addresses only)
-                var registers = new[] { 0x2E, 0x2F, 0x34, 0x35, 0xCE, 0xCF };
-                sb.AppendLine("Safe Register Values:");
-                foreach (var reg in registers)
+                // Read comprehensive EC registers (safe addresses for diagnostics)
+                var safeRegisters = new[]
+                {
+                    // Fan control registers
+                    0x2E, 0x2F, 0x34, 0x35, 0xCE, 0xCF,
+                    // Temperature registers
+                    0x60, 0x61, 0x62, 0x63, 0x68, 0x69,
+                    // Power management
+                    0x70, 0x71, 0x72, 0x73,
+                    // System status
+                    0x80, 0x81, 0x82, 0x83
+                };
+
+                sb.AppendLine("EC Register Dump (Safe Addresses):");
+                sb.AppendLine("Address\tValue\tBinary");
+                sb.AppendLine("--------------------------------");
+
+                foreach (var reg in safeRegisters)
                 {
                     try
                     {
                         byte value = ecAccess.ReadByte((ushort)reg);
-                        sb.AppendLine($"  0x{reg:X2} = 0x{value:X2}");
+                        string binary = Convert.ToString(value, 2).PadLeft(8, '0');
+                        sb.AppendLine($"0x{reg:X2}\t0x{value:X2}\t{binary}");
+                    }
+                    catch (Exception ex)
+                    {
+                        sb.AppendLine($"0x{reg:X2}\tERROR\t{ex.Message}");
+                    }
+                }
+
+                sb.AppendLine();
+                sb.AppendLine("=== FAN CONTROL REGISTERS ===");
+                sb.AppendLine("These registers may control fan speed and mode:");
+                var fanRegisters = new[] { 0x2E, 0x2F, 0x34, 0x35 };
+                foreach (var reg in fanRegisters)
+                {
+                    try
+                    {
+                        byte value = ecAccess.ReadByte((ushort)reg);
+                        sb.AppendLine($"EC[0x{reg:X2}] = 0x{value:X2} ({value})");
+                    }
+                    catch { }
+                }
+
+                sb.AppendLine();
+                sb.AppendLine("=== TEMPERATURE REGISTERS ===");
+                sb.AppendLine("These registers may contain temperature readings:");
+                var tempRegisters = new[] { 0x60, 0x61, 0x62, 0x63, 0x68, 0x69 };
+                foreach (var reg in tempRegisters)
+                {
+                    try
+                    {
+                        byte value = ecAccess.ReadByte((ushort)reg);
+                        sb.AppendLine($"EC[0x{reg:X2}] = 0x{value:X2} ({value}°C raw)");
                     }
                     catch { }
                 }
 
                 File.WriteAllText(Path.Combine(exportPath, "ec-state.txt"), sb.ToString());
-                _logging.Info("Collected EC state");
+                _logging.Info("Collected comprehensive EC state");
                 await Task.CompletedTask;
             }
             catch (Exception ex)
@@ -196,6 +244,90 @@ namespace OmenCore.Services.Diagnostics
             catch (Exception ex)
             {
                 _logging.Warn($"Failed to collect hardware info: {ex.Message}");
+            }
+        }
+
+        private async Task CollectWmiCommandHistoryAsync(string exportPath, object? wmiController)
+        {
+            try
+            {
+                if (wmiController == null)
+                {
+                    File.WriteAllText(Path.Combine(exportPath, "wmi-command-history.txt"), "WMI fan controller not available");
+                    await Task.CompletedTask;
+                    return;
+                }
+
+                var sb = new StringBuilder();
+                sb.AppendLine("=== WMI COMMAND HISTORY ===");
+                sb.AppendLine($"Captured: {DateTime.Now:O}");
+                sb.AppendLine();
+
+                // Try to get command history using reflection (since we don't have the interface)
+                try
+                {
+                    var getHistoryMethod = wmiController.GetType().GetMethod("GetCommandHistory");
+                    if (getHistoryMethod != null)
+                    {
+                        var history = getHistoryMethod.Invoke(wmiController, null) as System.Collections.IEnumerable;
+                        if (history != null)
+                        {
+                            sb.AppendLine("Recent WMI Commands:");
+                            sb.AppendLine("Timestamp\t\t\tCommand\t\t\tSuccess\tError\t\tRPM Before\tRPM After");
+                            sb.AppendLine("----------------------------------------------------------------------------------------------------------------");
+
+                            foreach (var entry in history)
+                            {
+                                var timestamp = entry.GetType().GetProperty("Timestamp")?.GetValue(entry)?.ToString() ?? "N/A";
+                                var command = entry.GetType().GetProperty("Command")?.GetValue(entry)?.ToString() ?? "N/A";
+                                var success = entry.GetType().GetProperty("Success")?.GetValue(entry)?.ToString() ?? "N/A";
+                                var error = entry.GetType().GetProperty("Error")?.GetValue(entry)?.ToString() ?? "N/A";
+                                var rpmBefore = entry.GetType().GetProperty("FanRpmBefore")?.GetValue(entry)?.ToString() ?? "N/A";
+                                var rpmAfter = entry.GetType().GetProperty("FanRpmAfter")?.GetValue(entry)?.ToString() ?? "N/A";
+
+                                sb.AppendLine($"{timestamp}\t{command,-20}\t{success,-7}\t{error,-10}\t{rpmBefore,-10}\t{rpmAfter}");
+                            }
+                        }
+                        else
+                        {
+                            sb.AppendLine("No WMI commands recorded yet.");
+                        }
+                    }
+                    else
+                    {
+                        sb.AppendLine("Command history not available in this controller version.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    sb.AppendLine($"Error reading command history: {ex.Message}");
+                }
+
+                sb.AppendLine();
+                sb.AppendLine("=== WMI CONTROLLER STATUS ===");
+                // Add basic status info using reflection
+                try
+                {
+                    var isAvailable = wmiController.GetType().GetProperty("IsAvailable")?.GetValue(wmiController)?.ToString() ?? "Unknown";
+                    var status = wmiController.GetType().GetProperty("Status")?.GetValue(wmiController)?.ToString() ?? "Unknown";
+                    var fanCount = wmiController.GetType().GetProperty("FanCount")?.GetValue(wmiController)?.ToString() ?? "Unknown";
+
+                    sb.AppendLine($"Available: {isAvailable}");
+                    sb.AppendLine($"Status: {status}");
+                    sb.AppendLine($"Fan Count: {fanCount}");
+                }
+                catch
+                {
+                    sb.AppendLine("Controller status not available.");
+                }
+
+                File.WriteAllText(Path.Combine(exportPath, "wmi-command-history.txt"), sb.ToString());
+                _logging.Info("Collected WMI command history");
+                await Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to collect WMI command history: {ex.Message}");
             }
         }
 

@@ -73,6 +73,17 @@ namespace OmenCore.Services
         }
 
         /// <summary>
+        /// Set MSR access for enhanced throttling detection on LibreHardwareMonitor.
+        /// </summary>
+        public void SetMsrAccess(IMsrAccess? msrAccess)
+        {
+            if (_bridge is LibreHardwareMonitorImpl lhwm)
+            {
+                lhwm.SetMsrAccess(msrAccess);
+            }
+        }
+
+        /// <summary>
         /// Pause monitoring during system suspend (S0 Modern Standby).
         /// Prevents fan revving from WMI/EC queries while system is in standby.
         /// </summary>

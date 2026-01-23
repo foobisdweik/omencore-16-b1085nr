@@ -159,6 +159,7 @@ namespace OmenCoreApp.Tests.ViewModels
             public void ApplyQuietMode() { LastAppliedPreset = "Quiet"; }
             public bool ResetEcToDefaults() => true;
             public void Dispose() { }
+            public bool VerifyMaxApplied(out string details) { details = ""; return true; }
         }
     }
 }

@@ -27,6 +27,7 @@ namespace OmenCore.ViewModels
         private readonly HardwareMonitoringService? _hardwareMonitoringService;
         private IMsrAccess? _msrAccess;  // Changed from WinRing0MsrAccess to IMsrAccess
         private readonly IEcAccess? _ecAccess;
+        private EdpThrottlingMitigationService? _edpMitigationService;
 
         private PerformanceMode? _selectedPerformanceMode;
         private UndervoltStatus _undervoltStatus = UndervoltStatus.CreateUnknown();
@@ -987,6 +988,16 @@ namespace OmenCore.ViewModels
                 var tj = _msrAccess.ReadTjMax();
                 var currentOffset = _msrAccess.ReadTccOffset();
                 TccStatus = TccOffsetStatus.CreateSupported(tj, currentOffset);
+                
+                // Enable MSR-based throttling detection in hardware monitoring
+                _hardwareMonitoringService?.SetMsrAccess(_msrAccess);
+
+                // Initialize EDP throttling mitigation service
+                _edpMitigationService = new EdpThrottlingMitigationService(_msrAccess, _undervoltService, _logging);
+                _edpMitigationService.ThrottlingDetected += OnEdpThrottlingDetected;
+                _edpMitigationService.MitigationApplied += OnEdpMitigationApplied;
+                _edpMitigationService.MitigationRemoved += OnEdpMitigationRemoved;
+                _edpMitigationService.Start();
 
                 var savedOffset = _configService.Config.LastTccOffset;
                 if (savedOffset.HasValue && savedOffset.Value > 0)
@@ -2543,6 +2554,25 @@ namespace OmenCore.ViewModels
                 OnPropertyChanged(nameof(HasCleanupSteps));
             });
         }
+
+        #region EDP Throttling Mitigation
+
+        private void OnEdpThrottlingDetected(object? sender, EdpThrottlingEventArgs e)
+        {
+            _logging.Info($"EDP throttling detected at {e.Timestamp:O}");
+        }
+
+        private void OnEdpMitigationApplied(object? sender, EdpThrottlingEventArgs e)
+        {
+            _logging.Info($"EDP throttling mitigation applied: {e.UndervoltOffsetMv}mV additional undervolt");
+        }
+
+        private void OnEdpMitigationRemoved(object? sender, EdpThrottlingEventArgs e)
+        {
+            _logging.Info($"EDP throttling mitigation removed");
+        }
+
+        #endregion
 
         #region AMD Power/Temperature Controls
 

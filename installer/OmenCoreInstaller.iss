@@ -1,6 +1,6 @@
 #define MyAppName "OmenCore"
 #ifndef MyAppVersion
-  #define MyAppVersion "2.4.1"
+  #define MyAppVersion "2.5.1"
 #endif
 #define MyAppPublisher "OmenCore Project"
 #define MyAppExeName "OmenCore.exe"
@@ -41,7 +41,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "startmenu"; Description: "Create Start Menu shortcut"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "installpawnio"; Description: "Install PawnIO driver (Secure Boot compatible, recommended for advanced features)"; GroupDescription: "Hardware Drivers:"; Flags: unchecked
+Name: "installpawnio"; Description: "Install PawnIO driver (REQUIRED for MSR access, Secure Boot compatible)"; GroupDescription: "Hardware Drivers:"
 Name: "autostart"; Description: "Start OmenCore with Windows"; GroupDescription: "Startup Options:"; Flags: unchecked
 
 [Files]

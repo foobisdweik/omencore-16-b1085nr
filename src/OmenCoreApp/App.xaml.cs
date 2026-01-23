@@ -729,15 +729,19 @@ namespace OmenCore
 
         protected override void OnExit(ExitEventArgs e)
         {
-            // Don't restore fan modes on exit - keep user's chosen settings
-            // This prevents fans ramping up unexpectedly when closing the app
+            // Restore fans to default/Windows auto control before shutdown
+            // This ensures fans return to BIOS/Windows default behavior instead of staying at last manual setting
             try
             {
-                Logging.Info("OmenCore shutting down (preserving current fan settings)...");
+                Logging.Info("OmenCore shutting down (restoring fans to auto control)...");
+                
+                // Explicitly restore fan auto control before disposing services
+                var fanService = _serviceProvider?.GetService(typeof(FanService)) as FanService;
+                fanService?.ApplyAutoMode();
             }
             catch (Exception ex)
             {
-                Logging.Debug($"Error during shutdown: {ex.Message}");
+                Logging.Debug($"Error restoring fan auto control during shutdown: {ex.Message}");
             }
 
             // Unsubscribe from session switch events

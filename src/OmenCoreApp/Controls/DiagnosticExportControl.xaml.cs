@@ -24,6 +24,7 @@ namespace OmenCore.Controls
         private readonly HardwareMonitoringService? _hardwareService;
         private readonly PerformanceModeService? _performanceService;
         private readonly FanCalibrationStorageService? _calibrationService;
+        private readonly FanService? _fanService;
 
         private CancellationTokenSource? _exportCts;
         private string? _lastExportPath;
@@ -41,6 +42,9 @@ namespace OmenCore.Controls
             _hardwareService = serviceProvider.GetService(typeof(HardwareMonitoringService)) as HardwareMonitoringService;
             _performanceService = serviceProvider.GetService(typeof(PerformanceModeService)) as PerformanceModeService;
             _calibrationService = new FanCalibrationStorageService(_logging);
+
+            // Optional fan service for verification
+            _fanService = serviceProvider.GetService(typeof(FanService)) as FanService;
         }
 
         private async void ExportButton_Click(object sender, RoutedEventArgs e)
@@ -174,6 +178,46 @@ namespace OmenCore.Controls
                     UpdateProgress("Collecting fan calibration data...", 95);
                     diagnosticData.Sections["FanCalibration"] = CollectFanCalibrationData();
                     result.Sections.Add("Fan Calibration Data");
+                }
+
+                // Optional: Run quick fan verification to check 'Max' preset application
+                if (IncludeFanVerificationCheck.IsChecked == true)
+                {
+                    UpdateProgress("Running fan Max verification...", 96);
+                    try
+                    {
+                        if (_fanService != null)
+                        {
+                            var (success, details) = _fanService.VerifyMaxApplied();
+                            diagnosticData.Sections["FanVerification"] = new FanVerificationData
+                            {
+                                CollectionTimestamp = DateTime.Now,
+                                Success = success,
+                                Details = details
+                            };
+                            result.Sections.Add("Fan Verification");
+                        }
+                        else
+                        {
+                            diagnosticData.Sections["FanVerification"] = new FanVerificationData
+                            {
+                                CollectionTimestamp = DateTime.Now,
+                                Success = false,
+                                Details = "Fan service not available"
+                            };
+                            result.Sections.Add("Fan Verification");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        diagnosticData.Sections["FanVerification"] = new FanVerificationData
+                        {
+                            CollectionTimestamp = DateTime.Now,
+                            Success = false,
+                            Details = $"Verification failed: {ex.Message}"
+                        };
+                        result.Sections.Add("Fan Verification");
+                    }
                 }
 
                 // Anonymize if requested
@@ -537,7 +581,7 @@ namespace OmenCore.Controls
             }
             catch
             {
-                return "2.5.0";
+                return "2.5.1";
             }
         }
 
@@ -729,5 +773,12 @@ Add any other context about the problem here.
         public List<string> CalibratedModels { get; set; } = new();
         public bool HasCalibrations { get; set; }
         public string? ErrorMessage { get; set; }
+    }
+
+    public class FanVerificationData
+    {
+        public DateTime CollectionTimestamp { get; set; }
+        public bool Success { get; set; }
+        public string Details { get; set; } = "";
     }
 }

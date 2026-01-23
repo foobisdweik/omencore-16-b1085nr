@@ -131,9 +131,16 @@ namespace OmenCore.Services
             
             if (_wmiBios == null || !_wmiBios.IsAvailable)
             {
-                result.ErrorMessage = "WMI BIOS not available";
-                result.Duration = DateTime.Now - startTime;
-                return result;
+                // Fall back to FanService if WMI is not available
+                if (_fanService == null)
+                {
+                    result.ErrorMessage = "No fan control backend available";
+                    result.Duration = DateTime.Now - startTime;
+                    return result;
+                }
+                
+                // Use FanService for fan control
+                return await ApplyAndVerifyFanSpeedViaFanServiceAsync(fanIndex, targetPercent, ct);
             }
             
             try
@@ -263,6 +270,118 @@ namespace OmenCore.Services
             result.Duration = DateTime.Now - startTime;
             return result;
         }
+
+        /// <summary>
+        /// Apply and verify fan speed using FanService (fallback when WMI is unavailable).
+        /// </summary>
+        private async Task<FanApplyResult> ApplyAndVerifyFanSpeedViaFanServiceAsync(
+            int fanIndex, 
+            int targetPercent,
+            CancellationToken ct = default)
+        {
+            var startTime = DateTime.Now;
+            var result = new FanApplyResult
+            {
+                FanIndex = fanIndex,
+                FanName = GetFanName(fanIndex),
+                RequestedPercent = targetPercent,
+                ExpectedRpm = PercentToExpectedRpm(targetPercent)
+            };
+
+            try
+            {
+                // Read current state before change (from telemetry)
+                result.ActualRpmBefore = GetCurrentRpm(fanIndex);
+                _logging.Info($"Fan {fanIndex} ({result.FanName}) before: {result.ActualRpmBefore} RPM");
+
+                // Get current fan speeds to preserve the other fan
+                var currentCpuPercent = 50; // Default
+                var currentGpuPercent = 50; // Default
+                
+                // Try to estimate current speeds from telemetry
+                if (_fanService?.FanTelemetry != null && _fanService.FanTelemetry.Count > 0)
+                {
+                    // Estimate based on RPM
+                    for (int i = 0; i < _fanService.FanTelemetry.Count && i < 2; i++)
+                    {
+                        var rpm = _fanService.FanTelemetry[i].SpeedRpm;
+                        var estimatedPercent = RpmToPercent(rpm);
+                        if (i == 0) currentCpuPercent = estimatedPercent;
+                        else currentGpuPercent = estimatedPercent;
+                    }
+                }
+
+                // Set the target fan to the requested percent, keep other fan at current
+                int cpuPercent = fanIndex == 0 ? targetPercent : currentCpuPercent;
+                int gpuPercent = fanIndex == 1 ? targetPercent : currentGpuPercent;
+
+                result.WmiCallSucceeded = _fanService!.ForceSetFanSpeeds(cpuPercent, gpuPercent);
+                
+                if (result.WmiCallSucceeded)
+                {
+                    _logging.Info($"Fan {fanIndex} set to {targetPercent}% via FanService (CPU:{cpuPercent}%, GPU:{gpuPercent}%)");
+                }
+                else
+                {
+                    result.ErrorMessage = "FanService call returned false";
+                    result.Duration = DateTime.Now - startTime;
+                    return result;
+                }
+
+                // Wait for fan to respond
+                await Task.Delay(FanResponseDelayMs, ct);
+
+                // Multi-sample verification
+                int totalAttempts = 0;
+                for (int attempt = 0; attempt <= VerificationRetries; attempt++)
+                {
+                    totalAttempts = attempt + 1;
+
+                    // Take multiple samples
+                    var rpmSamples = new int[VerificationSamples];
+                    for (int i = 0; i < VerificationSamples; i++)
+                    {
+                        rpmSamples[i] = GetCurrentRpm(fanIndex);
+                        if (i < VerificationSamples - 1)
+                            await Task.Delay(SampleDelayMs, ct);
+                    }
+
+                    // Use average RPM
+                    result.ActualRpmAfter = (int)rpmSamples.Average();
+
+                    _logging.Info($"Fan {fanIndex} RPM samples: [{string.Join(", ", rpmSamples)}], Average: {result.ActualRpmAfter} RPM");
+
+                    // Verify
+                    result.VerificationPassed = VerifyRpm(result);
+
+                    if (result.VerificationPassed)
+                    {
+                        _logging.Info($"✓ Fan {fanIndex} verified: {result.ActualRpmAfter} RPM (expected ~{result.ExpectedRpm}, deviation {result.DeviationPercent:F1}%)");
+                        break;
+                    }
+                    else if (attempt < VerificationRetries)
+                    {
+                        _logging.Warn($"Fan {fanIndex} verification attempt {attempt + 1} failed: Expected ~{result.ExpectedRpm} RPM, got {result.ActualRpmAfter} RPM ({result.DeviationPercent:F1}% deviation). Retrying...");
+                        await Task.Delay(RetryDelayMs, ct);
+                    }
+                }
+
+                // Final diagnostic
+                if (!result.VerificationPassed)
+                {
+                    _logging.Error($"Fan {fanIndex} verification failed after {totalAttempts} attempts: expected ~{result.ExpectedRpm} RPM, got {result.ActualRpmAfter} RPM");
+                    result.ErrorMessage = $"RPM verification failed after {totalAttempts} attempts: expected ~{result.ExpectedRpm}, got {result.ActualRpmAfter}";
+                }
+            }
+            catch (Exception ex)
+            {
+                result.ErrorMessage = ex.Message;
+                _logging.Error($"Fan verification via FanService exception: {ex.Message}", ex);
+            }
+
+            result.Duration = DateTime.Now - startTime;
+            return result;
+        }
         
         /// <summary>
         /// Read current fan speed without making changes (diagnostic tool).
@@ -373,6 +492,15 @@ namespace OmenCore.Services
             if (rpm <= 0) return 0;
             var percent = Math.Min(100, (rpm / (double)MaxRpm) * 100);
             return (int)Math.Round(percent / 100.0 * MaxLevel);
+        }
+
+        /// <summary>
+        /// Estimate percentage from RPM.
+        /// </summary>
+        private int RpmToPercent(int rpm)
+        {
+            if (rpm <= 0) return 0;
+            return (int)Math.Min(100, (rpm / (double)MaxRpm) * 100);
         }
         
         /// <summary>

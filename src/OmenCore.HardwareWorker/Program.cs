@@ -686,7 +686,28 @@ class Program
                 var ramAvail = GetSensorValue(hardware, SensorType.Data, "Memory Available");
                 // Assign memory usage if sensors exist (even if 0 bytes used)
                 sample.RamUsage = ramUsed;
-                if (ramUsed >= 0 && ramAvail >= 0) sample.RamTotal = ramUsed + ramAvail;
+                if (ramUsed >= 0 && ramAvail >= 0) 
+                {
+                    sample.RamTotal = ramUsed + ramAvail;
+                }
+                else if (sample.RamTotal <= 0)
+                {
+                    // WMI fallback for RAM total when sensors unavailable
+                    try
+                    {
+                        using var searcher = new System.Management.ManagementObjectSearcher("SELECT TotalPhysicalMemory FROM Win32_ComputerSystem");
+                        foreach (System.Management.ManagementObject obj in searcher.Get())
+                        {
+                            var bytes = Convert.ToUInt64(obj["TotalPhysicalMemory"]);
+                            sample.RamTotal = bytes / 1024.0 / 1024.0 / 1024.0; // Convert to GB
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        sample.RamTotal = 16; // Default assumption
+                    }
+                }
                 break;
                 
             case HardwareType.Storage:

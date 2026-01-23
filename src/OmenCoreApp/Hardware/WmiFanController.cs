@@ -36,7 +36,7 @@ namespace OmenCore.Hardware
         
         // Countdown extension timer - keeps fan settings from reverting
         private Timer? _countdownExtensionTimer;
-        private const int CountdownExtensionIntervalMs = 30000; // 30 seconds (more aggressive to handle load changes)
+        private const int CountdownExtensionIntervalMs = 15000; // 15 seconds (OmenMon-style - more aggressive)
         private bool _countdownExtensionEnabled = false;
         
         // Command verification tracking
@@ -44,6 +44,10 @@ namespace OmenCore.Hardware
         private int? _lastCommandRpmBefore = null;
         private const int VerifyDelayMs = 3000; // Wait 3 seconds for fans to respond
         private const int VerifyThreshold = 3; // After 3 verified failures, mark as ineffective
+
+        // Command history for diagnostics
+        private readonly List<WmiCommandHistoryEntry> _commandHistory = new();
+        private const int MaxCommandHistoryEntries = 50; // Keep last 50 commands
 
         public bool IsAvailable => _wmiBios.IsAvailable;
         public string Status => _wmiBios.Status;
@@ -121,28 +125,53 @@ namespace OmenCore.Hardware
                     StartCountdownExtension();
                     
                     // Now enable max fan speed (forces 100%)
+                    double? rpmBefore = GetCurrentFanRpm();
                     if (_wmiBios.SetFanMax(true))
                     {
-                        _logging?.Info("✓ Max fan speed enabled - fans should ramp to 100%");
-                        IsManualControlActive = true; // Mark as manual since we're forcing max
-                        _isMaxModeActive = true;      // Track max mode for countdown extension
-                        _lastManualFanPercent = 100;
-                        // GPU power left unchanged - max fans is for COOLING, not more power
-                        return true;
+                        AddCommandToHistory("SetFanMax(true)", true, null, rpmBefore, null);
+                        _logging?.Info("✓ Max fan speed command issued - awaiting verification...");
+
+                        // Verify that fans actually reached high RPMs. Some BIOS/EC combinations accept the command
+                        // but never actually spin the fans; avoid showing misleading 100% in the UI by readback.
+                        if (VerifyMaxAppliedWithRetries())
+                        {
+                            _logging?.Info("✓ Max fan speed verified - fans confirmed at high RPM");
+                            IsManualControlActive = true; // Mark as manual since we're forcing max
+                            _isMaxModeActive = true;      // Track max mode for countdown extension
+                            _lastManualFanPercent = 100;
+                            return true;
+                        }
+
+                        _logging?.Warn("SetFanMax succeeded but verification failed - attempting fallback methods");
                     }
                     else
                     {
+                        AddCommandToHistory("SetFanMax(true)", false, "Command failed", rpmBefore, null);
                         _logging?.Warn("SetFanMax command failed - trying alternative method");
-                        // Alternative: Try setting fan level directly to max (55 = ~5500 RPM)
-                        if (_wmiBios.SetFanLevel(55, 55))
+                    }
+
+                    // Alternative: Try setting fan level directly to max (55 = ~5500 RPM)
+                    if (_wmiBios.SetFanLevel(55, 55))
+                    {
+                        _logging?.Info("✓ Fan level set to maximum (55, 55) - awaiting verification...");
+
+                        if (VerifyMaxAppliedWithRetries())
                         {
-                            _logging?.Info("✓ Fan level set to maximum (55, 55)");
+                            _logging?.Info("✓ Fan level verified - fans confirmed at high RPM");
                             IsManualControlActive = true;
                             _isMaxModeActive = true;
                             _lastManualFanPercent = 100;
                             return true;
                         }
+
+                        _logging?.Warn("Fan level set to 55 but verification failed");
                     }
+
+                    _logging?.Error("Failed to enable Max fan speed: verification failed");
+                    // Ensure we don't leave UI thinking Max is active
+                    IsManualControlActive = false;
+                    _isMaxModeActive = false;
+                    _lastManualFanPercent = -1;
                     return false;
                 }
                 
@@ -152,7 +181,7 @@ namespace OmenCore.Hardware
                 {
                     ResetFromMaxMode();
                 }
-                
+
                 // Map preset to fan mode
                 var mode = MapPresetToFanMode(preset);
                 
@@ -253,6 +282,7 @@ namespace OmenCore.Hardware
             if (!IsAvailable)
             {
                 _logging?.Warn("Cannot set fan speed: WMI BIOS not available");
+                AddCommandToHistory($"SetFanSpeed({percent})", false, "WMI BIOS not available");
                 return false;
             }
 
@@ -267,6 +297,7 @@ namespace OmenCore.Hardware
                 try
                 {
                     bool success;
+                    double? rpmBefore = GetCurrentFanRpm();
                     
                     // For 100%, use SetFanMax which bypasses BIOS power limits
                     // SetFanLevel(55) may be capped by BIOS, but SetFanMax achieves true max RPM
@@ -275,6 +306,7 @@ namespace OmenCore.Hardware
                         success = _wmiBios.SetFanMax(true);
                         if (success)
                         {
+                            AddCommandToHistory("SetFanMax(true)", true, null, rpmBefore, null);
                             _logging?.Info($"✓ Fan speed set to MAX (100%) via SetFanMax (attempt {attempt}/{maxRetries})");
                         }
                         else
@@ -283,7 +315,12 @@ namespace OmenCore.Hardware
                             success = _wmiBios.SetFanLevel(55, 55);
                             if (success)
                             {
+                                AddCommandToHistory("SetFanLevel(55, 55)", true, null, rpmBefore, null);
                                 _logging?.Info($"✓ Fan speed set to 100% via SetFanLevel(55) fallback (attempt {attempt}/{maxRetries})");
+                            }
+                            else
+                            {
+                                AddCommandToHistory("SetFanLevel(55, 55)", false, "Command failed", rpmBefore, null);
                             }
                         }
                     }
@@ -298,7 +335,12 @@ namespace OmenCore.Hardware
                         
                         if (success)
                         {
+                            AddCommandToHistory($"SetFanLevel({fanLevel}, {fanLevel})", true, null, rpmBefore, null);
                             _logging?.Info($"✓ Fan speed set to {percent}% (Level: {fanLevel}) (attempt {attempt}/{maxRetries})");
+                        }
+                        else
+                        {
+                            AddCommandToHistory($"SetFanLevel({fanLevel}, {fanLevel})", false, "Command failed", rpmBefore, null);
                         }
                     }
                     
@@ -821,6 +863,50 @@ namespace OmenCore.Hardware
             return _wmiBios.GetGpuMode();
         }
 
+        /// <summary>
+        /// Small verification helper: after attempting to enable max, checks fan RPM/duty a few times
+        /// to confirm the hardware actually ramped. Returns true if verification passes.
+        /// </summary>
+        private bool VerifyMaxAppliedWithRetries()
+        {
+            const int attempts = 3;
+            const int delayMs = 500;
+
+            for (int attempt = 1; attempt <= attempts; attempt++)
+            {
+                try
+                {
+                    // Read current fan status
+                    var fans = ReadFanSpeeds().ToArray();
+                    if (fans.Length >= 2)
+                    {
+                        bool cpuOk = fans[0].DutyCyclePercent >= 90 || fans[0].SpeedRpm >= 3000;
+                        bool gpuOk = fans[1].DutyCyclePercent >= 90 || fans[1].SpeedRpm >= 3000;
+
+                        _logging?.Debug($"[VerifyMax] Attempt {attempt}/{attempts}: CPU {fans[0].DutyCyclePercent}% ({fans[0].SpeedRpm} RPM), GPU {fans[1].DutyCyclePercent}% ({fans[1].SpeedRpm} RPM)");
+
+                        if (cpuOk && gpuOk)
+                            return true;
+                    }
+                    else if (fans.Length == 1)
+                    {
+                        var f = fans[0];
+                        bool ok = f.DutyCyclePercent >= 90 || f.SpeedRpm >= 3000;
+                        _logging?.Debug($"[VerifyMax] Attempt {attempt}/{attempts}: Single fan {f.DutyCyclePercent}% ({f.SpeedRpm} RPM)");
+                        if (ok) return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logging?.Warn($"[VerifyMax] ReadFanSpeeds failed: {ex.Message}");
+                }
+
+                System.Threading.Thread.Sleep(delayMs);
+            }
+
+            return false;
+        }
+
         private HpWmiBios.FanMode MapPresetToFanMode(FanPreset preset)
         {
             // Check preset's FanMode enum first (if specified)
@@ -914,9 +1000,9 @@ namespace OmenCore.Hardware
         }
         
         /// <summary>
-        /// Countdown extension callback - periodically extends the BIOS timer.
-        /// For Max mode, also re-applies SetFanMax(true) to ensure it stays active.
-        /// HP BIOS is aggressive about reverting fan settings, especially under load.
+        /// Countdown extension callback - periodically re-applies fan settings.
+        /// OmenMon-style: Re-applies settings every 15 seconds to prevent BIOS reversion.
+        /// HP BIOS aggressively reverts fan settings, especially under load.
         /// </summary>
         private void CountdownExtensionCallback(object? state)
         {
@@ -924,18 +1010,15 @@ namespace OmenCore.Hardware
             
             try
             {
-                // Extend countdown for any manual control mode (preset or custom curve)
-                // IsManualControlActive is set when we apply fan levels directly
+                // Re-apply current fan settings to prevent BIOS reversion (OmenMon approach)
                 if (IsManualControlActive || (_lastMode != HpWmiBios.FanMode.Default && _lastMode != HpWmiBios.FanMode.LegacyDefault))
                 {
                     // For Max mode, re-apply SetFanMax(true) to ensure it stays active
-                    // This is more aggressive than just extending countdown, but necessary
-                    // because HP BIOS can reset max mode under high load conditions
                     if (_isMaxModeActive)
                     {
                         if (_wmiBios.SetFanMax(true))
                         {
-                            _logging?.Info("Fan Max mode re-applied via countdown extension");
+                            _logging?.Debug("Fan Max mode re-applied via countdown extension (OmenMon-style)");
                         }
                         else
                         {
@@ -947,26 +1030,23 @@ namespace OmenCore.Hardware
                     else if (_lastManualFanPercent >= 0)
                     {
                         // For custom fan curves, re-apply the last set percentage
-                        // This combats BIOS resetting under load
                         byte fanLevel = (byte)(_lastManualFanPercent * MaxFanLevel / 100);
                         if (_wmiBios.SetFanLevel(fanLevel, fanLevel))
                         {
-                            _logging?.Info($"Fan level re-applied: {_lastManualFanPercent}% via countdown extension");
+                            _logging?.Debug($"Fan level re-applied: {_lastManualFanPercent}% via countdown extension (OmenMon-style)");
                         }
-                    }
-                    else if (_wmiBios.ExtendFanCountdown())
-                    {
-                        _logging?.Info($"Fan countdown extended (manual: {IsManualControlActive}, mode: {_lastMode})");
                     }
                     else
                     {
-                        _logging?.Warn("Fan countdown extension failed - BIOS may revert to auto");
+                        // For preset modes, re-apply the fan mode
+                        _wmiBios.SetFanMode(_lastMode);
+                        _logging?.Debug($"Fan mode re-applied: {_lastMode} via countdown extension (OmenMon-style)");
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logging?.Warn($"Failed to extend fan countdown: {ex.Message}");
+                _logging?.Warn($"Failed to extend fan settings: {ex.Message}");
             }
         }
         
@@ -1190,5 +1270,71 @@ namespace OmenCore.Hardware
                 _disposed = true;
             }
         }
+
+        /// <summary>
+        /// Get command history for diagnostics
+        /// </summary>
+        public IReadOnlyList<WmiCommandHistoryEntry> GetCommandHistory()
+        {
+            lock (_commandHistory)
+            {
+                return _commandHistory.ToList();
+            }
+        }
+
+        /// <summary>
+        /// Get current fan RPM for command history tracking
+        /// </summary>
+        private double? GetCurrentFanRpm()
+        {
+            try
+            {
+                var fanSpeeds = _hwMonitor.GetFanSpeeds();
+                var firstFan = fanSpeeds.FirstOrDefault();
+                return firstFan.Rpm; // Access the Rpm property of the tuple
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Add a command to the history
+        /// </summary>
+        private void AddCommandToHistory(string command, bool success, string? error = null, double? fanRpmBefore = null, double? fanRpmAfter = null)
+        {
+            lock (_commandHistory)
+            {
+                _commandHistory.Add(new WmiCommandHistoryEntry
+                {
+                    Timestamp = DateTime.Now,
+                    Command = command,
+                    Success = success,
+                    Error = error,
+                    FanRpmBefore = fanRpmBefore,
+                    FanRpmAfter = fanRpmAfter
+                });
+
+                // Keep only the most recent entries
+                if (_commandHistory.Count > MaxCommandHistoryEntries)
+                {
+                    _commandHistory.RemoveAt(0);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Entry in WMI command history for diagnostics
+    /// </summary>
+    public class WmiCommandHistoryEntry
+    {
+        public DateTime Timestamp { get; set; }
+        public string Command { get; set; } = "";
+        public bool Success { get; set; }
+        public string? Error { get; set; }
+        public double? FanRpmBefore { get; set; }
+        public double? FanRpmAfter { get; set; }
     }
 }

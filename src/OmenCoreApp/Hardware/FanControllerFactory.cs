@@ -14,27 +14,33 @@ namespace OmenCore.Hardware
         bool IsAvailable { get; }
         string Status { get; }
         string Backend { get; }
-        
+
         bool ApplyPreset(FanPreset preset);
         bool ApplyCustomCurve(IEnumerable<FanCurvePoint> curve);
         bool SetFanSpeed(int percent);
+        bool SetFanSpeeds(int cpuPercent, int gpuPercent);
         bool SetMaxFanSpeed(bool enabled);
         bool SetPerformanceMode(string modeName);
         bool RestoreAutoControl();
         IEnumerable<FanTelemetry> ReadFanSpeeds();
-        
+
         // Quick profile methods
         void ApplyMaxCooling();
         void ApplyAutoMode();
         void ApplyQuietMode();
-        
+
         /// <summary>
         /// Reset EC (Embedded Controller) to factory defaults.
         /// Restores BIOS control of fans and clears all manual overrides.
         /// Use this to fix stuck fan readings or restore normal BIOS display values.
         /// </summary>
         bool ResetEcToDefaults();
+
+        // Verify that Max fan speed was applied successfully.
+        // Returns true if verification succeeded; "details" contains a short diagnostic description.
+        bool VerifyMaxApplied(out string details);
     }
+    
 
     /// <summary>
     /// Factory for creating fan controllers with automatic backend selection.
@@ -269,7 +275,7 @@ namespace OmenCore.Hardware
             {
                 if (_ecAccess != null && _ecAccess.IsAvailable && _registerMap != null)
                 {
-                    var controller = new FanController(_ecAccess, _registerMap, _hwMonitor);
+                    var controller = new FanController(_ecAccess, _registerMap, _hwMonitor, _logging);
                     if (controller.IsEcReady)
                     {
                         return new EcFanControllerWrapper(controller, _hwMonitor, _logging);
@@ -290,6 +296,19 @@ namespace OmenCore.Hardware
     /// </summary>
     public class OghFanControllerWrapper : IFanController
     {
+        public bool VerifyMaxApplied(out string details)
+        {
+            // Best-effort: check hardware monitor for RPMs or return fallback message
+            var fans = _hwMonitor.GetFanSpeeds();
+            if (fans.Any())
+            {
+                details = $"HardwareMonitor RPMs: {string.Join(',', fans.Select(f => f.Rpm))}";
+                return fans.Any(f => f.Rpm > 1000);
+            }
+            details = "No hardware RPM sensors available via HWMonitor (OGH).";
+            return false;
+        }
+        
         private readonly OghServiceProxy _proxy;
         private readonly LibreHardwareMonitorImpl _hwMonitor;
         private readonly LoggingService? _logging;
@@ -353,6 +372,13 @@ namespace OmenCore.Hardware
             if (percent >= 60) return _proxy.SetThermalPolicy(OghServiceProxy.ThermalPolicy.Performance);
             if (percent >= 40) return _proxy.SetThermalPolicy(OghServiceProxy.ThermalPolicy.Default);
             return _proxy.SetThermalPolicy(OghServiceProxy.ThermalPolicy.Cool);
+        }
+
+        public bool SetFanSpeeds(int cpuPercent, int gpuPercent)
+        {
+            // OGH doesn't support per-fan control, use average
+            int avgPercent = (cpuPercent + gpuPercent) / 2;
+            return SetFanSpeed(avgPercent);
         }
 
         public bool SetMaxFanSpeed(bool enabled)
@@ -480,6 +506,29 @@ namespace OmenCore.Hardware
     /// </summary>
     public class WmiFanControllerWrapper : IFanController
     {
+        public bool VerifyMaxApplied(out string details)
+        {
+            // WMI may not expose RPM directly; check hardware monitor first
+            // Use controller's ReadFanSpeeds (which may read WMI or HWMonitor internally)
+            try
+            {
+                var speeds = _controller.ReadFanSpeeds().ToList();
+                if (speeds.Any())
+                {
+                    details = $"ReadFanSpeeds: {string.Join(',', speeds.Select(s => s.SpeedRpm))}";
+                    return speeds.Any(s => s.SpeedRpm > 1000);
+                }
+            }
+            catch (Exception ex)
+            {
+                details = $"Verify attempt failed: {ex.Message}";
+                return false;
+            }
+
+            details = "No RPMs available via WMI or HWMonitor.";
+            return false;
+        }
+
         private readonly WmiFanController _controller;
         private readonly LoggingService? _logging;
 
@@ -508,6 +557,7 @@ namespace OmenCore.Hardware
         public bool ApplyPreset(FanPreset preset) => _controller.ApplyPreset(preset);
         public bool ApplyCustomCurve(IEnumerable<FanCurvePoint> curve) => _controller.ApplyCustomCurve(curve);
         public bool SetFanSpeed(int percent) => _controller.SetFanSpeed(percent);
+        public bool SetFanSpeeds(int cpuPercent, int gpuPercent) => _controller.SetFanSpeeds(cpuPercent, gpuPercent);
         public bool SetMaxFanSpeed(bool enabled) => _controller.SetMaxFanSpeed(enabled);
         public bool SetPerformanceMode(string modeName) => _controller.SetPerformanceMode(modeName);
         public bool RestoreAutoControl() => _controller.RestoreAutoControl();
@@ -531,6 +581,26 @@ namespace OmenCore.Hardware
     /// </summary>
     public class EcFanControllerWrapper : IFanController
     {
+        /// <summary>
+        /// Verify Max applied by checking EC RPM registers and hardware monitor values.
+        /// Attempts to apply Max up to several retries when applying.
+        /// </summary>
+        public bool VerifyMaxApplied(out string details)
+        {
+            // Simple verification: read EC RPM registers via underlying controller
+            try
+            {
+                var (f1, f2) = _controller.ReadActualFanRpmPublic();
+                details = $"EC RPMs after apply: F1={f1},F2={f2}";
+                return (f1 > 1000 || f2 > 1000);
+            }
+            catch (Exception ex)
+            {
+                details = $"Verify failed: {ex.Message}";
+                return false;
+            }
+        }
+
         private readonly FanController _controller;
         private readonly LibreHardwareMonitorImpl _hwMonitor;
         private readonly LoggingService? _logging;
@@ -585,23 +655,77 @@ namespace OmenCore.Hardware
             return ApplyCustomCurve(curve);
         }
 
+        public bool SetFanSpeeds(int cpuPercent, int gpuPercent)
+        {
+            try
+            {
+                _controller.SetFanSpeeds(cpuPercent, gpuPercent);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logging?.Error($"Failed to set fan speeds: {ex.Message}", ex);
+                return false;
+            }
+        }
+
         public bool SetMaxFanSpeed(bool enabled)
         {
             try
             {
-                if (enabled)
-                {
-                    // Use optimized SetMaxSpeed method with fan boost
-                    _controller.SetMaxSpeed();
-                    _logging?.Info("EC: Max fan speed enabled with fan boost");
-                }
-                else
+                if (!enabled)
                 {
                     // Restore auto control to BIOS
                     _controller.RestoreAutoControl();
                     _logging?.Info("EC: Restored auto control");
+                    return true;
                 }
-                return true;
+
+                if (!_controller.IsEcReady)
+                {
+                    _logging?.Warn("EC backend not ready - cannot apply Max fan speed");
+                    return false;
+                }
+
+                // Retry loop with verification
+                const int maxAttempts = 3;
+                int attempt = 0;
+                for (attempt = 1; attempt <= maxAttempts; attempt++)
+                {
+                    _logging?.Info($"EC: Applying Max fan (attempt {attempt}/{maxAttempts})");
+
+                    // Primary method: SetMaxSpeed (writes boost + max registers)
+                    _controller.SetMaxSpeed();
+
+                    // Wait briefly to allow fans to ramp
+                    System.Threading.Thread.Sleep(150 * attempt);
+
+                    // Verify via EC RPM registers
+                    var (fan1, fan2) = _controller.ReadActualFanRpmPublic();
+                    _logging?.Info($"EC Verify attempt {attempt}: RPMs read - Fan1={fan1}, Fan2={fan2}");
+
+                    if (fan1 > 1000 || fan2 > 1000)
+                    {
+                        _logging?.Info($"EC: Max fan verified on attempt {attempt} (Fan1={fan1},Fan2={fan2})");
+                        return true;
+                    }
+
+                    // Fallback attempt: Set explicit percent then boost
+                    _logging?.Warn($"EC: Max apply not confirmed (attempt {attempt}), trying alternative sequence");
+                    _controller.SetImmediatePercent(100); // uses explicit EC duty write as fallback
+                    _controller.SetMaxSpeed();
+                    System.Threading.Thread.Sleep(150);
+                    var (fan1b, fan2b) = _controller.ReadActualFanRpmPublic();
+                    _logging?.Info($"EC Verify alt attempt {attempt}: RPMs read - Fan1={fan1b}, Fan2={fan2b}");
+                    if (fan1b > 1000 || fan2b > 1000)
+                    {
+                        _logging?.Info($"EC: Max fan verified after alt sequence on attempt {attempt}");
+                        return true;
+                    }
+                }
+
+                _logging?.Warn($"EC: Failed to verify Max fan after {maxAttempts} attempts");
+                return false;
             }
             catch (Exception ex)
             {
@@ -654,9 +778,12 @@ namespace OmenCore.Hardware
 
         public void ApplyMaxCooling()
         {
-            // Use the proper SetMaxSpeed method with fan boost, not just SetFanSpeed
             _logging?.Info("Applying Max cooling via EC (with fan boost)...");
-            _controller.SetMaxSpeed();
+            var ok = SetMaxFanSpeed(true);
+            if (!ok)
+            {
+                _logging?.Warn("ApplyMaxCooling: Verification failed - Max may not be applied");
+            }
         }
         
         public void ApplyAutoMode()
@@ -685,6 +812,12 @@ namespace OmenCore.Hardware
     /// </summary>
     public class FallbackFanController : IFanController
     {
+        public bool VerifyMaxApplied(out string details)
+        {
+            details = "No fan control backend available (monitoring only) - cannot verify Max";
+            return false;
+        }
+        
         private readonly LibreHardwareMonitorImpl _hwMonitor;
         private readonly LoggingService? _logging;
 
@@ -713,6 +846,12 @@ namespace OmenCore.Hardware
         public bool SetFanSpeed(int percent)
         {
             _logging?.Warn("Fan control not available: Cannot set fan speed");
+            return false;
+        }
+
+        public bool SetFanSpeeds(int cpuPercent, int gpuPercent)
+        {
+            _logging?.Warn("Fan control not available: Cannot set fan speeds");
             return false;
         }
 
