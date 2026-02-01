@@ -108,7 +108,7 @@ namespace OmenCore.Services
 
             config.Monitoring = new MonitoringPreferences
             {
-                PollIntervalMs = 2000,
+                PollIntervalMs = 1000,  // Faster updates for smoother temperature display
                 HistoryCount = 120,
                 LowOverheadMode = false
             };

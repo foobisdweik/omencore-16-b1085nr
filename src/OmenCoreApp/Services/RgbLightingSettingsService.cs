@@ -295,7 +295,9 @@ namespace OmenCore.Services
     /// </summary>
     public class RgbLightingSettings
     {
-        // Temperature-based lighting
+        // Temperature-based lighting (OmenMon-style)
+        public bool TemperatureBasedLightingEnabled { get; set; }
+        
         public double CpuTempThresholdLow { get; set; }
         public double CpuTempThresholdMedium { get; set; }
         public double CpuTempThresholdHigh { get; set; }

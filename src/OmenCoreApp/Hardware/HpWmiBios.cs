@@ -36,6 +36,9 @@ namespace OmenCore.Hardware
         private CimInstance? _biosData;
         private CimInstance? _biosMethods;
         
+        // Legacy WMI fallback for BIOS F.15+
+        private bool _useLegacyWmi = false;
+        
         // Error throttling to reduce log spam
         private DateTime _lastErrorLog = DateTime.MinValue;
         private int _errorCount = 0;
@@ -155,6 +158,7 @@ namespace OmenCore.Hardware
         }
 
         public bool IsAvailable => _isAvailable;
+        public bool IsConnected => _isAvailable; // Alias for IsAvailable
         public string Status { get; private set; } = "Not initialized";
         public ThermalPolicyVersion ThermalPolicy { get; private set; } = ThermalPolicyVersion.V1;
         public int FanCount { get; private set; } = 2;
@@ -502,23 +506,15 @@ namespace OmenCore.Hardware
                         return (v2Result[0], v2Result[1]);
                     }
                     
-                    // V2 command failed or returned zeros - try direct RPM command (0x38)
-                    var rpmResult = SendBiosCommand(BiosCmd.Default, CMD_FAN_GET_RPM, new byte[4], 128);
-                    if (rpmResult != null && rpmResult.Length >= 4)
+                    // V2 command failed or returned zeros - try direct RPM command
+                    var rpmResult = GetFanRpmDirect();
+                    if (rpmResult.HasValue && (rpmResult.Value.fan1Rpm > 0 || rpmResult.Value.fan2Rpm > 0))
                     {
-                        // RPM command returns 16-bit values: [fan1_low, fan1_high, fan2_low, fan2_high]
-                        int fan1Rpm = rpmResult[0] | (rpmResult[1] << 8);
-                        int fan2Rpm = rpmResult.Length >= 4 ? (rpmResult[2] | (rpmResult[3] << 8)) : 0;
-                        _logging?.Debug($"Fan RPM via 0x38: Fan1={fan1Rpm}, Fan2={fan2Rpm}");
-                        // Convert RPM to krpm (divide by 100)
-                        if (fan1Rpm > 0 || fan2Rpm > 0)
-                        {
-                            return ((byte)(fan1Rpm / 100), (byte)(fan2Rpm / 100));
-                        }
+                        // Convert validated RPM to krpm (divide by 100)
+                        return ((byte)(rpmResult.Value.fan1Rpm / 100), (byte)(rpmResult.Value.fan2Rpm / 100));
                     }
                     
                     // V2 commands not working - fall through to V1 commands
-                    // This handles OMEN Max models that report V2 but don't support V2 read commands
                     _logging?.Debug("V2 fan commands failed, falling back to V1");
                 }
                 
@@ -534,6 +530,71 @@ namespace OmenCore.Hardware
                 _logging?.Warn($"Failed to get fan level: {ex.Message}");
             }
             return null;
+        }
+        
+        /// <summary>
+        /// Get raw fan RPM directly from BIOS (V2 command 0x38).
+        /// Returns validated RPM values with sanity checks.
+        /// v2.6.0: Added endianness detection and sanity validation.
+        /// </summary>
+        public (int fan1Rpm, int fan2Rpm)? GetFanRpmDirect()
+        {
+            if (!_isAvailable) return null;
+            
+            try
+            {
+                var rpmResult = SendBiosCommand(BiosCmd.Default, CMD_FAN_GET_RPM, new byte[4], 128);
+                if (rpmResult == null || rpmResult.Length < 4)
+                {
+                    _logging?.Debug("GetFanRpmDirect: No data from BIOS");
+                    return null;
+                }
+                
+                // Log raw bytes for debugging
+                _logging?.Debug($"GetFanRpmDirect raw: [{rpmResult[0]:X2} {rpmResult[1]:X2} {rpmResult[2]:X2} {rpmResult[3]:X2}]");
+                
+                // Try little-endian first (most common)
+                int fan1Rpm = rpmResult[0] | (rpmResult[1] << 8);
+                int fan2Rpm = rpmResult[2] | (rpmResult[3] << 8);
+                
+                // Sanity check: valid RPM range is 0-8000
+                bool le_valid = IsValidRpm(fan1Rpm) && IsValidRpm(fan2Rpm);
+                
+                if (le_valid)
+                {
+                    _logging?.Debug($"GetFanRpmDirect (LE): Fan1={fan1Rpm} RPM, Fan2={fan2Rpm} RPM");
+                    return (fan1Rpm, fan2Rpm);
+                }
+                
+                // Try big-endian (some newer BIOS versions)
+                int fan1Rpm_be = (rpmResult[0] << 8) | rpmResult[1];
+                int fan2Rpm_be = (rpmResult[2] << 8) | rpmResult[3];
+                bool be_valid = IsValidRpm(fan1Rpm_be) && IsValidRpm(fan2Rpm_be);
+                
+                if (be_valid)
+                {
+                    _logging?.Debug($"GetFanRpmDirect (BE): Fan1={fan1Rpm_be} RPM, Fan2={fan2Rpm_be} RPM");
+                    return (fan1Rpm_be, fan2Rpm_be);
+                }
+                
+                // Both interpretations invalid - log warning
+                _logging?.Warn($"GetFanRpmDirect: Invalid RPM values - LE:({fan1Rpm},{fan2Rpm}) BE:({fan1Rpm_be},{fan2Rpm_be})");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logging?.Warn($"GetFanRpmDirect failed: {ex.Message}");
+                return null;
+            }
+        }
+        
+        /// <summary>
+        /// Check if an RPM value is within valid range.
+        /// Valid range: 0-8000 RPM (typical laptop fans)
+        /// </summary>
+        public static bool IsValidRpm(int rpm)
+        {
+            return rpm >= 0 && rpm <= 8000;
         }
 
         /// <summary>
@@ -594,7 +655,7 @@ namespace OmenCore.Hardware
         }
 
         /// <summary>
-        /// Get BIOS temperature sensor reading.
+        /// Get BIOS temperature sensor reading (CPU).
         /// OmenMon: Cmd.Default, 0x23, {0x01, 0, 0, 0}
         /// </summary>
         public int? GetTemperature()
@@ -604,7 +665,7 @@ namespace OmenCore.Hardware
             try
             {
                 var result = SendBiosCommand(BiosCmd.Default, CMD_TEMP_GET, new byte[4] { 0x01, 0x00, 0x00, 0x00 }, 4);
-                if (result != null && result.Length >= 1)
+                if (result != null && result.Length >= 1 && result[0] > 0 && result[0] < 110)
                 {
                     return result[0];
                 }
@@ -612,6 +673,46 @@ namespace OmenCore.Hardware
             catch (Exception ex)
             {
                 _logging?.Warn($"Failed to get temperature: {ex.Message}");
+            }
+            return null;
+        }
+        
+        /// <summary>
+        /// Get GPU temperature from BIOS.
+        /// OmenMon: Cmd.Default, 0x23, {0x02, 0, 0, 0}
+        /// v2.6.0: Added GPU temperature support.
+        /// </summary>
+        public int? GetGpuTemperature()
+        {
+            if (!_isAvailable) return null;
+
+            try
+            {
+                var result = SendBiosCommand(BiosCmd.Default, CMD_TEMP_GET, new byte[4] { 0x02, 0x00, 0x00, 0x00 }, 4);
+                if (result != null && result.Length >= 1 && result[0] > 0 && result[0] < 110)
+                {
+                    return result[0];
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging?.Debug($"Failed to get GPU temperature from BIOS: {ex.Message}");
+            }
+            return null;
+        }
+        
+        /// <summary>
+        /// Get both CPU and GPU temperatures from BIOS.
+        /// v2.6.0: Provides reliable temperature source independent of LibreHardwareMonitor.
+        /// </summary>
+        public (int cpuTemp, int gpuTemp)? GetBothTemperatures()
+        {
+            var cpu = GetTemperature();
+            var gpu = GetGpuTemperature();
+            
+            if (cpu.HasValue || gpu.HasValue)
+            {
+                return (cpu ?? 0, gpu ?? 0);
             }
             return null;
         }
@@ -1068,6 +1169,12 @@ namespace OmenCore.Hardware
         /// <returns>Output data bytes or empty array on success, null on failure</returns>
         private byte[]? SendBiosCommand(BiosCmd command, uint commandType, byte[]? inData, byte outDataSize)
         {
+            // Use legacy WMI if it was already determined to work
+            if (_useLegacyWmi)
+            {
+                return SendBiosCommandLegacy(command, commandType, inData, outDataSize);
+            }
+            
             if (_cimSession == null || _biosMethods == null || _wmiCommandsDisabled)
                 return null;
                 
@@ -1077,8 +1184,11 @@ namespace OmenCore.Hardware
             try
             {
                 using CimInstance input = new(_biosData!);
+                // Ensure Sign is set on each command (some BIOS versions require this)
+                input.CimInstanceProperties["Sign"].Value = BiosSign;
                 // Define the input arguments for the request
-                input.CimInstanceProperties["Command"].Value = command;
+                // Must cast to uint for BIOS F.15+ compatibility (enum type causes "Invalid method Parameter(s)")
+                input.CimInstanceProperties["Command"].Value = (uint)command;
                 input.CimInstanceProperties["CommandType"].Value = commandType;
 
                 if (inData == null)
@@ -1143,7 +1253,8 @@ namespace OmenCore.Hardware
             }
             catch (CimException ex)
             {
-                LogThrottledError($"CIM command failed: {ex.Message}");
+                // Log detailed CIM error for debugging BIOS F.15+ compatibility issues
+                LogThrottledError($"CIM command failed: {ex.Message} (NativeErrorCode: {ex.NativeErrorCode}, StatusCode: {ex.StatusCode})");
                 _consecutiveFailures++;
             }
             catch (Exception ex)
@@ -1157,6 +1268,102 @@ namespace OmenCore.Hardware
             {
                 _wmiCommandsDisabled = true;
                 _logging?.Warn($"WMI BIOS commands disabled after {MaxConsecutiveFailures} consecutive failures.");
+            }
+            
+            // Try legacy WMI as fallback for BIOS F.15+ compatibility
+            if (!_useLegacyWmi)
+            {
+                _logging?.Info("CIM failed, trying legacy System.Management WMI...");
+                var legacyResult = SendBiosCommandLegacy(command, commandType, inData, outDataSize);
+                if (legacyResult != null)
+                {
+                    _useLegacyWmi = true; // Use legacy from now on
+                    _wmiCommandsDisabled = false;
+                    _consecutiveFailures = 0;
+                    _logging?.Info("✓ Legacy WMI fallback successful - switching to legacy mode");
+                    return legacyResult;
+                }
+            }
+            
+            return null;
+        }
+        
+        /// <summary>
+        /// Legacy System.Management WMI fallback for BIOS F.15+ compatibility.
+        /// Some newer BIOS versions don't work with Microsoft.Management.Infrastructure CIM.
+        /// </summary>
+        private byte[]? SendBiosCommandLegacy(BiosCmd command, uint commandType, byte[]? inData, byte outDataSize)
+        {
+            try
+            {
+                var scope = new ManagementScope(@"\\.\root\wmi");
+                scope.Connect();
+                
+                // Get the BIOS methods instance
+                using var methodClass = new ManagementClass(scope, new ManagementPath("hpqBIntM"), null);
+                using var instances = methodClass.GetInstances();
+                
+                ManagementObject? biosInstance = null;
+                foreach (ManagementObject obj in instances)
+                {
+                    if (obj["InstanceName"]?.ToString()?.Contains(BIOS_METHOD_INSTANCE) == true)
+                    {
+                        biosInstance = obj;
+                        break;
+                    }
+                    obj.Dispose();
+                }
+                
+                if (biosInstance == null)
+                {
+                    _logging?.Debug("Legacy WMI: BIOS instance not found");
+                    return null;
+                }
+                
+                using (biosInstance)
+                {
+                    // Create input data object
+                    using var dataClass = new ManagementClass(scope, new ManagementPath("hpqBDataIn"), null);
+                    using var inputData = dataClass.CreateInstance();
+                    
+                    inputData["Sign"] = BiosSign;
+                    inputData["Command"] = (uint)command;
+                    inputData["CommandType"] = commandType;
+                    inputData["Size"] = (uint)(inData?.Length ?? 0);
+                    if (inData != null)
+                    {
+                        inputData["hpqBData"] = inData;
+                    }
+                    
+                    // Invoke method
+                    string methodName = $"hpqBIOSInt{outDataSize}";
+                    var inParams = biosInstance.GetMethodParameters(methodName);
+                    inParams["InData"] = inputData;
+                    
+                    var outParams = biosInstance.InvokeMethod(methodName, inParams, null);
+                    
+                    if (outParams != null)
+                    {
+                        var outDataObj = outParams["OutData"] as ManagementBaseObject;
+                        if (outDataObj != null)
+                        {
+                            var returnCode = Convert.ToInt32(outDataObj["rwReturnCode"]);
+                            if (returnCode == 0)
+                            {
+                                if (outDataSize > 0)
+                                {
+                                    return outDataObj["Data"] as byte[] ?? new byte[outDataSize];
+                                }
+                                return new byte[0];
+                            }
+                            _logging?.Debug($"Legacy WMI: Command returned code {returnCode}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging?.Debug($"Legacy WMI fallback failed: {ex.Message}");
             }
             
             return null;

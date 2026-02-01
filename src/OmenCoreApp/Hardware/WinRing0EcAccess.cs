@@ -37,6 +37,17 @@ namespace OmenCore.Hardware
         
         // Mutex for EC access synchronization
         private static readonly Mutex EcMutex = new(false, @"Global\Access_EC");
+        
+        /// <summary>
+        /// Enable experimental keyboard EC writes. Set this to true when ExperimentalEcKeyboardEnabled is on.
+        /// </summary>
+        public static bool EnableExperimentalKeyboardWrites { get; set; } = false;
+        
+        /// <summary>
+        /// Enable exclusive EC access diagnostic mode.
+        /// When enabled, acquires and holds the EC mutex exclusively for diagnostic purposes.
+        /// </summary>
+        public static bool EnableExclusiveEcAccessDiagnostics { get; set; } = false;
 
         /// <summary>
         /// Allowlist of EC addresses that are safe to write (fan control only).
@@ -139,7 +150,15 @@ namespace OmenCore.Hardware
                 acquired = EcMutex.WaitOne(EC_TIMEOUT_MS * 2);
                 if (!acquired)
                 {
-                    throw new TimeoutException("EC mutex acquisition timed out");
+                    if (EnableExclusiveEcAccessDiagnostics)
+                    {
+                        // In exclusive mode, log contention and throw
+                        throw new TimeoutException("EC mutex acquisition failed - another application holds EC access (exclusive diagnostics mode)");
+                    }
+                    else
+                    {
+                        throw new TimeoutException("EC mutex acquisition timed out");
+                    }
                 }
                 
                 // Wait for input buffer empty
@@ -195,7 +214,15 @@ namespace OmenCore.Hardware
                 acquired = EcMutex.WaitOne(EC_TIMEOUT_MS * 2);
                 if (!acquired)
                 {
-                    throw new TimeoutException("EC mutex acquisition timed out");
+                    if (EnableExclusiveEcAccessDiagnostics)
+                    {
+                        // In exclusive mode, log contention and throw
+                        throw new TimeoutException("EC mutex acquisition failed - another application holds EC access (exclusive diagnostics mode)");
+                    }
+                    else
+                    {
+                        throw new TimeoutException("EC mutex acquisition timed out");
+                    }
                 }
                 
                 // Wait for input buffer empty

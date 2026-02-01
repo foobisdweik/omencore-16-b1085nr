@@ -204,6 +204,10 @@ namespace OmenCore.ViewModels
                 {
                     return "Using EC direct access (experimental). Changes may take a moment to apply.";
                 }
+                else if (backend.Contains("OGH"))
+                {
+                    return "Using OMEN Gaming Hub proxy. Ensure Gaming Hub services are running.";
+                }
                 return string.Empty;
             }
         }

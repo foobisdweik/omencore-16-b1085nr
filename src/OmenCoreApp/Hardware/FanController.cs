@@ -223,53 +223,100 @@ namespace OmenCore.Hardware
             if (!_ecAccess.IsAvailable)
                 return (0, 0);
 
-            try
+            // Retry/backoff strategy to mitigate inter-process EC contention.
+            // Some contention manifests as transient 0 RPM or thrown timeouts when other apps access EC.
+            const int attempts = 5;
+            var readings = new List<(int f1, int f2)>();
+            for (int attempt = 1; attempt <= attempts; attempt++)
             {
-                // Try alternative registers first (0x4A-0x4B for Fan1, 0x4C-0x4D for Fan2) - 16-bit RPM
                 try
                 {
-                    var fan1Low = _ecAccess.ReadByte(0x4A);
-                    var fan1High = _ecAccess.ReadByte(0x4B);
-                    var fan2Low = _ecAccess.ReadByte(0x4C);
-                    var fan2High = _ecAccess.ReadByte(0x4D);
-                    _logging?.Debug($"EC Read alt RPM regs: 0x4A=0x{fan1Low:X2}, 0x4B=0x{fan1High:X2}, 0x4C=0x{fan2Low:X2}, 0x4D=0x{fan2High:X2}");
-
-                    var fan1Rpm = (fan1High << 8) | fan1Low;
-                    var fan2Rpm = (fan2High << 8) | fan2Low;
-
-                    if (fan1Rpm > 0 || fan2Rpm > 0)
+                    // Try alternative registers first (0x4A-0x4B for Fan1, 0x4C-0x4D for Fan2) - 16-bit RPM
+                    try
                     {
-                        _logging?.Info($"EC RPMs (alt regs): Fan1={fan1Rpm} RPM, Fan2={fan2Rpm} RPM");
-                        return (fan1Rpm, fan2Rpm);
+                        var fan1Low = _ecAccess.ReadByte(0x4A);
+                        var fan1High = _ecAccess.ReadByte(0x4B);
+                        var fan2Low = _ecAccess.ReadByte(0x4C);
+                        var fan2High = _ecAccess.ReadByte(0x4D);
+                        _logging?.Debug($"EC Read alt RPM regs (attempt {attempt}): 0x4A=0x{fan1Low:X2}, 0x4B=0x{fan1High:X2}, 0x4C=0x{fan2Low:X2}, 0x4D=0x{fan2High:X2}");
+
+                        var fan1Rpm = (fan1High << 8) | fan1Low;
+                        var fan2Rpm = (fan2High << 8) | fan2Low;
+
+                        // Validate RPM range (0-8000 is valid for laptop fans)
+                        // 0xFF or 0xFFFF values indicate "no data" or error states
+                        if ((HpWmiBios.IsValidRpm(fan1Rpm) && fan1Rpm > 0) || 
+                            (HpWmiBios.IsValidRpm(fan2Rpm) && fan2Rpm > 0))
+                        {
+                            // Only return valid readings
+                            var validF1 = HpWmiBios.IsValidRpm(fan1Rpm) ? fan1Rpm : 0;
+                            var validF2 = HpWmiBios.IsValidRpm(fan2Rpm) ? fan2Rpm : 0;
+                            readings.Add((validF1, validF2));
+                            _logging?.Info($"EC RPMs (alt regs, attempt {attempt}): Fan1={validF1} RPM, Fan2={validF2} RPM");
+                            // Good reading - return immediately
+                            return (validF1, validF2);
+                        }
                     }
+                    catch (Exception ex)
+                    {
+                        _logging?.Debug($"EC alt register read failed (attempt {attempt}): {ex.Message}");
+                        if (ex is TimeoutException || ex.Message.Contains("mutex", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Log contention event
+                            _logging?.Warn($"EC contention detected during alt read (attempt {attempt}): {ex.Message}");
+                        }
+                    }
+
+                    // Try primary registers (0x34/0x35) - units of 100 RPM (write registers, may return set values)
+                    const ushort REG_FAN1_RPM = 0x34;
+                    const ushort REG_FAN2_RPM = 0x35;
+
+                    var fan1Unit = _ecAccess.ReadByte(REG_FAN1_RPM);
+                    var fan2Unit = _ecAccess.ReadByte(REG_FAN2_RPM);
+                    _logging?.Debug($"EC Read primary RPM regs (attempt {attempt}): 0x{REG_FAN1_RPM:X2}=0x{fan1Unit:X2}, 0x{REG_FAN2_RPM:X2}=0x{fan2Unit:X2}");
+
+                    // Skip 0xFF values (invalid/error indicator)
+                    // Max valid unit is 80 (8000 RPM / 100)
+                    if (fan1Unit > 0 && fan1Unit < 0xFF || fan2Unit > 0 && fan2Unit < 0xFF)
+                    {
+                        // Only compute RPM for valid units (< 80 = 8000 RPM max)
+                        var fan1Rpm = (fan1Unit > 0 && fan1Unit <= 80) ? fan1Unit * 100 : 0;
+                        var fan2Rpm = (fan2Unit > 0 && fan2Unit <= 80) ? fan2Unit * 100 : 0;
+                        
+                        if (fan1Rpm > 0 || fan2Rpm > 0)
+                        {
+                            readings.Add((fan1Rpm, fan2Rpm));
+                            _logging?.Info($"EC RPMs (primary, attempt {attempt}): Fan1={fan1Rpm} RPM, Fan2={fan2Rpm} RPM");
+                            return (fan1Rpm, fan2Rpm);
+                        }
+                    }
+
+                    // If we reach here, we got zeros - wait and retry
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[FanController] Alt register read failed: {ex.Message}");
+                    _logging?.Warn($"EC Read attempt {attempt} failed: {ex.Message}");
                 }
 
-                // Try primary registers (0x34/0x35) - units of 100 RPM (write registers, may return set values)
-                var fan1Unit = _ecAccess.ReadByte(REG_FAN1_RPM);
-                var fan2Unit = _ecAccess.ReadByte(REG_FAN2_RPM);
-                _logging?.Debug($"EC Read primary RPM regs: 0x{REG_FAN1_RPM:X2}=0x{fan1Unit:X2}, 0x{REG_FAN2_RPM:X2}=0x{fan2Unit:X2}");
-
-                if (fan1Unit > 0 || fan2Unit > 0)
+                // Backoff with jitter
+                try
                 {
-                    // Convert from 100 RPM units to actual RPM
-                    var fan1Rpm = fan1Unit * 100;
-                    var fan2Rpm = fan2Unit * 100;
-                    _logging?.Info($"EC RPMs (primary): Fan1={fan1Rpm} RPM, Fan2={fan2Rpm} RPM");
-                    return (fan1Rpm, fan2Rpm);
+                    var delayMs = 50 * attempt + (new Random()).Next(20, 80);
+                    System.Threading.Thread.Sleep(delayMs);
                 }
+                catch { }
+            }
 
-                // No registers returned a value
-                return (0, 0);
-            }
-            catch (Exception ex)
+            // If we collected any non-zero readings, pick the most recent non-zero
+            for (int i = readings.Count - 1; i >= 0; i--)
             {
-                _logging?.Warn($"EC ReadActualFanRpm failed: {ex.Message}");
-                return (0, 0);
+                var r = readings[i];
+                if (r.f1 > 0 || r.f2 > 0) return r;
             }
+
+            // Nothing useful found
+            _logging?.Debug("EC ReadActualFanRpm: no valid RPM readings after retries");
+            return (0, 0);
         }
 
         /// <summary>

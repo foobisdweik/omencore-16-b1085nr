@@ -684,28 +684,24 @@ class Program
             case HardwareType.Memory:
                 var ramUsed = GetSensorValue(hardware, SensorType.Data, "Memory Used");
                 var ramAvail = GetSensorValue(hardware, SensorType.Data, "Memory Available");
-                // Assign memory usage if sensors exist (even if 0 bytes used)
-                sample.RamUsage = ramUsed;
-                if (ramUsed >= 0 && ramAvail >= 0) 
+                
+                // LibreHardwareMonitor sometimes returns garbage values (e.g. 16MB instead of 16GB)
+                // Use WMI fallback if values are unreasonable (< 1GB total is clearly wrong)
+                var sensorTotal = ramUsed + ramAvail;
+                if (sensorTotal >= 1.0) // At least 1 GB - seems valid
                 {
-                    sample.RamTotal = ramUsed + ramAvail;
+                    sample.RamUsage = ramUsed;
+                    sample.RamTotal = sensorTotal;
                 }
-                else if (sample.RamTotal <= 0)
+                
+                // Always use WMI if sensor data is missing or unreasonable
+                if (sample.RamTotal < 1.0)
                 {
-                    // WMI fallback for RAM total when sensors unavailable
-                    try
+                    var (wmiTotal, wmiUsed) = GetRamFromWmi();
+                    if (wmiTotal > 0)
                     {
-                        using var searcher = new System.Management.ManagementObjectSearcher("SELECT TotalPhysicalMemory FROM Win32_ComputerSystem");
-                        foreach (System.Management.ManagementObject obj in searcher.Get())
-                        {
-                            var bytes = Convert.ToUInt64(obj["TotalPhysicalMemory"]);
-                            sample.RamTotal = bytes / 1024.0 / 1024.0 / 1024.0; // Convert to GB
-                            break;
-                        }
-                    }
-                    catch
-                    {
-                        sample.RamTotal = 16; // Default assumption
+                        sample.RamTotal = wmiTotal;
+                        sample.RamUsage = wmiUsed > 0 ? wmiUsed : wmiTotal * 0.5; // Estimate 50% if usage unknown
                     }
                 }
                 break;
@@ -772,6 +768,50 @@ class Program
         // Fallback to any sensor of this type
         var fallback = hardware.Sensors.FirstOrDefault(s => s.SensorType == type);
         return fallback?.Value ?? 0;
+    }
+
+    /// <summary>
+    /// Get RAM information directly from WMI when LibreHardwareMonitor sensors unavailable.
+    /// This fixes the "0/0 GB" RAM display issue on some systems.
+    /// </summary>
+    private static (double TotalGb, double UsedGb) GetRamFromWmi()
+    {
+        try
+        {
+            double totalGb = 0;
+            double freeGb = 0;
+            
+            // Get total RAM from Win32_ComputerSystem
+            using (var searcher = new System.Management.ManagementObjectSearcher(
+                "SELECT TotalPhysicalMemory FROM Win32_ComputerSystem"))
+            {
+                foreach (System.Management.ManagementObject obj in searcher.Get())
+                {
+                    var bytes = Convert.ToUInt64(obj["TotalPhysicalMemory"]);
+                    totalGb = bytes / 1024.0 / 1024.0 / 1024.0;
+                    break;
+                }
+            }
+            
+            // Get free RAM from Win32_OperatingSystem
+            using (var searcher = new System.Management.ManagementObjectSearcher(
+                "SELECT FreePhysicalMemory FROM Win32_OperatingSystem"))
+            {
+                foreach (System.Management.ManagementObject obj in searcher.Get())
+                {
+                    var freeKb = Convert.ToUInt64(obj["FreePhysicalMemory"]);
+                    freeGb = freeKb / 1024.0 / 1024.0;
+                    break;
+                }
+            }
+            
+            double usedGb = totalGb > 0 ? totalGb - freeGb : 0;
+            return (totalGb, usedGb);
+        }
+        catch
+        {
+            return (16, 8); // Default assumption: 16 GB total, 8 GB used
+        }
     }
 
     private static async Task RunPipeServer()

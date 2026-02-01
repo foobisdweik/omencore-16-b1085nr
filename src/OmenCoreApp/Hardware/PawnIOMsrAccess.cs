@@ -431,6 +431,120 @@ namespace OmenCore.Hardware
         // Power Limit Control (EDP Override)
         // ==========================================
         
+        // MSR 0x610 bit definitions (MSR_PKG_POWER_LIMIT)
+        private const uint MSR_PKG_POWER_LIMIT_ADDR = 0x610;
+        private const ulong PL1_POWER_MASK = 0x7FFF;        // Bits 14:0  - Power limit in 1/8W units
+        private const ulong PL1_ENABLE_BIT = 1UL << 15;     // Bit 15    - PL1 enable
+        private const ulong PL1_CLAMP_BIT = 1UL << 16;      // Bit 16    - PL1 clamp (allow throttling below OS-requested P-state)
+        private const ulong PL1_TIME_MASK = 0x7FUL << 17;   // Bits 23:17 - Time window exponent
+        private const ulong PL2_POWER_MASK = 0x7FFFUL << 32; // Bits 46:32 - PL2 power limit
+        private const ulong PL2_ENABLE_BIT = 1UL << 47;     // Bit 47    - PL2 enable
+        private const ulong PL2_CLAMP_BIT = 1UL << 48;      // Bit 48    - PL2 clamp
+        private const ulong PL2_TIME_MASK = 0x7FUL << 49;   // Bits 55:49 - PL2 time window
+        private const ulong LOCK_BIT = 1UL << 63;           // Bit 63    - Lock (read-only once set)
+
+        /// <summary>
+        /// Check if power limit MSR is locked by BIOS (cannot be modified until next reboot)
+        /// </summary>
+        public bool IsPowerLimitLocked()
+        {
+            if (!IsAvailable) return true;
+            
+            try
+            {
+                ulong limit = ReadMsr(MSR_PKG_POWER_LIMIT_ADDR);
+                return (limit & LOCK_BIT) != 0;
+            }
+            catch
+            {
+                return true; // Assume locked if we can't read
+            }
+        }
+        
+        /// <summary>
+        /// Get detailed power limit status including PL1, PL2, enable states, and lock status
+        /// </summary>
+        public (double Pl1Watts, double Pl2Watts, bool Pl1Enabled, bool Pl2Enabled, bool IsLocked) GetPowerLimitStatus()
+        {
+            if (!IsAvailable) return (0, 0, false, false, true);
+            
+            try
+            {
+                ulong limit = ReadMsr(MSR_PKG_POWER_LIMIT_ADDR);
+                
+                double pl1 = (limit & PL1_POWER_MASK) / 8.0;
+                double pl2 = ((limit >> 32) & 0x7FFF) / 8.0;
+                bool pl1Enabled = (limit & PL1_ENABLE_BIT) != 0;
+                bool pl2Enabled = (limit & PL2_ENABLE_BIT) != 0;
+                bool locked = (limit & LOCK_BIT) != 0;
+                
+                return (pl1, pl2, pl1Enabled, pl2Enabled, locked);
+            }
+            catch
+            {
+                return (0, 0, false, false, true);
+            }
+        }
+        
+        /// <summary>
+        /// Set both PL1 and PL2 power limits at once (more efficient than separate calls).
+        /// Only works if power limits are not locked by BIOS.
+        /// </summary>
+        /// <param name="pl1Watts">Sustained power limit (PL1) in watts</param>
+        /// <param name="pl2Watts">Burst power limit (PL2) in watts</param>
+        /// <returns>True if successfully set, false if locked or failed</returns>
+        public bool SetPowerLimits(double pl1Watts, double pl2Watts)
+        {
+            if (!IsAvailable) return false;
+            
+            try
+            {
+                // Check if locked first
+                ulong current = ReadMsr(MSR_PKG_POWER_LIMIT_ADDR);
+                if ((current & LOCK_BIT) != 0)
+                {
+                    System.Diagnostics.Debug.WriteLine("[MSR] Power limits are BIOS-locked and cannot be modified");
+                    return false;
+                }
+                
+                // Convert watts to 1/8 watt units
+                uint pl1 = (uint)Math.Clamp(pl1Watts * 8, 0, 0x7FFF);
+                uint pl2 = (uint)Math.Clamp(pl2Watts * 8, 0, 0x7FFF);
+                
+                // Build new value preserving time windows but updating power and enable bits
+                ulong newValue = current;
+                
+                // Clear and set PL1 (bits 14:0 and enable bit 15)
+                newValue = (newValue & ~(PL1_POWER_MASK | PL1_ENABLE_BIT)) | pl1 | PL1_ENABLE_BIT;
+                
+                // Clear and set PL2 (bits 46:32 and enable bit 47)
+                newValue = (newValue & ~(PL2_POWER_MASK | PL2_ENABLE_BIT)) | ((ulong)pl2 << 32) | PL2_ENABLE_BIT;
+                
+                WriteMsr(MSR_PKG_POWER_LIMIT_ADDR, newValue);
+                
+                // Verify the write took effect
+                ulong verify = ReadMsr(MSR_PKG_POWER_LIMIT_ADDR);
+                double verifyPl1 = (verify & PL1_POWER_MASK) / 8.0;
+                double verifyPl2 = ((verify >> 32) & 0x7FFF) / 8.0;
+                
+                if (Math.Abs(verifyPl1 - pl1Watts) < 0.5 && Math.Abs(verifyPl2 - pl2Watts) < 0.5)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[MSR] Power limits set: PL1={verifyPl1:F1}W, PL2={verifyPl2:F1}W");
+                    return true;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[MSR] Power limit verification failed: expected PL1={pl1Watts}W/PL2={pl2Watts}W, got PL1={verifyPl1}W/PL2={verifyPl2}W");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MSR] Failed to set power limits: {ex.Message}");
+                return false;
+            }
+        }
+        
         /// <summary>
         /// Read current package power limit (PL1) in watts.
         /// </summary>

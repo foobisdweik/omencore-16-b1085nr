@@ -28,8 +28,8 @@ namespace OmenCore.Hardware
         private const int RequestTimeoutMs = 2000;
         private const int MaxRestartAttempts = 5;
         private const int RestartCooldownMs = 5000;
-        private const int WorkerStartupDelayMs = 1500;  // Give worker more time to start pipe server
-        private const int MaxConnectionRetries = 3;
+        private const int WorkerStartupDelayMs = 2000;  // Increased for hardware scan time
+        private const int MaxConnectionRetries = 5;     // More retries for slow boots
         
         private Process? _workerProcess;
         private NamedPipeClientStream? _pipeClient;

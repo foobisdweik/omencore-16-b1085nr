@@ -376,6 +376,90 @@ namespace OmenCore.Hardware
         // Power Limit Control (EDP Override)
         // ==========================================
         
+        // MSR 0x610 bit definitions (MSR_PKG_POWER_LIMIT)
+        private const uint MSR_PKG_POWER_LIMIT_ADDR = 0x610;
+        private const ulong PL1_POWER_MASK = 0x7FFF;        // Bits 14:0  - Power limit in 1/8W units
+        private const ulong PL1_ENABLE_BIT = 1UL << 15;     // Bit 15    - PL1 enable
+        private const ulong PL2_POWER_MASK = 0x7FFFUL << 32; // Bits 46:32 - PL2 power limit
+        private const ulong PL2_ENABLE_BIT = 1UL << 47;     // Bit 47    - PL2 enable
+        private const ulong LOCK_BIT = 1UL << 63;           // Bit 63    - Lock (read-only once set)
+        
+        /// <summary>
+        /// Check if power limit MSR is locked by BIOS (cannot be modified until next reboot)
+        /// </summary>
+        public bool IsPowerLimitLocked()
+        {
+            if (!IsAvailable) return true;
+            
+            try
+            {
+                ulong limit = ReadMsr(MSR_PKG_POWER_LIMIT_ADDR);
+                return (limit & LOCK_BIT) != 0;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+        
+        /// <summary>
+        /// Get detailed power limit status including PL1, PL2, enable states, and lock status
+        /// </summary>
+        public (double Pl1Watts, double Pl2Watts, bool Pl1Enabled, bool Pl2Enabled, bool IsLocked) GetPowerLimitStatus()
+        {
+            if (!IsAvailable) return (0, 0, false, false, true);
+            
+            try
+            {
+                ulong limit = ReadMsr(MSR_PKG_POWER_LIMIT_ADDR);
+                
+                double pl1 = (limit & PL1_POWER_MASK) / 8.0;
+                double pl2 = ((limit >> 32) & 0x7FFF) / 8.0;
+                bool pl1Enabled = (limit & PL1_ENABLE_BIT) != 0;
+                bool pl2Enabled = (limit & PL2_ENABLE_BIT) != 0;
+                bool locked = (limit & LOCK_BIT) != 0;
+                
+                return (pl1, pl2, pl1Enabled, pl2Enabled, locked);
+            }
+            catch
+            {
+                return (0, 0, false, false, true);
+            }
+        }
+        
+        /// <summary>
+        /// Set both PL1 and PL2 power limits at once.
+        /// Only works if power limits are not locked by BIOS.
+        /// </summary>
+        public bool SetPowerLimits(double pl1Watts, double pl2Watts)
+        {
+            if (!IsAvailable) return false;
+            
+            try
+            {
+                ulong current = ReadMsr(MSR_PKG_POWER_LIMIT_ADDR);
+                if ((current & LOCK_BIT) != 0)
+                {
+                    System.Diagnostics.Debug.WriteLine("[MSR] Power limits are BIOS-locked");
+                    return false;
+                }
+                
+                uint pl1 = (uint)Math.Clamp(pl1Watts * 8, 0, 0x7FFF);
+                uint pl2 = (uint)Math.Clamp(pl2Watts * 8, 0, 0x7FFF);
+                
+                ulong newValue = current;
+                newValue = (newValue & ~(PL1_POWER_MASK | PL1_ENABLE_BIT)) | pl1 | PL1_ENABLE_BIT;
+                newValue = (newValue & ~(PL2_POWER_MASK | PL2_ENABLE_BIT)) | ((ulong)pl2 << 32) | PL2_ENABLE_BIT;
+                
+                WriteMsr(MSR_PKG_POWER_LIMIT_ADDR, newValue);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        
         /// <summary>
         /// Read current package power limit (PL1) in watts.
         /// </summary>
@@ -387,7 +471,7 @@ namespace OmenCore.Hardware
             {
                 // MSR 0x610: MSR_PKG_POWER_LIMIT
                 // Bits 14:0: Power Limit #1 in 1/8 Watt units
-                ulong limit = ReadMsr(0x610);
+                ulong limit = ReadMsr(MSR_PKG_POWER_LIMIT_ADDR);
                 uint pl1 = (uint)(limit & 0x7FFF);
                 return pl1 / 8.0;
             }
@@ -409,7 +493,7 @@ namespace OmenCore.Hardware
             {
                 // MSR 0x610: MSR_PKG_POWER_LIMIT
                 // Read current value to preserve other settings
-                ulong current = ReadMsr(0x610);
+                ulong current = ReadMsr(MSR_PKG_POWER_LIMIT_ADDR);
                 
                 // Convert watts to 1/8 watt units
                 uint pl1 = (uint)(watts * 8);
@@ -418,7 +502,7 @@ namespace OmenCore.Hardware
                 // Clear bits 14:0 and set new limit
                 ulong newValue = (current & ~0x7FFFUL) | pl1;
                 
-                WriteMsr(0x610, newValue);
+                WriteMsr(MSR_PKG_POWER_LIMIT_ADDR, newValue);
             }
             catch
             {

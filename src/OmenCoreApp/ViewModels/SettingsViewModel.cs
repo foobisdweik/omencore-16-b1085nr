@@ -837,7 +837,54 @@ namespace OmenCore.ViewModels
                     
                     // Update the static flag immediately so EC writes work without restart
                     Hardware.PawnIOEcAccess.EnableExperimentalKeyboardWrites = value;
+                    Hardware.WinRing0EcAccess.EnableExperimentalKeyboardWrites = value;
                     _logging.Info($"EC keyboard writes flag updated at runtime: {value}");
+                    
+                    OnPropertyChanged();
+                    SaveSettings();
+                }
+            }
+        }
+        
+        public bool ExclusiveEcAccessDiagnosticsEnabled
+        {
+            get => _config.ExclusiveEcAccessDiagnosticsEnabled;
+            set
+            {
+                if (_config.ExclusiveEcAccessDiagnosticsEnabled != value)
+                {
+                    // Show warning dialog before enabling
+                    if (value)
+                    {
+                        var result = MessageBox.Show(
+                            "⚠️ EXCLUSIVE EC ACCESS DIAGNOSTICS ⚠️\n\n" +
+                            "This diagnostic mode will:\n" +
+                            "• Acquire exclusive access to EC registers\n" +
+                            "• Block other applications from accessing EC\n" +
+                            "• Log detailed contention information\n" +
+                            "• May interfere with OMEN Gaming Hub or other fan control apps\n\n" +
+                            "Use this only for troubleshooting EC register conflicts.\n" +
+                            "It will help identify if other apps are causing fan RPM 0 issues.\n\n" +
+                            "Enable exclusive diagnostics mode?",
+                            "Exclusive EC Access Diagnostics",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Warning,
+                            MessageBoxResult.No);
+                        
+                        if (result != MessageBoxResult.Yes)
+                        {
+                            return; // User cancelled
+                        }
+                        
+                        _logging.Warn("⚠️ Exclusive EC access diagnostics enabled - may interfere with other apps");
+                    }
+                    
+                    _config.ExclusiveEcAccessDiagnosticsEnabled = value;
+                    
+                    // Update the static flags immediately
+                    Hardware.PawnIOEcAccess.EnableExclusiveEcAccessDiagnostics = value;
+                    Hardware.WinRing0EcAccess.EnableExclusiveEcAccessDiagnostics = value;
+                    _logging.Info($"Exclusive EC diagnostics flag updated at runtime: {value}");
                     
                     OnPropertyChanged();
                     SaveSettings();

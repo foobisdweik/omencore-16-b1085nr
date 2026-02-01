@@ -421,8 +421,35 @@ namespace OmenCore.Hardware
                 
                 _cachedVramUsage = workerSample.VramUsage;
                 _cachedVramTotal = workerSample.VramTotal;
-                _cachedRamUsage = workerSample.RamUsage;
-                _cachedRamTotal = workerSample.RamTotal;
+                
+                // RAM: Accept worker values only if valid, otherwise fallback will be triggered later
+                if (workerSample.RamTotal > 0)
+                {
+                    _cachedRamUsage = workerSample.RamUsage;
+                    _cachedRamTotal = workerSample.RamTotal;
+                }
+                // Immediate fallback if worker returned 0/0 GB
+                else if (_cachedRamTotal <= 0)
+                {
+                    var totalGb = GetTotalPhysicalMemoryGB();
+                    if (totalGb > 0)
+                    {
+                        _cachedRamTotal = totalGb;
+                        // Estimate usage via WMI
+                        try
+                        {
+                            using var searcher = new System.Management.ManagementObjectSearcher(
+                                "SELECT FreePhysicalMemory FROM Win32_OperatingSystem");
+                            foreach (System.Management.ManagementObject obj in searcher.Get())
+                            {
+                                var freeKb = Convert.ToUInt64(obj["FreePhysicalMemory"]);
+                                _cachedRamUsage = totalGb - (freeKb / 1024.0 / 1024.0);
+                                break;
+                            }
+                        }
+                        catch { _cachedRamUsage = totalGb * 0.5; }
+                    }
+                }
                 
                 _cachedSsdTemp = workerSample.SsdTemperature;
                 
@@ -615,9 +642,24 @@ namespace OmenCore.Hardware
                                 _consecutiveSameTempReadings++;
                                 if (_consecutiveSameTempReadings >= MaxSameTempReadingsBeforeReinit)
                                 {
-                                    _logger?.Invoke($"🚨 CPU temp stuck at {_cachedCpuTemp:F1}°C for {_consecutiveSameTempReadings} readings. Triggering hardware reinitialize...");
-                                    Task.Run(() => Reinitialize());
-                                    _consecutiveSameTempReadings = 0;
+                                    _logger?.Invoke($"🚨 CPU temp stuck at {_cachedCpuTemp:F1}°C for {_consecutiveSameTempReadings} readings. Trying WMI BIOS fallback before reinitialize...");
+                                    
+                                    // Try WMI BIOS fallback first before full reinitialize
+                                    UpdateViaWmiBiosFallback();
+                                    
+                                    // If WMI gave us a different temperature, use it and reset counter
+                                    if (Math.Abs(_cachedCpuTemp - _lastCpuTempReading) > 1)
+                                    {
+                                        _logger?.Invoke($"✅ WMI BIOS fallback provided different temperature: {_cachedCpuTemp:F1}°C");
+                                        _consecutiveSameTempReadings = 0;
+                                    }
+                                    else
+                                    {
+                                        // WMI didn't help, do full reinitialize
+                                        _logger?.Invoke($"WMI BIOS fallback didn't help. Triggering full hardware reinitialize...");
+                                        Task.Run(() => Reinitialize());
+                                        _consecutiveSameTempReadings = 0;
+                                    }
                                 }
                                 else if (_consecutiveSameTempReadings >= MaxSameTempReadingsBeforeLog)
                                 {
@@ -964,17 +1006,41 @@ namespace OmenCore.Hardware
                             break;
 
                         case HardwareType.Memory:
-                            _cachedRamUsage = GetSensor(hardware, SensorType.Data, "Memory Used")?.Value ?? 0;
-                            var availableRam = GetSensor(hardware, SensorType.Data, "Memory Available")?.Value ?? 0;
+                            var sensorRamUsed = GetSensor(hardware, SensorType.Data, "Memory Used")?.Value ?? 0;
+                            var sensorRamAvail = GetSensor(hardware, SensorType.Data, "Memory Available")?.Value ?? 0;
+                            var sensorRamTotal = sensorRamUsed + sensorRamAvail;
                             
-                            if (availableRam > 0)
+                            // LibreHardwareMonitor sometimes returns garbage values (e.g. 16MB instead of 16GB)
+                            // Only use sensor values if they're reasonable (>= 1 GB total)
+                            if (sensorRamTotal >= 1.0)
                             {
-                                _cachedRamTotal = (_cachedRamUsage + availableRam) > 0 ? (_cachedRamUsage + availableRam) : 16;
+                                _cachedRamUsage = sensorRamUsed;
+                                _cachedRamTotal = sensorRamTotal;
                             }
                             else
                             {
-                                // Fallback to system total if available RAM sensor missing
-                                _cachedRamTotal = _systemRamTotalGb > 0 ? _systemRamTotalGb : 16;
+                                // Fallback to WMI for accurate RAM info
+                                if (_systemRamTotalGb > 0)
+                                {
+                                    _cachedRamTotal = _systemRamTotalGb;
+                                    // Calculate usage via WMI
+                                    try
+                                    {
+                                        using var searcher = new System.Management.ManagementObjectSearcher(
+                                            "SELECT FreePhysicalMemory FROM Win32_OperatingSystem");
+                                        foreach (System.Management.ManagementObject obj in searcher.Get())
+                                        {
+                                            var freeKb = Convert.ToUInt64(obj["FreePhysicalMemory"]);
+                                            _cachedRamUsage = _systemRamTotalGb - (freeKb / 1024.0 / 1024.0);
+                                            break;
+                                        }
+                                    }
+                                    catch { _cachedRamUsage = _systemRamTotalGb * 0.5; }
+                                }
+                                else
+                                {
+                                    _cachedRamTotal = 16; // Default fallback
+                                }
                             }
                             break;
 
@@ -1373,22 +1439,52 @@ namespace OmenCore.Hardware
         {
             try
             {
-                // Try to get CPU temperature from WMI BIOS
+                // Try to get CPU and GPU temperature from WMI BIOS
                 var wmiBios = new HpWmiBios(_logger != null ? new LoggingService() : null);
-                var wmiTemp = wmiBios.GetTemperature();
                 
-                if (wmiTemp.HasValue && wmiTemp.Value > 0)
-                {
-                    _cachedCpuTemp = wmiTemp.Value;
-                    _logger?.Invoke($"[Fallback] Using WMI BIOS temperature: {_cachedCpuTemp}°C");
-                }
-                else
-                {
-                    _logger?.Invoke("[Fallback] WMI BIOS temperature unavailable");
-                }
+                // Try the new GetBothTemperatures method first for efficiency
+                var temps = wmiBios.GetBothTemperatures();
                 
-                // For GPU temp, we don't have WMI fallback yet, so leave cached values
-                // Fan speeds also remain cached
+                if (temps.HasValue)
+                {
+                    var (cpuTemp, gpuTemp) = temps.Value;
+                    
+                    if (cpuTemp > 0)
+                    {
+                        _cachedCpuTemp = cpuTemp;
+                        _logger?.Invoke($"[Fallback] Using WMI BIOS CPU temperature: {_cachedCpuTemp}°C");
+                    }
+                    else
+                    {
+                        // Fallback to the original GetTemperature method
+                        var wmiTemp = wmiBios.GetTemperature();
+                        if (wmiTemp.HasValue && wmiTemp.Value > 0)
+                        {
+                            _cachedCpuTemp = wmiTemp.Value;
+                            _logger?.Invoke($"[Fallback] Using WMI BIOS temperature (legacy): {_cachedCpuTemp}°C");
+                        }
+                        else
+                        {
+                            _logger?.Invoke("[Fallback] WMI BIOS CPU temperature unavailable");
+                        }
+                    }
+                    
+                    if (gpuTemp > 0)
+                    {
+                        _cachedGpuTemp = gpuTemp;
+                        _logger?.Invoke($"[Fallback] Using WMI BIOS GPU temperature: {_cachedGpuTemp}°C");
+                    }
+                    else
+                    {
+                        // Try dedicated GPU temperature method
+                        var gpuTempAlt = wmiBios.GetGpuTemperature();
+                        if (gpuTempAlt.HasValue && gpuTempAlt.Value > 0)
+                        {
+                            _cachedGpuTemp = gpuTempAlt.Value;
+                            _logger?.Invoke($"[Fallback] Using WMI BIOS GPU temperature (alt): {_cachedGpuTemp}°C");
+                        }
+                    }
+                }
                 
                 wmiBios.Dispose();
             }

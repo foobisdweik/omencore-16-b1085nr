@@ -68,6 +68,11 @@
                 <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding HasKeyboardLighting, Converter={StaticResource BoolToYesNo}}" Foreground="{Binding HasKeyboardLighting, Converter={StaticResource BoolToColor}}" />
             </Grid>
 
+            <TextBlock Text="Keyboard Lighting Telemetry" Style="{StaticResource Heading3}" Margin="0,16,0,8" />
+            <Border Background="{StaticResource SurfaceDarkBrush}" Padding="12" CornerRadius="6">
+                <TextBlock Text="{Binding KeyboardLightingTelemetry}" Style="{StaticResource Caption}" TextWrapping="Wrap" />
+            </Border>
+
             <TextBlock Text="Troubleshooting Tips" Style="{StaticResource Heading3}" Margin="0,16,0,8" />
             <Border Background="{StaticResource SurfaceDarkBrush}" Padding="12" CornerRadius="6">
                 <StackPanel>

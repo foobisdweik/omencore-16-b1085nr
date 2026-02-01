@@ -255,103 +255,153 @@ namespace OmenCore.Controls
                 if (_powerHistory.Count > 60) _powerHistory.Dequeue();
 
                 // Update power consumption with trend
-                PowerConsumptionValue.Text = estimatedPower.ToString("F1");
+                if (PowerConsumptionValue != null) PowerConsumptionValue.Text = estimatedPower.ToString("F1");
                 double powerTrend = _powerHistory.Count > 1 ? estimatedPower - _previousPower : 0;
-                PowerConsumptionTrend.Text = GetTrendIndicator(powerTrend);
-                PowerConsumptionTrend.Foreground = GetTrendBrush(powerTrend);
+                if (PowerConsumptionTrend != null)
+                {
+                    PowerConsumptionTrend.Text = GetTrendIndicator(powerTrend);
+                    PowerConsumptionTrend.Foreground = GetTrendBrush(powerTrend);
+                }
                 _previousPower = estimatedPower;
 
                 // Update battery health (using real data if available)
-                BatteryHealthValue.Text = "100";
-                BatteryHealthStatus.Text = "Good";
-                BatteryHealthStatus.Foreground = Brushes.LimeGreen;
+                if (BatteryHealthValue != null) BatteryHealthValue.Text = "100";
+                if (BatteryHealthStatus != null)
+                {
+                    BatteryHealthStatus.Text = "Good";
+                    BatteryHealthStatus.Foreground = Brushes.LimeGreen;
+                }
 
                 // CRITICAL FIX: Update temperatures with proper null checking and display
                 double cpuTemp = sample.CpuTemperatureC;
                 double gpuTemp = sample.GpuTemperatureC;
 
-                CpuTempValue.Text = cpuTemp.ToString("F0");
-                var cpuStatus = GetTemperatureStatus(cpuTemp);
-                CpuTempStatus.Text = cpuStatus;
-                CpuTempStatus.Foreground = GetTemperatureBrush(cpuTemp);
-                AnimateMetricIfCritical(CpuTempValue, cpuTemp > 85);
+                if (CpuTempValue != null)
+                {
+                    CpuTempValue.Text = cpuTemp.ToString("F0");
+                    AnimateMetricIfCritical(CpuTempValue, cpuTemp > 85);
+                }
+                if (CpuTempStatus != null)
+                {
+                    var cpuStatus = GetTemperatureStatus(cpuTemp);
+                    CpuTempStatus.Text = cpuStatus;
+                    CpuTempStatus.Foreground = GetTemperatureBrush(cpuTemp);
+                }
 
-                GpuTempValue.Text = gpuTemp.ToString("F0");
-                var gpuStatus = GetTemperatureStatus(gpuTemp);
-                GpuTempStatus.Text = gpuStatus;
-                GpuTempStatus.Foreground = GetTemperatureBrush(gpuTemp);
-                AnimateMetricIfCritical(GpuTempValue, gpuTemp > 85);
+                if (GpuTempValue != null)
+                {
+                    GpuTempValue.Text = gpuTemp.ToString("F0");
+                    AnimateMetricIfCritical(GpuTempValue, gpuTemp > 85);
+                }
+                if (GpuTempStatus != null)
+                {
+                    var gpuStatus = GetTemperatureStatus(gpuTemp);
+                    GpuTempStatus.Text = gpuStatus;
+                    GpuTempStatus.Foreground = GetTemperatureBrush(gpuTemp);
+                }
 
-                App.Logging.Debug($"[Dashboard.UpdateMetrics] UI updated: CpuTempValue.Text={CpuTempValue.Text}, GpuTempValue.Text={GpuTempValue.Text}");                // CPU/GPU Load indicators
-                CpuLoadValue.Text = sample.CpuLoadPercent.ToString("F0");
-                GpuLoadValue.Text = sample.GpuLoadPercent.ToString("F0");
+                App.Logging.Debug($"[Dashboard.UpdateMetrics] UI updated: CpuTempValue.Text={CpuTempValue?.Text}, GpuTempValue.Text={GpuTempValue?.Text}");
+                
+                // CPU/GPU Load indicators - with null safety
+                var cpuLoadStr = sample.CpuLoadPercent.ToString("F0");
+                var gpuLoadStr = sample.GpuLoadPercent.ToString("F0");
+                
+                if (CpuLoadValue != null) CpuLoadValue.Text = cpuLoadStr;
+                if (GpuLoadValue != null) GpuLoadValue.Text = gpuLoadStr;
+                
+                App.Logging.Info($"[Dashboard.UpdateMetrics] Load updated: CpuLoad={cpuLoadStr}%, GpuLoad={gpuLoadStr}%, RAM={sample.RamUsageGb:F1}GB, CpuClock={sample.CpuCoreClocksMhz?.Count ?? 0} cores");
                 
                 // Update progress bars
                 if (CpuLoadBar != null) CpuLoadBar.Value = Math.Min(100, sample.CpuLoadPercent);
                 if (GpuLoadBar != null) GpuLoadBar.Value = Math.Min(100, sample.GpuLoadPercent);
 
                 // Clock speeds (if available)
-                if (sample.CpuCoreClocksMhz.Count > 0)
+                if (CpuClockValue != null)
                 {
-                    int avgClock = (int)sample.CpuCoreClocksMhz.Average();
-                    CpuClockValue.Text = $"{avgClock:F0}";
+                    if (sample.CpuCoreClocksMhz != null && sample.CpuCoreClocksMhz.Count > 0)
+                    {
+                        int avgClock = (int)sample.CpuCoreClocksMhz.Average();
+                        CpuClockValue.Text = $"{avgClock:F0}";
+                    }
+                    else
+                    {
+                        // No per-core clock data - show N/A
+                        CpuClockValue.Text = "--";
+                    }
                 }
 
-                // RAM usage
-                double ramUsagePercent = (sample.RamUsageGb / sample.RamTotalGb) * 100;
-                RamUsageValue.Text = $"{sample.RamUsageGb:F1}";
-                RamUsagePercent.Text = ramUsagePercent.ToString("F0");
+                // RAM usage - guard against divide by zero with null safety
+                if (RamUsageValue != null && RamUsagePercent != null)
+                {
+                    if (sample.RamTotalGb > 0)
+                    {
+                        double ramUsagePercent = (sample.RamUsageGb / sample.RamTotalGb) * 100;
+                        RamUsageValue.Text = $"{sample.RamUsageGb:F1}";
+                        RamUsagePercent.Text = ramUsagePercent.ToString("F0");
+                    }
+                    else
+                    {
+                        RamUsageValue.Text = "--";
+                        RamUsagePercent.Text = "--";
+                    }
+                }
 
-                // Update efficiency metrics - FIXED
+                // Update efficiency metrics - FIXED with null safety
                 double workload = Math.Min(100, (sample.CpuLoadPercent + sample.GpuLoadPercent) / 2);
                 double avgTemp = (cpuTemp + gpuTemp) / 2;
                 double efficiency = CalculateEfficiency(workload, avgTemp);
                 
-                PowerEfficiencyValue.Text = efficiency.ToString("F1");
-                var efficiencyRating = GetEfficiencyRating(efficiency);
-                PowerEfficiencyRating.Text = efficiencyRating;
-                PowerEfficiencyRating.Foreground = GetEfficiencyBrush(efficiency);
+                if (PowerEfficiencyValue != null) PowerEfficiencyValue.Text = efficiency.ToString("F1");
+                if (PowerEfficiencyRating != null)
+                {
+                    var efficiencyRating = GetEfficiencyRating(efficiency);
+                    PowerEfficiencyRating.Text = efficiencyRating;
+                    PowerEfficiencyRating.Foreground = GetEfficiencyBrush(efficiency);
+                }
 
-                // Thermal status - FIXED
-                BatteryCyclesValue.Text = "0";
-                BatteryLifeEstimate.Text = "~3.0 years remaining";
+                // Thermal status - FIXED with null safety
+                if (BatteryCyclesValue != null) BatteryCyclesValue.Text = "0";
+                if (BatteryLifeEstimate != null) BatteryLifeEstimate.Text = "~3.0 years remaining";
 
-                ThermalStatusValue.Text = GetThermalStatus(avgTemp);
-                ThermalStatusValue.Foreground = GetTemperatureBrush(avgTemp);
-                ThermalEfficiency.Text = $"Fan: {CalculateFanEfficiency(sample):F0}% efficient";
+                if (ThermalStatusValue != null)
+                {
+                    ThermalStatusValue.Text = GetThermalStatus(avgTemp);
+                    ThermalStatusValue.Foreground = GetTemperatureBrush(avgTemp);
+                }
+                if (ThermalEfficiency != null) ThermalEfficiency.Text = $"Fan: {CalculateFanEfficiency(sample):F0}% efficient";
 
 
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[Dashboard] Error updating metrics: {ex}");
+                App.Logging.Error($"[Dashboard.UpdateMetrics] ERROR: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
         private void ShowNoDataPlaceholders()
         {
             App.Logging.Warn("[Dashboard] ShowNoDataPlaceholders() called - setting all values to '--'");
-            PowerConsumptionValue.Text = "--";
-            PowerConsumptionTrend.Text = "No data";
-            BatteryHealthValue.Text = "--";
-            BatteryHealthStatus.Text = "Unknown";
-            CpuTempValue.Text = "--";
-            CpuTempStatus.Text = "No data";
-            GpuTempValue.Text = "--";
-            GpuTempStatus.Text = "No data";
-            PowerEfficiencyValue.Text = "--";
-            PowerEfficiencyRating.Text = "Unknown";
-            BatteryCyclesValue.Text = "--";
-            BatteryLifeEstimate.Text = "No data";
-            ThermalStatusValue.Text = "Unknown";
-            ThermalEfficiency.Text = "No data";
+            if (PowerConsumptionValue != null) PowerConsumptionValue.Text = "--";
+            if (PowerConsumptionTrend != null) PowerConsumptionTrend.Text = "No data";
+            if (BatteryHealthValue != null) BatteryHealthValue.Text = "--";
+            if (BatteryHealthStatus != null) BatteryHealthStatus.Text = "Unknown";
+            if (CpuTempValue != null) CpuTempValue.Text = "--";
+            if (CpuTempStatus != null) CpuTempStatus.Text = "No data";
+            if (GpuTempValue != null) GpuTempValue.Text = "--";
+            if (GpuTempStatus != null) GpuTempStatus.Text = "No data";
+            if (PowerEfficiencyValue != null) PowerEfficiencyValue.Text = "--";
+            if (PowerEfficiencyRating != null) PowerEfficiencyRating.Text = "Unknown";
+            if (BatteryCyclesValue != null) BatteryCyclesValue.Text = "--";
+            if (BatteryLifeEstimate != null) BatteryLifeEstimate.Text = "No data";
+            if (ThermalStatusValue != null) ThermalStatusValue.Text = "Unknown";
+            if (ThermalEfficiency != null) ThermalEfficiency.Text = "No data";
             
-            // New fields
-            CpuLoadValue.Text = "--";
-            GpuLoadValue.Text = "--";
-            CpuClockValue.Text = "--";
-            RamUsageValue.Text = "--";
-            RamUsagePercent.Text = "--";
+            // System Activity fields
+            if (CpuLoadValue != null) CpuLoadValue.Text = "--";
+            if (GpuLoadValue != null) GpuLoadValue.Text = "--";
+            if (CpuClockValue != null) CpuClockValue.Text = "--";
+            if (RamUsageValue != null) RamUsageValue.Text = "--";
+            if (RamUsagePercent != null) RamUsagePercent.Text = "--";
         }
 
         private double CalculatePowerConsumption(MonitoringSample sample)
@@ -386,26 +436,46 @@ namespace OmenCore.Controls
             return 50.0;
         }
 
-        private void AnimateMetricIfCritical(TextBlock textBlock, bool isCritical)
+        private void AnimateMetricIfCritical(TextBlock? textBlock, bool isCritical)
         {
-            if (isCritical && textBlock.Foreground != Brushes.Red)
+            if (textBlock == null) return;
+            
+            try
             {
-                // Pulse animation for critical values
-                var animation = new ColorAnimation
+                if (isCritical && textBlock.Foreground != Brushes.Red)
                 {
-                    From = Colors.OrangeRed,
-                    To = Colors.Red,
-                    Duration = TimeSpan.FromSeconds(0.5),
-                    AutoReverse = true,
-                    RepeatBehavior = RepeatBehavior.Forever
-                };
-                var brush = new SolidColorBrush();
-                textBlock.Foreground = brush;
-                brush.BeginAnimation(SolidColorBrush.ColorProperty, animation);
+                    // Pulse animation for critical values
+                    var animation = new ColorAnimation
+                    {
+                        From = Colors.OrangeRed,
+                        To = Colors.Red,
+                        Duration = TimeSpan.FromSeconds(0.5),
+                        AutoReverse = true,
+                        RepeatBehavior = RepeatBehavior.Forever
+                    };
+                    var brush = new SolidColorBrush();
+                    textBlock.Foreground = brush;
+                    brush.BeginAnimation(SolidColorBrush.ColorProperty, animation);
+                }
+                else if (!isCritical)
+                {
+                    // Use a fallback color if AccentColor resource is not available
+                    var accentColor = Application.Current?.Resources["AccentColor"];
+                    if (accentColor is Color color)
+                    {
+                        textBlock.Foreground = new SolidColorBrush(color);
+                    }
+                    else
+                    {
+                        textBlock.Foreground = new SolidColorBrush(Colors.DeepSkyBlue);
+                    }
+                }
             }
-            else if (!isCritical)
+            catch (Exception ex)
             {
-                textBlock.Foreground = new SolidColorBrush((Color)Application.Current.Resources["AccentColor"]);
+                // Failsafe - just log and set a default color
+                App.Logging.Debug($"[Dashboard] AnimateMetricIfCritical failed: {ex.Message}");
+                textBlock.Foreground = new SolidColorBrush(Colors.White);
             }
         }
 

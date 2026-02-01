@@ -21,6 +21,7 @@ namespace OmenCore.Services
         private readonly IEcAccess? _ecAccess;
         private readonly HpWmiBios? _wmiBios;
         private readonly ConfigurationService? _configService;
+        private readonly OghServiceProxy? _oghProxy;
         private bool _wmiAvailable;
         private bool _wmiBiosAvailable;
         private bool _ecAvailable;
@@ -31,6 +32,8 @@ namespace OmenCore.Services
         private int _wmiFailureCount = 0;
         private int _ecSuccessCount = 0;
         private int _ecFailureCount = 0;
+        private int _oghSuccessCount = 0;
+        private int _oghFailureCount = 0;
         private int _totalAttempts = 0;
         private readonly object _telemetryLock = new();
 
@@ -55,7 +58,7 @@ namespace OmenCore.Services
             Off = 0xFF
         }
 
-        public bool IsAvailable => _wmiBiosAvailable || _wmiAvailable || _ecAvailable;
+        public bool IsAvailable => _wmiBiosAvailable || _wmiAvailable || _ecAvailable || (_oghProxy != null && _oghProxy.IsAvailable);
         
         /// <summary>
         /// Returns the currently active backend based on user preference and availability.
@@ -101,7 +104,8 @@ namespace OmenCore.Services
             _ecAccess = ecAccess;
             _wmiBios = wmiBios;
             _configService = configService;
-            
+            _oghProxy = new OghServiceProxy(_logging);
+
             InitializeBackends();
         }
 
@@ -153,6 +157,16 @@ namespace OmenCore.Services
                 _logging.Info($"EC keyboard access not available: {ex.Message}");
                 _ecAvailable = false;
             }
+
+            // Try OGH proxy for models where OMEN Gaming Hub mediates keyboard control
+            try
+            {
+                if (_oghProxy != null && _oghProxy.IsAvailable)
+                {
+                    _logging.Info("✓ OGH proxy available for possible keyboard control fallback");
+                }
+            }
+            catch { }
 
             if (!IsAvailable)
             {
@@ -382,7 +396,41 @@ namespace OmenCore.Services
                     return;
                 }
                 _logging.Warn("WMI BIOS methods failed, trying EC fallback");
-                
+
+                // Before falling back to EC, try OGH proxy (some models route keyboard control through Gaming Hub)
+                try
+                {
+                    if (_oghProxy != null && _oghProxy.IsAvailable)
+                    {
+                        // Build 128-byte color table per OmenMon format
+                        var data = new byte[128];
+                        data[0] = 4;
+                        const int COLOR_TABLE_PAD = 24;
+                        int colorOffset = 1 + COLOR_TABLE_PAD; // Byte 25
+                        int colorsToCopy = Math.Min(12, orderedColors.Length * 3);
+                        for (int i = 0; i < 4; i++)
+                        {
+                            data[colorOffset + i * 3] = orderedColors[i].R;
+                            data[colorOffset + i * 3 + 1] = orderedColors[i].G;
+                            data[colorOffset + i * 3 + 2] = orderedColors[i].B;
+                        }
+
+                        bool oghOk = TryOghSetColorTable(data);
+                        TrackOghResult(oghOk);
+                        if (oghOk)
+                        {
+                            _logging.Info("✓ Keyboard colors set via OGH proxy fallback");
+                            _logging.Info($"✓ Applied keyboard zone colors: Z1=#{orderedColors[0].R:X2}{orderedColors[0].G:X2}{orderedColors[0].B:X2}, Z2=#{orderedColors[1].R:X2}{orderedColors[1].G:X2}{orderedColors[1].B:X2}, Z3=#{orderedColors[2].R:X2}{orderedColors[2].G:X2}{orderedColors[2].B:X2}, Z4=#{orderedColors[3].R:X2}{orderedColors[3].G:X2}{orderedColors[3].B:X2}");
+                            return;
+                        }
+                        _logging.Warn("OGH proxy fallback failed or commands unsupported on this model");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logging.Warn($"OGH fallback attempt failed: {ex.Message}");
+                }
+
                 // Final fallback: try EC if experimental is enabled
                 if (_ecAvailable && _ecAccess != null && IsExperimentalEcEnabled)
                 {
@@ -619,8 +667,13 @@ namespace OmenCore.Services
                     WmiFailureCount = _wmiFailureCount,
                     EcSuccessCount = _ecSuccessCount,
                     EcFailureCount = _ecFailureCount,
+                    OghSuccessCount = _oghSuccessCount,
+                    OghFailureCount = _oghFailureCount,
                     WmiSuccessRate = _wmiSuccessCount + _wmiFailureCount > 0 
                         ? (double)_wmiSuccessCount / (_wmiSuccessCount + _wmiFailureCount) * 100 
+                        : 0,
+                    OghSuccessRate = _oghSuccessCount + _oghFailureCount > 0 
+                        ? (double)_oghSuccessCount / (_oghSuccessCount + _oghFailureCount) * 100 
                         : 0,
                     EcSuccessRate = _ecSuccessCount + _ecFailureCount > 0 
                         ? (double)_ecSuccessCount / (_ecSuccessCount + _ecFailureCount) * 100 
@@ -634,7 +687,7 @@ namespace OmenCore.Services
             var stats = GetTelemetry();
             if (stats.TotalAttempts > 0)
             {
-                _logging.Info($"Keyboard Telemetry: {stats.TotalAttempts} attempts | WMI: {stats.WmiSuccessCount}✓/{stats.WmiFailureCount}✗ ({stats.WmiSuccessRate:F0}%) | EC: {stats.EcSuccessCount}✓/{stats.EcFailureCount}✗ ({stats.EcSuccessRate:F0}%)");
+                _logging.Info($"Keyboard Telemetry: {stats.TotalAttempts} attempts | WMI: {stats.WmiSuccessCount}✓/{stats.WmiFailureCount}✗ ({stats.WmiSuccessRate:F0}%) | OGH: {stats.OghSuccessCount}✓/{stats.OghFailureCount}✗ ({stats.OghSuccessRate:F0}%) | EC: {stats.EcSuccessCount}✓/{stats.EcFailureCount}✗ ({stats.EcSuccessRate:F0}%)");
             }
         }
         
@@ -655,6 +708,36 @@ namespace OmenCore.Services
                 if (success) _ecSuccessCount++; else _ecFailureCount++;
             }
         }
+
+        private void TrackOghResult(bool success)
+        {
+            lock (_telemetryLock)
+            {
+                _totalAttempts++;
+                if (success) _oghSuccessCount++; else _oghFailureCount++;
+            }
+        }
+
+        private bool TryOghSetColorTable(byte[] data)
+        {
+            if (_oghProxy == null || !_oghProxy.IsAvailable) return false;
+
+            // Candidate command names that OGH might accept for keyboard backlight
+            var cmds = new[] { "Backlight:SetColorTable", "Backlight:ColorTable", "Keyboard:SetColorTable", "Backlight:Set" };
+            foreach (var cmd in cmds)
+            {
+                try
+                {
+                    if (_oghProxy.ExecuteOghSetCommand(cmd, data))
+                        return true;
+                }
+                catch (Exception ex)
+                {
+                    _logging.Warn($"OGH command '{cmd}' failed: {ex.Message}");
+                }
+            }
+            return false;
+        }
     }
     
     /// <summary>
@@ -665,9 +748,12 @@ namespace OmenCore.Services
         public int TotalAttempts { get; set; }
         public int WmiSuccessCount { get; set; }
         public int WmiFailureCount { get; set; }
+        public int OghSuccessCount { get; set; }
+        public int OghFailureCount { get; set; }
         public int EcSuccessCount { get; set; }
         public int EcFailureCount { get; set; }
         public double WmiSuccessRate { get; set; }
+        public double OghSuccessRate { get; set; }
         public double EcSuccessRate { get; set; }
     }
 }

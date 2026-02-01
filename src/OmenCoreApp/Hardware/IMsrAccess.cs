@@ -88,6 +88,25 @@ namespace OmenCore.Hardware
         // ==========================================
         
         /// <summary>
+        /// Check if power limit MSR is locked by BIOS (cannot be modified until next reboot)
+        /// </summary>
+        bool IsPowerLimitLocked();
+        
+        /// <summary>
+        /// Get detailed power limit status including PL1, PL2, enable states, and lock status
+        /// </summary>
+        (double Pl1Watts, double Pl2Watts, bool Pl1Enabled, bool Pl2Enabled, bool IsLocked) GetPowerLimitStatus();
+        
+        /// <summary>
+        /// Set both PL1 and PL2 power limits at once (more efficient than separate calls).
+        /// Only works if power limits are not locked by BIOS.
+        /// </summary>
+        /// <param name="pl1Watts">Sustained power limit (PL1) in watts</param>
+        /// <param name="pl2Watts">Burst power limit (PL2) in watts</param>
+        /// <returns>True if successfully set, false if locked or failed</returns>
+        bool SetPowerLimits(double pl1Watts, double pl2Watts);
+        
+        /// <summary>
         /// Read current package power limit (PL1) in watts.
         /// </summary>
         double ReadPackagePowerLimit();

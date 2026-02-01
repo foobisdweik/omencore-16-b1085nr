@@ -14,7 +14,7 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 - ✅ **No Sign-In Required** - Full offline operation
 - 🐧 **Cross-Platform** - Windows GUI + Linux CLI & Avalonia GUI
 
-[![Version](https://img.shields.io/badge/version-2.5.1-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v2.5.1)
+[![Version](https://img.shields.io/badge/version-2.6.0-blue.svg)](https://github.com/theantipopau/omencore/releases/tag/v2.6.0)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
 [![Website](https://img.shields.io/badge/website-omencore.info-brightgreen.svg)](https://omencore.info)
@@ -25,38 +25,39 @@ OmenCore is a **complete replacement** for HP OMEN Gaming Hub - no OGH services 
 
 ---
 
-## 🆕 What's New in v2.5.1
+## 🆕 What's New in v2.6.0
 
-### 🛡️ Critical Safety Improvements
-- **Fan Curve Safety Bounds**: Multi-layer thermal clamping with emergency protection at 88°C (forces 100% fans)
-- **Progressive Minimum Speeds**: 80% at 80°C, 60% at 70°C, 40% at 60°C, 20% at 50°C, 10% base
-- **EDP Throttling Detection**: MSR-based throttling detection using IA32_THERM_STATUS register
-- **Emergency Override**: Bypasses all controls when temperatures exceed 88°C
+### 🔧 WMI BIOS Compatibility (BIOS F.15+)
+- **Legacy WMI Fallback** - CIM-based commands now gracefully fall back to System.Management API
+- **GPU Power Boost Fixed** - Now works on systems with latest BIOS updates (F.15+)
+- **Automatic Detection** - Seamless switching to legacy mode when needed
 
-### 🐛 Critical Bug Fixes
-- **Max Preset Reliability**: Fixed GUI showing 100% while fans don't spin - added verification loops with retries
-- **Fan Control Reliability**: Apply-and-verify loops, continuous re-application (15-second intervals), fallback sequences
-- **Temperature Freezing**: Fixed temps freezing when storage drives sleep, SafeFileHandle disposal errors
-- **Victus 16 Fan Control**: Enhanced stuck sensor detection, worker robustness, fan control retry logic
+### 🌀 Fan Control Improvements
+- **Fixed Dual Curve UI** - Single/dual curve editors no longer overlap
+- **RPM Parsing for V2 Systems** - Fixed absurd readings (20297 RPM, 78 RPM) with sanity validation
+- **Constant Speed Mode** - Set fans to fixed percentage (0-100%) with estimated RPM display
+- **EC Conflict Detection** - Graceful coexistence with OmenMon (retry logic)
 
-### 📊 Enhanced Diagnostics
-- **Comprehensive Fan Diagnostics**: Detailed fan curve analysis, hardware verification, BIOS command logging
-- **Hardware Monitoring Improvements**: Enhanced sensor reliability, stuck sensor detection, worker process monitoring
-- **Diagnostic Export Enhancements**: Better error reporting, hardware state capture, troubleshooting data
+### 🌈 New Features
+- **Temperature-Based RGB** - Keyboard color changes based on CPU/GPU temp (blue→yellow→red)
+- **RAM Display Fix** - Fixed "0/0 GB" with WMI fallback
+- **Self-Sufficient Architecture** - Works without LibreHardwareMonitor using HP WMI BIOS
+- **PL1/PL2 Control** - Power limit detection and atomic set with verification
 
-### 🔧 Technical Improvements
-- **Power Limit Verification**: Reads back EC registers to verify power limits applied successfully
-- **Secure Boot Compatibility**: Enhanced MSR access via PawnIO for Secure Boot systems
-- **BIOS Timeout Handling**: Automatic re-application of settings to prevent BIOS reversion
-- **Enhanced Diagnostics**: Better logging and conflict detection for troubleshooting
-- **GPU Power Boost Integration**: Combined WMI BIOS + NVAPI control for accurate power management
-- **Fan Control Hardening**: Multi-level retry logic with verification and enhanced logging
+### ⚡ Performance
+- **Faster Startup** - Hardware worker now starts 1 second faster (500ms vs 1500ms delay)
 
-Full changelog: [CHANGELOG_v2.5.0.md](docs/CHANGELOG_v2.5.0.md)
+### 🐛 Bug Fixes
+- **Ctrl+S Hotkey Conflict** - Replaced with `Ctrl+Shift+Alt+A` for apply settings
+- **Temperature Freezing** - Enhanced stuck-temperature detection with WMI fallback
+
+Full changelog: [CHANGELOG_v2.6.0.md](docs/CHANGELOG_v2.6.0.md)
 
 ---
 
-## 🆕 What's New in v2.3.2
+## 📖 Previous Releases
+
+### v2.5.1 - Critical Safety Improvements
 
 - 🛡️ **Desktop Safety Protection** - OmenCore now detects OMEN desktops and blocks fan control to prevent hardware damage (monitoring-only mode available)
 - 🐧 **Linux GUI Crash Fixed** - Resolved Avalonia startup crash on Linux (`StaticResource 'DarkBackgroundBrush' not found`)

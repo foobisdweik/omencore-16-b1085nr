@@ -41,7 +41,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "startmenu"; Description: "Create Start Menu shortcut"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "installpawnio"; Description: "Install PawnIO driver (REQUIRED for MSR access, Secure Boot compatible)"; GroupDescription: "Hardware Drivers:"
+Name: "installpawnio"; Description: "Install PawnIO driver (REQUIRED for advanced features - MSR, EC access, Secure Boot compatible)"; GroupDescription: "Hardware Drivers:"; Flags: checkedonce
 Name: "autostart"; Description: "Start OmenCore with Windows"; GroupDescription: "Startup Options:"; Flags: unchecked
 
 [Files]

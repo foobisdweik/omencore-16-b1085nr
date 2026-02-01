@@ -13,7 +13,7 @@ using OmenCore.Utils;
 
 namespace OmenCore.ViewModels
 {
-    public class FanControlViewModel : ViewModelBase, IDisposable
+    public class FanControlViewModel : ViewModelBase
     {
         private readonly FanService _fanService;
         private readonly LoggingService _logging;
@@ -21,120 +21,12 @@ namespace OmenCore.ViewModels
         private FanPreset? _selectedPreset;
         private string _customPresetName = "Custom";
         private double _currentTemperature;
-        private double _currentCpuTemperature;
-        private double _currentGpuTemperature;
-        private bool _thermalProtectionActive;
-        private DateTime _lastTelemetryTimestamp = DateTime.MinValue;
         private bool _suppressApplyOnSelection;
-        private bool _independentCurvesEnabled;
-        private string _curveEditTarget = "Both"; // "Both", "CPU", "GPU"
-        private bool _disposed;
 
         public ObservableCollection<FanPreset> FanPresets { get; } = new();
-        
-        /// <summary>
-        /// The fan curve used for unified control or CPU-specific control.
-        /// </summary>
         public ObservableCollection<FanCurvePoint> CustomFanCurve { get; } = new();
-        
-        /// <summary>
-        /// The fan curve used for GPU-specific control when independent curves are enabled.
-        /// </summary>
-        public ObservableCollection<FanCurvePoint> GpuFanCurve { get; } = new();
-        
         public ReadOnlyObservableCollection<ThermalSample> ThermalSamples => _fanService.ThermalSamples;
         public ReadOnlyObservableCollection<FanTelemetry> FanTelemetry => _fanService.FanTelemetry;
-
-        /// <summary>
-        /// Whether thermal protection is currently overriding user curves.
-        /// </summary>
-        public bool ThermalProtectionActive
-        {
-            get => _thermalProtectionActive;
-            private set
-            {
-                if (_thermalProtectionActive != value)
-                {
-                    _thermalProtectionActive = value;
-                    OnPropertyChanged();
-                    OnPropertyChanged(nameof(ThermalProtectionStatusText));
-                }
-            }
-        }
-
-        /// <summary>
-        /// Human-readable label for thermal protection state.
-        /// </summary>
-        public string ThermalProtectionStatusText => ThermalProtectionActive
-            ? "Thermal protection is overriding fan curves until temps drop"
-            : "Thermal protection is idle";
-
-        /// <summary>
-        /// Last time fan telemetry was refreshed.
-        /// </summary>
-        public string LastTelemetryUpdatedText => _lastTelemetryTimestamp == DateTime.MinValue
-            ? "No data yet"
-            : $"Last updated: {_lastTelemetryTimestamp:HH:mm:ss}";
-        
-        /// <summary>
-        /// Whether independent CPU/GPU fan curves are enabled.
-        /// </summary>
-        public bool IndependentCurvesEnabled
-        {
-            get => _independentCurvesEnabled;
-            set
-            {
-                if (_independentCurvesEnabled != value)
-                {
-                    _independentCurvesEnabled = value;
-                    OnPropertyChanged();
-                    OnPropertyChanged(nameof(CurveEditorLabel));
-                    OnPropertyChanged(nameof(ShowGpuCurveEditor));
-                    
-                    // If enabling and GPU curve is empty, initialize it from the CPU curve
-                    if (value && GpuFanCurve.Count == 0)
-                    {
-                        foreach (var point in CustomFanCurve)
-                        {
-                            GpuFanCurve.Add(new FanCurvePoint 
-                            { 
-                                TemperatureC = point.TemperatureC, 
-                                FanPercent = point.FanPercent 
-                            });
-                        }
-                    }
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Which curve is being edited: "Both" (unified), "CPU", or "GPU".
-        /// </summary>
-        public string CurveEditTarget
-        {
-            get => _curveEditTarget;
-            set
-            {
-                if (_curveEditTarget != value)
-                {
-                    _curveEditTarget = value;
-                    OnPropertyChanged();
-                    OnPropertyChanged(nameof(CurveEditorLabel));
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Label for the curve editor based on current mode.
-        /// </summary>
-        public string CurveEditorLabel => IndependentCurvesEnabled 
-            ? "CPU Fan Curve (by CPU Temperature)" 
-            : "Fan Curve (by Max Temperature)";
-        
-        /// <summary>
-        /// Whether to show the separate GPU curve editor panel.
-        /// </summary>
-        public bool ShowGpuCurveEditor => IndependentCurvesEnabled;
         
         /// <summary>
         /// Current max temperature (CPU/GPU) for display on the fan curve editor.
@@ -147,38 +39,6 @@ namespace OmenCore.ViewModels
                 if (Math.Abs(_currentTemperature - value) > 0.1)
                 {
                     _currentTemperature = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Current CPU temperature for independent curve mode.
-        /// </summary>
-        public double CurrentCpuTemperature
-        {
-            get => _currentCpuTemperature;
-            set
-            {
-                if (Math.Abs(_currentCpuTemperature - value) > 0.1)
-                {
-                    _currentCpuTemperature = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Current GPU temperature for independent curve mode.
-        /// </summary>
-        public double CurrentGpuTemperature
-        {
-            get => _currentGpuTemperature;
-            set
-            {
-                if (Math.Abs(_currentGpuTemperature - value) > 0.1)
-                {
-                    _currentGpuTemperature = value;
                     OnPropertyChanged();
                 }
             }
@@ -243,6 +103,7 @@ namespace OmenCore.ViewModels
                     OnPropertyChanged(nameof(IsAutoSelected));
                     OnPropertyChanged(nameof(IsSilentSelected));
                     OnPropertyChanged(nameof(IsCustomSelected));
+                    OnPropertyChanged(nameof(IsConstantSelected));
                 }
             }
         }
@@ -283,6 +144,40 @@ namespace OmenCore.ViewModels
             set { if (value) ActiveFanMode = "Custom"; }
         }
         
+        public bool IsConstantSelected
+        {
+            get => _activeFanMode == "Constant";
+            set { if (value) ActiveFanMode = "Constant"; }
+        }
+        
+        // Constant speed mode properties (OmenMon-style fixed percentage)
+        private int _constantFanPercent = 50;
+        public int ConstantFanPercent
+        {
+            get => _constantFanPercent;
+            set
+            {
+                var clamped = Math.Clamp(value, 0, 100);
+                if (_constantFanPercent != clamped)
+                {
+                    _constantFanPercent = clamped;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(ConstantFanRpmEstimate));
+                    
+                    // If in constant mode, apply immediately
+                    if (IsConstantSelected)
+                    {
+                        ApplyConstantSpeed();
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Estimated RPM based on percentage (assuming max ~5500 RPM)
+        /// </summary>
+        public int ConstantFanRpmEstimate => (int)(_constantFanPercent / 100.0 * 5500);
+        
         /// <summary>
         /// Whether a custom fan curve is currently being actively applied by FanService.
         /// </summary>
@@ -306,16 +201,10 @@ namespace OmenCore.ViewModels
         public ICommand ImportPresetsCommand { get; }
         public ICommand ExportPresetsCommand { get; }
         
-        // Curve editor commands (CPU/unified curve)
+        // Curve editor commands
         public ICommand AddCurvePointCommand { get; }
         public ICommand RemoveCurvePointCommand { get; }
         public ICommand ResetCurveCommand { get; }
-        
-        // GPU curve editor commands
-        public ICommand AddGpuCurvePointCommand { get; }
-        public ICommand RemoveGpuCurvePointCommand { get; }
-        public ICommand ResetGpuCurveCommand { get; }
-        public ICommand CopyFromCpuCurveCommand { get; }
         
         // Quick preset commands
         public ICommand ApplyMaxCoolingCommand { get; }
@@ -323,6 +212,7 @@ namespace OmenCore.ViewModels
         public ICommand ApplyAutoModeCommand { get; }
         public ICommand ApplyQuietModeCommand { get; }
         public ICommand ApplyGamingModeCommand { get; }
+        public ICommand ApplyConstantSpeedCommand { get; }
         public ICommand ReapplySavedPresetCommand { get; }
 
         private bool _immediateApplyOnApply;
@@ -383,6 +273,57 @@ namespace OmenCore.ViewModels
             }
         }
 
+        #region Independent CPU/GPU Curves (Disabled by default - XAML bindings require these)
+        
+        /// <summary>
+        /// When true, shows separate CPU and GPU curve editors. When false, shows a single unified curve.
+        /// Currently disabled (false) until full implementation is complete.
+        /// </summary>
+        private bool _independentCurvesEnabled = false;
+        public bool IndependentCurvesEnabled
+        {
+            get => _independentCurvesEnabled;
+            set
+            {
+                if (_independentCurvesEnabled != value)
+                {
+                    _independentCurvesEnabled = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        
+        /// <summary>GPU fan curve for independent mode (placeholder).</summary>
+        public ObservableCollection<FanCurvePoint> GpuFanCurve { get; } = new();
+        
+        /// <summary>Current CPU temperature for the CPU-specific curve editor.</summary>
+        public double CurrentCpuTemperature => CurrentTemperature; // Use unified temp for now
+        
+        /// <summary>Current GPU temperature for the GPU-specific curve editor.</summary>
+        public double CurrentGpuTemperature => CurrentTemperature; // Use unified temp for now
+        
+        /// <summary>Whether thermal protection is currently active.</summary>
+        public bool ThermalProtectionActive => _fanService.IsThermalProtectionActive;
+        
+        /// <summary>Human-readable thermal protection status.</summary>
+        public string ThermalProtectionStatusText => ThermalProtectionActive 
+            ? $"⚠️ Active - CPU at {CurrentTemperature:F0}°C" 
+            : "✓ Normal";
+        
+        /// <summary>When the fan telemetry was last updated.</summary>
+        public string LastTelemetryUpdatedText => $"Updated: {DateTime.Now:HH:mm:ss}";
+        
+        /// <summary>Shows which source is being used for RPM readings.</summary>
+        public string RpmSourceDisplay => _fanService.Backend;
+        
+        // GPU curve editor commands (stubs - will use same curve for now)
+        public ICommand AddGpuCurvePointCommand { get; }
+        public ICommand RemoveGpuCurvePointCommand { get; }
+        public ICommand ResetGpuCurveCommand { get; }
+        public ICommand CopyFromCpuCurveCommand { get; }
+        
+        #endregion
+
         public FanControlViewModel(FanService fanService, ConfigurationService configService, LoggingService logging)
         {
             _fanService = fanService;
@@ -407,11 +348,11 @@ namespace OmenCore.ViewModels
             RemoveCurvePointCommand = new RelayCommand(_ => RemoveLastCurvePoint(), _ => CustomFanCurve.Count > 2);
             ResetCurveCommand = new RelayCommand(_ => ResetCurveToDefault());
             
-            // GPU curve editor commands
-            AddGpuCurvePointCommand = new RelayCommand(_ => AddGpuCurvePoint(), _ => GpuFanCurve.Count < 10);
+            // GPU curve editor commands (stubs - use same logic as CPU for now)
+            AddGpuCurvePointCommand = new RelayCommand(_ => AddDefaultGpuCurvePoint(), _ => GpuFanCurve.Count < 10);
             RemoveGpuCurvePointCommand = new RelayCommand(_ => RemoveLastGpuCurvePoint(), _ => GpuFanCurve.Count > 2);
             ResetGpuCurveCommand = new RelayCommand(_ => ResetGpuCurveToDefault());
-            CopyFromCpuCurveCommand = new RelayCommand(_ => CopyFromCpuCurve(), _ => CustomFanCurve.Count > 0);
+            CopyFromCpuCurveCommand = new RelayCommand(_ => CopyCpuCurveToGpu());
             
             // Quick preset buttons
             ApplyMaxCoolingCommand = new RelayCommand(_ => ApplyFanMode("Max"));
@@ -419,11 +360,11 @@ namespace OmenCore.ViewModels
             ApplyAutoModeCommand = new RelayCommand(_ => ApplyFanMode("Auto"));
             ApplyQuietModeCommand = new RelayCommand(_ => ApplyQuietMode());
             ApplyGamingModeCommand = new RelayCommand(_ => ApplyGamingMode());
+            ApplyConstantSpeedCommand = new RelayCommand(_ => ApplyConstantSpeed());
             ReapplySavedPresetCommand = new RelayCommand(async _ => await ReapplySavedPresetAsync());
             
             // Subscribe to thermal samples to update current temperature
             ((INotifyCollectionChanged)_fanService.ThermalSamples).CollectionChanged += ThermalSamples_CollectionChanged;
-            ((INotifyCollectionChanged)_fanService.FanTelemetry).CollectionChanged += FanTelemetry_CollectionChanged;
             
             // Initialize built-in presets
             FanPresets.Add(new FanPreset 
@@ -458,54 +399,10 @@ namespace OmenCore.ViewModels
             // Load custom presets from config file
             LoadPresetsFromConfig();
             
-            // Load independent curves from config if enabled
-            LoadIndependentCurvesFromConfig();
-            
             // Default to Auto without applying/saving to config
             _suppressApplyOnSelection = true;
-            SelectedPreset = FanPresets[2]; // Default to Auto (index 2: Max=0, Extreme=1, Auto=2)
+            SelectedPreset = FanPresets[1]; // Default to Auto
             _suppressApplyOnSelection = false;
-        }
-        
-        /// <summary>
-        /// Load independent CPU/GPU curves from config if they were previously saved.
-        /// </summary>
-        private void LoadIndependentCurvesFromConfig()
-        {
-            try
-            {
-                var config = _configService.Load();
-                if (config.IndependentFanCurvesEnabled && config.CpuFanCurve != null && config.GpuFanCurve != null)
-                {
-                    // Load the curves into the ViewModel
-                    CustomFanCurve.Clear();
-                    foreach (var point in config.CpuFanCurve)
-                    {
-                        CustomFanCurve.Add(new FanCurvePoint 
-                        { 
-                            TemperatureC = point.TemperatureC, 
-                            FanPercent = point.FanPercent 
-                        });
-                    }
-                    
-                    GpuFanCurve.Clear();
-                    foreach (var point in config.GpuFanCurve)
-                    {
-                        GpuFanCurve.Add(new FanCurvePoint 
-                        { 
-                            TemperatureC = point.TemperatureC, 
-                            FanPercent = point.FanPercent 
-                        });
-                    }
-                    
-                    IndependentCurvesEnabled = true;
-                    _logging.Info($"Loaded independent fan curves from config - CPU: {CustomFanCurve.Count} points, GPU: {GpuFanCurve.Count} points");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logging.Warn($"Failed to load independent curves from config: {ex.Message}");
-            }
         }
         
         private void ThermalSamples_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -514,24 +411,7 @@ namespace OmenCore.ViewModels
             {
                 var latest = _fanService.ThermalSamples[^1];
                 CurrentTemperature = Math.Max(latest.CpuCelsius, latest.GpuCelsius);
-                CurrentCpuTemperature = latest.CpuCelsius;
-                CurrentGpuTemperature = latest.GpuCelsius;
-
-                // Update thermal protection and timestamp alongside temperature samples
-                ThermalProtectionActive = _fanService.IsThermalProtectionActive;
-                _lastTelemetryTimestamp = DateTime.Now;
-                OnPropertyChanged(nameof(LastTelemetryUpdatedText));
             }
-        }
-
-        private void FanTelemetry_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        {
-            // Refresh telemetry timestamp when RPM readings change
-            _lastTelemetryTimestamp = DateTime.Now;
-            OnPropertyChanged(nameof(LastTelemetryUpdatedText));
-
-            // Mirror thermal protection state in case only fan telemetry updates
-            ThermalProtectionActive = _fanService.IsThermalProtectionActive;
         }
         
         /// <summary>
@@ -641,67 +521,29 @@ namespace OmenCore.ViewModels
             _logging.Info("Reset fan curve to default");
         }
         
-        #region GPU Curve Methods
+        #region GPU Curve Editor Methods (Stubs for independent curves)
         
-        /// <summary>
-        /// Add a new point to the GPU curve.
-        /// </summary>
-        private void AddGpuCurvePoint()
+        private void AddDefaultGpuCurvePoint()
         {
             if (GpuFanCurve.Count >= 10) return;
             
-            var sorted = GpuFanCurve.OrderBy(p => p.TemperatureC).ToList();
+            // Simple default point
+            int newTemp = GpuFanCurve.Count > 0 
+                ? GpuFanCurve.Max(p => p.TemperatureC) + 10 
+                : 50;
+            int newFan = Math.Min(100, newTemp);
             
-            int newTemp = 60;
-            int newFan = 50;
-            
-            if (sorted.Count > 0)
-            {
-                int maxGap = 0;
-                int gapStart = 30;
-                
-                for (int i = 0; i < sorted.Count - 1; i++)
-                {
-                    int gap = sorted[i + 1].TemperatureC - sorted[i].TemperatureC;
-                    if (gap > maxGap)
-                    {
-                        maxGap = gap;
-                        gapStart = sorted[i].TemperatureC;
-                        int fanStart = sorted[i].FanPercent;
-                        int fanEnd = sorted[i + 1].FanPercent;
-                        newTemp = gapStart + gap / 2;
-                        newFan = (fanStart + fanEnd) / 2;
-                    }
-                }
-            }
-            
-            GpuFanCurve.Add(new FanCurvePoint { TemperatureC = newTemp, FanPercent = newFan });
-            var reordered = GpuFanCurve.OrderBy(p => p.TemperatureC).ToList();
-            GpuFanCurve.Clear();
-            foreach (var p in reordered)
-            {
-                GpuFanCurve.Add(p);
-            }
-            
+            GpuFanCurve.Add(new FanCurvePoint { TemperatureC = Math.Clamp(newTemp, 30, 95), FanPercent = newFan });
             _logging.Info($"Added GPU curve point: {newTemp}°C → {newFan}%");
         }
         
-        /// <summary>
-        /// Remove the last GPU curve point.
-        /// </summary>
         private void RemoveLastGpuCurvePoint()
         {
             if (GpuFanCurve.Count <= 2) return;
-            
-            var removed = GpuFanCurve[^1];
             GpuFanCurve.RemoveAt(GpuFanCurve.Count - 1);
-            
-            _logging.Info($"Removed GPU curve point: {removed.TemperatureC}°C → {removed.FanPercent}%");
+            _logging.Info("Removed last GPU curve point");
         }
         
-        /// <summary>
-        /// Reset GPU curve to default.
-        /// </summary>
         private void ResetGpuCurveToDefault()
         {
             GpuFanCurve.Clear();
@@ -712,21 +554,14 @@ namespace OmenCore.ViewModels
             _logging.Info("Reset GPU fan curve to default");
         }
         
-        /// <summary>
-        /// Copy CPU curve to GPU curve.
-        /// </summary>
-        private void CopyFromCpuCurve()
+        private void CopyCpuCurveToGpu()
         {
             GpuFanCurve.Clear();
             foreach (var point in CustomFanCurve)
             {
-                GpuFanCurve.Add(new FanCurvePoint 
-                { 
-                    TemperatureC = point.TemperatureC, 
-                    FanPercent = point.FanPercent 
-                });
+                GpuFanCurve.Add(new FanCurvePoint { TemperatureC = point.TemperatureC, FanPercent = point.FanPercent });
             }
-            _logging.Info("Copied CPU curve to GPU curve");
+            _logging.Info($"Copied CPU curve ({CustomFanCurve.Count} points) to GPU curve");
         }
         
         #endregion
@@ -786,11 +621,8 @@ namespace OmenCore.ViewModels
         {
             try
             {
-                // Use Config property directly (in-memory) to avoid race conditions with disk reads
-                var config = _configService.Config;
+                var config = _configService.Load();
                 config.LastFanPresetName = presetName;
-                // Clear independent curves flag when applying a standard preset
-                config.IndependentFanCurvesEnabled = false;
                 _configService.Save(config);
                 _logging.Info($"💾 Last fan preset saved to config: {presetName}");
             }
@@ -802,13 +634,6 @@ namespace OmenCore.ViewModels
 
         private void ApplyCustomCurve()
         {
-            // Check if using independent curves mode
-            if (IndependentCurvesEnabled)
-            {
-                ApplyIndependentCurves();
-                return;
-            }
-            
             // Validate the curve before applying
             var validationError = ValidateFanCurve(CustomFanCurve);
             if (validationError != null)
@@ -832,91 +657,7 @@ namespace OmenCore.ViewModels
             _fanService.ApplyPreset(customPreset, ImmediateApplyOnApply);
             ActiveFanMode = "Custom";
             OnPropertyChanged(nameof(CurrentFanModeName));
-            
-            // Save the custom curve to config for persistence across restarts
-            SaveCustomCurveToConfig();
-        }
-        
-        /// <summary>
-        /// Save the current custom curve to config for restoration on next startup.
-        /// </summary>
-        private void SaveCustomCurveToConfig()
-        {
-            try
-            {
-                var config = _configService.Config;
-                config.CustomFanCurve = CustomFanCurve.ToList();
-                config.LastFanPresetName = "Custom";
-                _configService.Save(config);
-                _logging.Info($"💾 Custom fan curve saved to config ({CustomFanCurve.Count} points)");
-            }
-            catch (Exception ex)
-            {
-                _logging.Warn($"Failed to save custom curve to config: {ex.Message}");
-            }
-        }
-        
-        /// <summary>
-        /// Apply independent CPU and GPU fan curves.
-        /// </summary>
-        private void ApplyIndependentCurves()
-        {
-            // Validate CPU curve
-            var cpuError = ValidateFanCurve(CustomFanCurve);
-            if (cpuError != null)
-            {
-                _logging.Warn($"Invalid CPU fan curve: {cpuError}");
-                System.Windows.MessageBox.Show(
-                    $"CPU Curve: {cpuError}\n\nPlease fix the CPU fan curve and try again.",
-                    "Invalid CPU Fan Curve",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Warning);
-                return;
-            }
-            
-            // Validate GPU curve
-            var gpuError = ValidateFanCurve(GpuFanCurve);
-            if (gpuError != null)
-            {
-                _logging.Warn($"Invalid GPU fan curve: {gpuError}");
-                System.Windows.MessageBox.Show(
-                    $"GPU Curve: {gpuError}\n\nPlease fix the GPU fan curve and try again.",
-                    "Invalid GPU Fan Curve",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Warning);
-                return;
-            }
-            
-            // Enable independent curves in FanService
-            _fanService.EnableIndependentCurves(CustomFanCurve.ToList(), GpuFanCurve.ToList());
-            ActiveFanMode = "Custom";
-            OnPropertyChanged(nameof(CurrentFanModeName));
-            _logging.Info($"Applied independent fan curves - CPU: {CustomFanCurve.Count} points, GPU: {GpuFanCurve.Count} points");
-            
-            // Save to config for persistence
-            SaveIndependentCurvesToConfig();
-        }
-        
-        /// <summary>
-        /// Save independent CPU/GPU curves to config for restoration on next startup.
-        /// </summary>
-        private void SaveIndependentCurvesToConfig()
-        {
-            try
-            {
-                // Use Config property directly (in-memory) to avoid race conditions with disk reads
-                var config = _configService.Config;
-                config.IndependentFanCurvesEnabled = true;
-                config.CpuFanCurve = CustomFanCurve.ToList();
-                config.GpuFanCurve = GpuFanCurve.ToList();
-                config.LastFanPresetName = "Independent";
-                _configService.Save(config);
-                _logging.Info($"💾 Independent fan curves saved to config - CPU: {CustomFanCurve.Count} points, GPU: {GpuFanCurve.Count} points");
-            }
-            catch (Exception ex)
-            {
-                _logging.Warn($"Failed to save independent curves to config: {ex.Message}");
-            }
+            // FanService logs success/failure, no need to duplicate
         }
         
         /// <summary>
@@ -1028,8 +769,7 @@ namespace OmenCore.ViewModels
         {
             try
             {
-                // Use Config property directly (in-memory) to avoid race conditions with disk reads
-                var config = _configService.Config;
+                var config = _configService.Load();
                 
                 // Update only the custom (non-built-in) presets
                 config.FanPresets = FanPresets
@@ -1096,15 +836,12 @@ namespace OmenCore.ViewModels
         private static List<FanCurvePoint> GetQuietCurve()
         {
             // Silent mode: delayed fan ramp, allows higher temps for quiet operation
-            // GitHub #47: Tuned to prevent 75°C overheat during sustained loads (movie playback)
-            // Now ramps more aggressively at 65°C+ to keep temps below 70°C under sustained load
             return new List<FanCurvePoint>
             {
                 new() { TemperatureC = 50, FanPercent = 25 },
-                new() { TemperatureC = 60, FanPercent = 30 },  // Earlier ramp
-                new() { TemperatureC = 68, FanPercent = 45 },  // More aggressive at warm temps
-                new() { TemperatureC = 75, FanPercent = 60 },  // Increased from 50% to 60%
-                new() { TemperatureC = 85, FanPercent = 75 },  // Increased from 70% to 75%
+                new() { TemperatureC = 65, FanPercent = 35 },
+                new() { TemperatureC = 75, FanPercent = 50 },
+                new() { TemperatureC = 85, FanPercent = 70 },
                 new() { TemperatureC = 95, FanPercent = 100 }
             };
         }
@@ -1167,14 +904,14 @@ namespace OmenCore.ViewModels
         /// <summary>
         /// Re-apply the last saved fan preset from config. Useful as a manual "force reapply" button.
         /// </summary>
-        private Task ReapplySavedPresetAsync()
+        private async Task ReapplySavedPresetAsync()
         {
             var saved = _configService.Config.LastFanPresetName;
             if (string.IsNullOrEmpty(saved))
             {
                 System.Windows.MessageBox.Show("No saved fan preset found in configuration.", "Reapply Saved Preset",
                     System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
-                return Task.CompletedTask;
+                return;
             }
 
             // First, see if it's a custom preset
@@ -1185,88 +922,38 @@ namespace OmenCore.ViewModels
                 SelectedPreset = FanPresets.FirstOrDefault(p => p.Name == preset.Name) ?? SelectedPreset;
                 SaveLastPresetToConfig(preset.Name);
                 _logging.Info($"Manually reapplied saved preset: {preset.Name}");
-                return Task.CompletedTask;
+                return;
             }
 
             // Handle built-in names
             var nameLower = saved.ToLowerInvariant();
-            if (nameLower.Contains("max") && !nameLower.Contains("extreme"))
+            if (nameLower.Contains("max"))
             {
                 _fanService.ApplyMaxCooling();
                 _logging.Info($"Manually reapplied saved preset: {saved} (Max)");
-                return Task.CompletedTask;
-            }
-
-            if (nameLower.Contains("extreme"))
-            {
-                var extremePreset = FanPresets.FirstOrDefault(p => p.Name == "Extreme");
-                if (extremePreset != null)
-                {
-                    _fanService.ApplyPreset(extremePreset);
-                    SelectedPreset = extremePreset;
-                }
-                _logging.Info($"Manually reapplied saved preset: {saved} (Extreme)");
-                return Task.CompletedTask;
+                return;
             }
 
             if (nameLower == "auto" || nameLower == "default")
             {
                 _fanService.ApplyAutoMode();
                 _logging.Info($"Manually reapplied saved preset: {saved} (Auto)");
-                return Task.CompletedTask;
+                return;
             }
 
             if (nameLower == "quiet" || nameLower == "silent")
             {
                 _fanService.ApplyQuietMode();
                 _logging.Info($"Manually reapplied saved preset: {saved} (Quiet)");
-                return Task.CompletedTask;
-            }
-            
-            // Handle "Custom" - restore the saved custom curve
-            if (nameLower == "custom")
-            {
-                var customCurve = _configService.Config.CustomFanCurve;
-                if (customCurve != null && customCurve.Count >= 2)
-                {
-                    // Load the curve into the UI
-                    CustomFanCurve.Clear();
-                    foreach (var point in customCurve)
-                    {
-                        CustomFanCurve.Add(new FanCurvePoint { TemperatureC = point.TemperatureC, FanPercent = point.FanPercent });
-                    }
-                    
-                    // Apply it
-                    var customPreset = new FanPreset
-                    {
-                        Name = "Custom (Restored)",
-                        Mode = FanMode.Manual,
-                        Curve = customCurve
-                    };
-                    _fanService.ApplyPreset(customPreset);
-                    ActiveFanMode = "Custom";
-                    OnPropertyChanged(nameof(CurrentFanModeName));
-                    _logging.Info($"Restored custom fan curve ({customCurve.Count} points) from config");
-                }
-                else
-                {
-                    _logging.Warn("Custom fan curve not found in config, applying default curve");
-                    CustomFanCurve.Clear();
-                    foreach (var point in GetDefaultManualCurve())
-                    {
-                        CustomFanCurve.Add(point);
-                    }
-                }
-                return Task.CompletedTask;
+                return;
             }
 
             // Fallback - attempt to apply by name
             var fallback = new FanPreset { Name = saved, Mode = FanMode.Performance };
             _fanService.ApplyPreset(fallback);
             _logging.Info($"Manually reapplied saved preset via fallback: {saved}");
-            return Task.CompletedTask;
         }
-
+        
         private void ApplyQuietMode()
         {
             var quietPreset = new FanPreset
@@ -1291,6 +978,18 @@ namespace OmenCore.ViewModels
             
             ActiveFanMode = "Silent";
             _logging.Info("Applied Quiet fan mode");
+        }
+        
+        /// <summary>
+        /// Apply constant fan speed mode (OmenMon-style fixed percentage).
+        /// Fans are held at ConstantFanPercent regardless of temperature.
+        /// </summary>
+        private void ApplyConstantSpeed()
+        {
+            _fanService.DisableCurve(); // Stop any active curve
+            _fanService.ForceSetFanSpeed(ConstantFanPercent);
+            ActiveFanMode = "Constant";
+            _logging.Info($"Applied constant fan speed: {ConstantFanPercent}% (~{ConstantFanRpmEstimate} RPM)");
         }
 
         /// <summary>
@@ -1424,32 +1123,6 @@ namespace OmenCore.ViewModels
                 System.Windows.MessageBox.Show($"Failed to export presets: {ex.Message}", "Export Error",
                     System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
-        }
-        
-        /// <summary>
-        /// Dispose resources and unsubscribe from events.
-        /// </summary>
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-        
-        /// <summary>
-        /// Protected dispose implementation.
-        /// </summary>
-        protected virtual void Dispose(bool disposing)
-        {
-            if (_disposed) return;
-            
-            if (disposing)
-            {
-                // Unsubscribe from thermal samples collection
-                ((INotifyCollectionChanged)_fanService.ThermalSamples).CollectionChanged -= ThermalSamples_CollectionChanged;
-                ((INotifyCollectionChanged)_fanService.FanTelemetry).CollectionChanged -= FanTelemetry_CollectionChanged;
-            }
-            
-            _disposed = true;
         }
     }
 

@@ -4,7 +4,6 @@ using OmenCore.Logitech;
 using OmenCore.Models;
 using OmenCore.Services;
 using OmenCore.Utils;
-using OmenCore.ViewModels;
 using OmenCore.Views;
 using System;
 using System.Collections.ObjectModel;
@@ -51,40 +50,32 @@ namespace OmenCore.ViewModels
         private readonly FanService _fanService = null!;
         private readonly IFanVerificationService _fanVerificationService = null!;
         private readonly PerformanceModeService _performanceModeService = null!;
-        private readonly KeyboardLightingService _keyboardLightingService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly SystemOptimizationService _systemOptimizationService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly GpuSwitchService _gpuSwitchService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
+        private readonly KeyboardLightingService _keyboardLightingService;
+        private readonly SystemOptimizationService _systemOptimizationService;
+        private readonly GpuSwitchService _gpuSwitchService;
         private CorsairDeviceService? _corsairDeviceService;
         private LogitechDeviceService? _logitechDeviceService;
         private OmenCore.Razer.RazerService? _razerService;
         private readonly MacroService _macroService = new();
-        private readonly UndervoltService _undervoltService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly HardwareMonitoringService _hardwareMonitoringService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly SystemRestoreService _systemRestoreService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly OmenGamingHubCleanupService _hubCleanupService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly SystemInfoService _systemInfoService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly AutoUpdateService _autoUpdateService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly UpdateCheckService _updateCheckService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly ProcessMonitoringService _processMonitoringService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly GameProfileService _gameProfileService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly FanCleaningService _fanCleaningService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly HotkeyService _hotkeyService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly NotificationService _notificationService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly BiosUpdateService _biosUpdateService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly PowerAutomationService _powerAutomationService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly OmenKeyService _omenKeyService = null!; // TODO: Refactor to constructor DI (#v2.4.1)
-        private readonly OsdService? _osdService;
-        private readonly HpWmiBios? _wmiBios;
-        private readonly OghServiceProxy? _oghProxy;
-        private readonly NvapiService? _nvapiService;
-        private readonly IEcAccess? _ecAccess;
+        private readonly UndervoltService _undervoltService;
+        private readonly HardwareMonitoringService _hardwareMonitoringService;
+        public HardwareMonitoringService HardwareMonitoringService => _hardwareMonitoringService;
+        private readonly SystemRestoreService _systemRestoreService;
+        private readonly OmenGamingHubCleanupService _hubCleanupService;
+        private readonly SystemInfoService _systemInfoService;
+        private readonly AutoUpdateService _autoUpdateService;
+        private readonly ProcessMonitoringService _processMonitoringService;
+        private readonly GameProfileService _gameProfileService;
+        private readonly FanCleaningService _fanCleaningService;
+        private readonly HotkeyService _hotkeyService;
+        private readonly NotificationService _notificationService;
+        private readonly BiosUpdateService _biosUpdateService;
+        private readonly PowerAutomationService _powerAutomationService;
+        private readonly OmenKeyService _omenKeyService;
+        private OsdService? _osdService;
+        private HpWmiBios? _wmiBios;
+        private OghServiceProxy? _oghProxy;
         private HotkeyOsdWindow? _hotkeyOsd;
-        
-        // Update check properties
-        private bool _updateAvailable;
-        private string _updateVersion = "";
-        private string _updateUrl = "";
-        private bool _isCheckingForUpdates;
         
         // Sub-ViewModels for modular UI (Lazy Loaded)
         private FanControlViewModel? _fanControl;
@@ -132,11 +123,7 @@ namespace OmenCore.ViewModels
                         _configService,
                         _wmiBios,
                         _oghProxy,
-                        _systemInfoService,
-                        _nvapiService,
-                        _fanService,
-                        _hardwareMonitoringService,
-                        _ecAccess
+                        _systemInfoService
                     );
                     _systemControl.PropertyChanged += (s, e) =>
                     {
@@ -160,7 +147,7 @@ namespace OmenCore.ViewModels
             {
                 if (_dashboard == null)
                 {
-                    _dashboard = new DashboardViewModel(_hardwareMonitoringService, _fanService);
+                    _dashboard = new DashboardViewModel(_hardwareMonitoringService);
                     // Initialize with current values (triggers creation of dependencies if needed)
                     if (SystemControl != null)
                     {
@@ -182,9 +169,14 @@ namespace OmenCore.ViewModels
             {
                 if (_settings == null)
                 {
+                    // Create services required for SettingsViewModel
                     var profileExportService = new ProfileExportService(_logging, _configService);
                     var diagnosticsExportService = new DiagnosticsExportService(_logging, _configService);
-                    _settings = new SettingsViewModel(_logging, _configService, _systemInfoService, _fanCleaningService, _biosUpdateService, profileExportService, diagnosticsExportService, _wmiBios, _omenKeyService, _osdService, _hardwareMonitoringService, _powerAutomationService, _fanService);
+                    
+                    _settings = new SettingsViewModel(_logging, _configService, _systemInfoService, 
+                        _fanCleaningService, _biosUpdateService, profileExportService, diagnosticsExportService,
+                        _wmiBios, _omenKeyService, _osdService, _hardwareMonitoringService, 
+                        _powerAutomationService, _fanService);
                     
                     // Subscribe to low overhead mode changes from Settings
                     _settings.LowOverheadModeChanged += (s, enabled) =>
@@ -249,36 +241,22 @@ namespace OmenCore.ViewModels
                 return _systemOptimizer;
             }
         }
-
-        private BloatwareManagerViewModel? _bloatwareManager;
-        public BloatwareManagerViewModel? BloatwareManager
-        {
-            get
-            {
-                if (_bloatwareManager == null)
-                {
-                    _bloatwareManager = new BloatwareManagerViewModel(_logging);
-                    OnPropertyChanged(nameof(BloatwareManager));
-                }
-                return _bloatwareManager;
-            }
-        }
         
-        private readonly AsyncRelayCommand _applyUndervoltCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly AsyncRelayCommand _resetUndervoltCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly AsyncRelayCommand _refreshUndervoltCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly AsyncRelayCommand _createRestorePointCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly AsyncRelayCommand _cleanupOmenHubCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly AsyncRelayCommand _installUpdateCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly AsyncRelayCommand _checkForUpdatesCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly RelayCommand _takeUndervoltControlCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly RelayCommand _respectExternalUndervoltCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly RelayCommand _stopMacroRecordingInternalCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly RelayCommand _saveRecordedMacroInternalCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly AsyncRelayCommand _applyLogitechColorInternalCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly AsyncRelayCommand _syncCorsairThemeInternalCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly RelayCommand _openReleaseNotesCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
-        private readonly RelayCommand _openGameProfileManagerCommand = null!; // TODO: Refactor to constructor DI (#v2.4.0)
+        private readonly AsyncRelayCommand _applyUndervoltCommand;
+        private readonly AsyncRelayCommand _resetUndervoltCommand;
+        private readonly AsyncRelayCommand _refreshUndervoltCommand;
+        private readonly AsyncRelayCommand _createRestorePointCommand;
+        private readonly AsyncRelayCommand _cleanupOmenHubCommand;
+        private readonly AsyncRelayCommand _installUpdateCommand;
+        private readonly AsyncRelayCommand _checkForUpdatesCommand;
+        private readonly RelayCommand _takeUndervoltControlCommand;
+        private readonly RelayCommand _respectExternalUndervoltCommand;
+        private readonly RelayCommand _stopMacroRecordingInternalCommand;
+        private readonly RelayCommand _saveRecordedMacroInternalCommand;
+        private readonly AsyncRelayCommand _applyLogitechColorInternalCommand;
+        private readonly AsyncRelayCommand _syncCorsairThemeInternalCommand;
+        private readonly RelayCommand _openReleaseNotesCommand;
+        private readonly RelayCommand _openGameProfileManagerCommand;
         private readonly INotifyCollectionChanged? _macroBufferNotifier;
         private readonly StringBuilder _logBuffer = new();
 
@@ -297,7 +275,7 @@ namespace OmenCore.ViewModels
         private bool _respectExternalUndervolt = true;
         private MonitoringSample? _latestMonitoringSample;
         private bool _monitoringLowOverhead;
-        private readonly bool _monitoringInitialized;
+        private bool _monitoringInitialized;
         private string _logitechColorHex = "#E6002E";
         private int _logitechBrightness = 80;
         private bool _isMacroRecording;
@@ -324,13 +302,6 @@ namespace OmenCore.ViewModels
         private string _appVersionLabel = "v0.0.0";
         private string _currentFanMode = "Auto";
         private string _currentPerformanceMode = "Balanced";
-        private bool _logsCollapsed = false; // GitHub #48: Collapsible logs (its-urbi)
-        
-        // Session tracking (v2.2)
-        private readonly DateTime _sessionStartTime = DateTime.Now;
-        private double _peakCpuTemp;
-        private double _peakGpuTemp;
-        private System.Windows.Threading.DispatcherTimer? _uptimeTimer;
 
         public ObservableCollection<FanPreset> FanPresets { get; } = new();
         public ObservableCollection<FanCurvePoint> CustomFanCurve { get; } = new();
@@ -347,7 +318,7 @@ namespace OmenCore.ViewModels
         public ObservableCollection<string> OmenCleanupSteps { get; } = new();
         public ReadOnlyObservableCollection<GameProfile> GameProfiles => _gameProfileService.Profiles;
         
-        public OmenCore.Models.SystemInfo SystemInfo { get; private set; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public SystemInfo SystemInfo { get; private set; }
         
         /// <summary>
         /// Device capabilities detected at startup.
@@ -393,58 +364,6 @@ namespace OmenCore.ViewModels
             }
         }
 
-        public bool UpdateAvailable
-        {
-            get => _updateAvailable;
-            set
-            {
-                if (_updateAvailable != value)
-                {
-                    _updateAvailable = value;
-                    OnPropertyChanged(nameof(UpdateAvailable));
-                }
-            }
-        }
-
-        public string UpdateVersion
-        {
-            get => _updateVersion;
-            set
-            {
-                if (_updateVersion != value)
-                {
-                    _updateVersion = value;
-                    OnPropertyChanged(nameof(UpdateVersion));
-                }
-            }
-        }
-
-        public string UpdateUrl
-        {
-            get => _updateUrl;
-            set
-            {
-                if (_updateUrl != value)
-                {
-                    _updateUrl = value;
-                    OnPropertyChanged(nameof(UpdateUrl));
-                }
-            }
-        }
-
-        public bool IsCheckingForUpdates
-        {
-            get => _isCheckingForUpdates;
-            set
-            {
-                if (_isCheckingForUpdates != value)
-                {
-                    _isCheckingForUpdates = value;
-                    OnPropertyChanged(nameof(IsCheckingForUpdates));
-                }
-            }
-        }
-
         public string CurrentFanMode
         {
             get => _currentFanMode;
@@ -483,23 +402,6 @@ namespace OmenCore.ViewModels
                 }
             }
         }
-        
-        public bool LogsCollapsed
-        {
-            get => _logsCollapsed;
-            set
-            {
-                if (_logsCollapsed != value)
-                {
-                    _logsCollapsed = value;
-                    OnPropertyChanged(nameof(LogsCollapsed));
-                    OnPropertyChanged(nameof(LogsToggleText));
-                }
-            }
-        }
-        
-        public string LogsToggleText => _logsCollapsed ? "🔼 Show Logs" : "🔽 Hide Logs";
-        
         public string UpdateBannerMessage
         {
             get => _updateBannerMessage;
@@ -552,10 +454,9 @@ namespace OmenCore.ViewModels
             }
         }
 
-        public ReadOnlyObservableCollection<ThermalSample> ThermalSamples { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ReadOnlyObservableCollection<FanTelemetry> FanTelemetry { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ReadOnlyObservableCollection<ThermalSample> ThermalSamples { get; }
+        public ReadOnlyObservableCollection<FanTelemetry> FanTelemetry { get; }
         public ReadOnlyObservableCollection<MonitoringSample> MonitoringSamples { get; } = null!;
-        public IHardwareMonitoringService? HardwareMonitoringService => _hardwareMonitoringService;
         public MonitoringSample? LatestMonitoringSample
         {
             get => _latestMonitoringSample;
@@ -565,31 +466,8 @@ namespace OmenCore.ViewModels
                 
                 _latestMonitoringSample = value;
                 
-                // Track peak temperatures (v2.2)
-                if (value != null)
-                {
-                    if (value.CpuTemperatureC > _peakCpuTemp)
-                    {
-                        _peakCpuTemp = value.CpuTemperatureC;
-                        OnPropertyChanged(nameof(PeakCpuTemp));
-                    }
-                    if (value.GpuTemperatureC > _peakGpuTemp)
-                    {
-                        _peakGpuTemp = value.GpuTemperatureC;
-                        OnPropertyChanged(nameof(PeakGpuTemp));
-                    }
-                }
-                
-                // Notify only the specific properties that depend on monitoring data
-                OnPropertyChanged(nameof(LatestMonitoringSample));
-                OnPropertyChanged(nameof(CpuSummary));
-                OnPropertyChanged(nameof(GpuSummary));
-                OnPropertyChanged(nameof(MemorySummary));
-                OnPropertyChanged(nameof(StorageSummary));
-                OnPropertyChanged(nameof(CpuClockSummary));
-                OnPropertyChanged(nameof(FanSummary));
-                OnPropertyChanged(nameof(Fan1Rpm));
-                OnPropertyChanged(nameof(Fan2Rpm));
+                // Batch property notifications to reduce overhead
+                OnPropertyChanged(string.Empty); // Notifies all properties changed
             }
         }
         public bool MonitoringLowOverheadMode
@@ -611,39 +489,6 @@ namespace OmenCore.ViewModels
             }
         }
         public bool MonitoringGraphsVisible => !MonitoringLowOverheadMode;
-        
-        // Session tracking properties (v2.2)
-        public string SessionUptime
-        {
-            get
-            {
-                var elapsed = DateTime.Now - _sessionStartTime;
-                if (elapsed.TotalHours >= 1)
-                    return $"{(int)elapsed.TotalHours}h {elapsed.Minutes}m";
-                return $"{elapsed.Minutes}m {elapsed.Seconds}s";
-            }
-        }
-        
-        public double PeakCpuTemp => _peakCpuTemp;
-        public double PeakGpuTemp => _peakGpuTemp;
-        
-        public string FanSummary
-        {
-            get
-            {
-                var telemetry = _fanService?.FanTelemetry;
-                if (telemetry == null || telemetry.Count == 0)
-                    return "Fans: --";
-                
-                var fan1 = telemetry.Count > 0 ? telemetry[0].SpeedRpm : 0;
-                var fan2 = telemetry.Count > 1 ? telemetry[1].SpeedRpm : 0;
-                return $"CPU: {fan1} RPM • GPU: {fan2} RPM";
-            }
-        }
-        
-        public int Fan1Rpm => _fanService?.FanTelemetry?.Count > 0 ? _fanService.FanTelemetry[0].SpeedRpm : 0;
-        public int Fan2Rpm => _fanService?.FanTelemetry?.Count > 1 ? _fanService.FanTelemetry[1].SpeedRpm : 0;
-        
         public string CpuSummary => LatestMonitoringSample == null ? "CPU telemetry unavailable" : $"{LatestMonitoringSample.CpuTemperatureC:F0}°C • {LatestMonitoringSample.CpuLoadPercent:F0}% load";
         public string GpuSummary => LatestMonitoringSample == null ? "GPU telemetry unavailable" : $"{LatestMonitoringSample.GpuTemperatureC:F0}°C • {LatestMonitoringSample.GpuLoadPercent:F0}% load • {LatestMonitoringSample.GpuVramUsageMb:F0} MB VRAM";
         public string MemorySummary => LatestMonitoringSample == null ? "Memory telemetry unavailable" : $"{LatestMonitoringSample.RamUsageGb:F1} / {LatestMonitoringSample.RamTotalGb:F0} GB";
@@ -1079,53 +924,49 @@ namespace OmenCore.ViewModels
             }
         }
 
-        public ICommand ApplyFanPresetCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand SaveCustomPresetCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ApplyFanCurveCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ApplyPerformanceModeCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ApplyLightingProfileCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ToggleAnimationsCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand GamingModeCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand RestoreDefaultsCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand SwitchGpuCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ReloadConfigCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand OpenConfigFolderCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand DiscoverCorsairCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ApplyCorsairLightingCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand SaveCorsairDpiCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ApplyMacroCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand SyncCorsairThemeCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand StartMacroRecordingCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand StopMacroRecordingCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand SaveRecordedMacroCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand OpenAboutCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ToggleServiceCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ToggleLowOverheadModeCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ApplyUndervoltCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ResetUndervoltCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand RefreshUndervoltCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand TakeUndervoltControlCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand RespectExternalUndervoltCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand DiscoverLogitechCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ApplyLogitechColorCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand CreateRestorePointCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand CleanupOmenHubCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand InstallUpdateCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand CheckForUpdatesCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand OpenReleaseNotesCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand OpenUpdateUrlCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand OpenGameProfileManagerCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ExportConfigurationCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
-        public ICommand ToggleLogsCommand { get; } = null!; // GitHub #48: Collapsible logs (its-urbi) - initialized in constructor
-        
-        private void ToggleLogs() => LogsCollapsed = !LogsCollapsed;
-        public ICommand ImportConfigurationCommand { get; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public ICommand ApplyFanPresetCommand { get; }
+        public ICommand SaveCustomPresetCommand { get; }
+        public ICommand ApplyFanCurveCommand { get; }
+        public ICommand ApplyPerformanceModeCommand { get; }
+        public ICommand ApplyLightingProfileCommand { get; }
+        public ICommand ToggleAnimationsCommand { get; }
+        public ICommand GamingModeCommand { get; }
+        public ICommand RestoreDefaultsCommand { get; }
+        public ICommand SwitchGpuCommand { get; }
+        public ICommand ReloadConfigCommand { get; }
+        public ICommand OpenConfigFolderCommand { get; }
+        public ICommand DiscoverCorsairCommand { get; }
+        public ICommand ApplyCorsairLightingCommand { get; }
+        public ICommand SaveCorsairDpiCommand { get; }
+        public ICommand ApplyMacroCommand { get; }
+        public ICommand SyncCorsairThemeCommand { get; }
+        public ICommand StartMacroRecordingCommand { get; }
+        public ICommand StopMacroRecordingCommand { get; }
+        public ICommand SaveRecordedMacroCommand { get; }
+        public ICommand OpenAboutCommand { get; }
+        public ICommand ToggleServiceCommand { get; }
+        public ICommand ToggleLowOverheadModeCommand { get; }
+        public ICommand ApplyUndervoltCommand { get; }
+        public ICommand ResetUndervoltCommand { get; }
+        public ICommand RefreshUndervoltCommand { get; }
+        public ICommand TakeUndervoltControlCommand { get; }
+        public ICommand RespectExternalUndervoltCommand { get; }
+        public ICommand DiscoverLogitechCommand { get; }
+        public ICommand ApplyLogitechColorCommand { get; }
+        public ICommand CreateRestorePointCommand { get; }
+        public ICommand CleanupOmenHubCommand { get; }
+        public ICommand InstallUpdateCommand { get; }
+        public ICommand CheckForUpdatesCommand { get; }
+        public ICommand OpenReleaseNotesCommand { get; }
+        public ICommand OpenGameProfileManagerCommand { get; }
+        public ICommand ExportConfigurationCommand { get; }
+        public ICommand ImportConfigurationCommand { get; }
 
         // Expose Fan Diagnostics VM
-        public FanDiagnosticsViewModel FanDiagnostics { get; private set; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public FanDiagnosticsViewModel FanDiagnostics { get; private set; }
 
         // Expose Keyboard Diagnostics VM
-        public KeyboardDiagnosticsViewModel KeyboardDiagnostics { get; private set; } = null!; // TODO: Initialize in constructor (#v2.4.0)
+        public KeyboardDiagnosticsViewModel KeyboardDiagnostics { get; private set; }
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -1133,11 +974,52 @@ namespace OmenCore.ViewModels
         {
             _config = _configService.Load();
             
-            // Initialize hardware monitor bridge first (needed by ThermalSensorProvider and FanController)
-            // Switch back to out-of-process worker mode to use PawnIO CPU temperature fallback
-            LibreHardwareMonitorImpl monitorBridge = new(
-                msg => _logging.Info($"[Monitor] {msg}"),
-                useWorker: true);
+            // Initialize hardware monitor bridge
+            // Priority: WmiBiosMonitor (no dependencies) -> LibreHardwareMonitor (if available for enhanced metrics)
+            IHardwareMonitorBridge monitorBridge;
+            LibreHardwareMonitorImpl? libreHwMonitor = null;
+            
+            // Try WmiBiosMonitor first - it's self-sufficient with no external dependencies
+            var wmiBiosMonitor = new WmiBiosMonitor(_logging);
+            
+            if (wmiBiosMonitor.IsAvailable)
+            {
+                _logging.Info("✓ WMI BIOS monitoring available (self-sufficient mode)");
+                
+                // Optionally try LibreHardwareMonitor for enhanced metrics (GPU clocks, power, VRAM, etc.)
+                try
+                {
+                    libreHwMonitor = new LibreHardwareMonitorImpl(
+                        msg => _logging.Debug($"[LibreHW] {msg}"),
+                        useWorker: true);
+                    _logging.Info("✓ LibreHardwareMonitor available for enhanced metrics");
+                    monitorBridge = libreHwMonitor; // Use LibreHW if available (has more metrics)
+                }
+                catch (Exception ex)
+                {
+                    _logging.Info($"LibreHardwareMonitor unavailable ({ex.Message}) - using WMI BIOS only");
+                    monitorBridge = wmiBiosMonitor;
+                }
+            }
+            else
+            {
+                _logging.Warn("WMI BIOS monitoring not available - trying LibreHardwareMonitor");
+                
+                // Fall back to LibreHardwareMonitor
+                try
+                {
+                    libreHwMonitor = new LibreHardwareMonitorImpl(
+                        msg => _logging.Info($"[Monitor] {msg}"),
+                        useWorker: true);
+                    monitorBridge = libreHwMonitor;
+                }
+                catch (Exception ex)
+                {
+                    _logging.Error($"No monitoring available: {ex.Message}");
+                    // Use WmiBiosMonitor even if not fully available - it will return zeros
+                    monitorBridge = wmiBiosMonitor;
+                }
+            }
             
             // Run capability detection to identify available backends
             var capabilityService = new CapabilityDetectionService(_logging);
@@ -1147,38 +1029,8 @@ namespace OmenCore.ViewModels
             // Set capability warning if functionality is limited
             if (capabilities.IsDesktop)
             {
-                CapabilityWarning = $"⚠️ DESKTOP PC DETECTED - Fan control DISABLED for safety. OmenCore is designed for OMEN LAPTOPS only.";
-                _logging.Warn("Desktop OMEN PC detected - fan control DISABLED. OmenCore is designed for laptops only. Desktop EC registers differ significantly and can cause hardware damage.");
-                
-                // Show blocking warning dialog for desktops - require explicit acknowledgment
-                var result = System.Windows.MessageBox.Show(
-                    "⚠️ DESKTOP PC DETECTED\n\n" +
-                    "OmenCore is designed for OMEN LAPTOPS only.\n\n" +
-                    "Desktop OMEN systems (25L, 30L, 40L, 45L) use completely different\n" +
-                    "EC registers and fan control mechanisms. Using OmenCore on desktops\n" +
-                    "can cause:\n\n" +
-                    "• Fans stuck at wrong speeds\n" +
-                    "• Cooling system malfunction\n" +
-                    "• CPU/GPU overheating\n" +
-                    "• Potential hardware damage\n\n" +
-                    "Fan control has been DISABLED for your safety.\n" +
-                    "You can still use monitoring features.\n\n" +
-                    "Click OK to continue in monitoring-only mode,\n" +
-                    "or Cancel to exit.",
-                    "OmenCore - Desktop Not Supported",
-                    System.Windows.MessageBoxButton.OKCancel,
-                    System.Windows.MessageBoxImage.Warning);
-                
-                if (result == System.Windows.MessageBoxResult.Cancel)
-                {
-                    _logging.Info("User chose to exit after desktop warning");
-                    System.Windows.Application.Current.Shutdown();
-                    return;
-                }
-                
-                // Force monitoring-only mode on desktops
-                capabilities.FanControl = Hardware.FanControlMethod.MonitoringOnly;
-                capabilities.CanSetFanSpeed = false;
+                CapabilityWarning = $"Desktop PC detected ({capabilities.Chassis}). OMEN desktop fan control is experimental - EC registers differ from laptops.";
+                _logging.Warn("Desktop OMEN PC - fan control support is limited. Consider using OMEN Gaming Hub for desktop systems.");
             }
             else if (capabilities.SecureBootEnabled && !capabilities.OghRunning)
             {
@@ -1191,11 +1043,11 @@ namespace OmenCore.ViewModels
             
             // Initialize EC access with automatic backend selection
             // Tries PawnIO first (Secure Boot compatible), then WinRing0
-            _ecAccess = null;
+            IEcAccess? ec = null;
             try
             {
-                _ecAccess = EcAccessFactory.GetEcAccess();
-                if (_ecAccess != null && _ecAccess.IsAvailable)
+                ec = EcAccessFactory.GetEcAccess();
+                if (ec != null && ec.IsAvailable)
                 {
                     _logging.Info($"EC access initialized: {EcAccessFactory.GetStatusMessage()}");
                     EcBackend = EcAccessFactory.ActiveBackend.ToString();
@@ -1214,7 +1066,7 @@ namespace OmenCore.ViewModels
 
             // Create fan controller with intelligent backend selection using pre-detected capabilities
             // Priority: OGH Proxy > WMI BIOS (no driver) > EC (requires WinRing0) > Fallback (monitoring only)
-            var fanControllerFactory = new FanControllerFactory(monitorBridge, _ecAccess, _config.EcFanRegisterMap, _logging, capabilities);
+            var fanControllerFactory = new FanControllerFactory(monitorBridge, ec, _config.EcFanRegisterMap, _logging, capabilities);
             var fanController = fanControllerFactory.Create();
             FanBackend = fanControllerFactory.ActiveBackend;
             
@@ -1231,6 +1083,9 @@ namespace OmenCore.ViewModels
                 _logging.Info("Running OGH command diagnostics...");
                 _oghProxy.RunDiagnostics();
             }
+            
+            // Create notification service early (before FanService which needs it)
+            _notificationService = new NotificationService(_logging);
             
             _fanService = new FanService(fanController, new ThermalSensorProvider(monitorBridge), _logging, _notificationService, _config.MonitoringIntervalMs);
             _fanService.SetHysteresis(_config.FanHysteresis);
@@ -1250,11 +1105,11 @@ namespace OmenCore.ViewModels
             
             // Power limit controller (EC-based CPU/GPU power control)
             PowerLimitController? powerLimitController = null;
-            if (_ecAccess != null && _ecAccess.IsAvailable)
+            if (ec != null && ec.IsAvailable)
             {
                 try
                 {
-                    powerLimitController = new PowerLimitController(_ecAccess, useSimplifiedMode: true);
+                    powerLimitController = new PowerLimitController(ec, useSimplifiedMode: true);
                     _logging.Info("✓ Power limit controller initialized (simplified mode)");
                 }
                 catch (Exception ex)
@@ -1266,21 +1121,6 @@ namespace OmenCore.ViewModels
             {
                 _logging.Info("Power limit controller skipped (EC not available)");
             }
-
-            // Power verification service
-            IPowerVerificationService? powerVerificationService = null;
-            if (powerLimitController != null && _ecAccess != null)
-            {
-                try
-                {
-                    powerVerificationService = new PowerVerificationService(powerLimitController, _ecAccess, _logging);
-                    _logging.Info("✓ Power verification service initialized");
-                }
-                catch (Exception ex)
-                {
-                    _logging.Warn($"Power verification service unavailable: {ex.Message}");
-                }
-            }
             
             // Enable experimental EC keyboard writes if user has opted in
             if (_config.ExperimentalEcKeyboardEnabled)
@@ -1289,13 +1129,10 @@ namespace OmenCore.ViewModels
                 _logging.Info("⚠️ Experimental EC keyboard writes ENABLED (user opted in)");
             }
             
-            _performanceModeService = new PerformanceModeService(fanController, powerPlanService, powerLimitController, _logging, powerVerificationService);
-            _keyboardLightingService = new KeyboardLightingService(_logging, _ecAccess, _wmiBios, _configService);
+            _performanceModeService = new PerformanceModeService(fanController, powerPlanService, powerLimitController, _logging);
+            _keyboardLightingService = new KeyboardLightingService(_logging, ec, _wmiBios, _configService);
             _systemOptimizationService = new SystemOptimizationService(_logging);
             _gpuSwitchService = new GpuSwitchService(_logging);
-            
-            // Initialize NVAPI for GPU overclocking (NVIDIA GPUs only)
-            _nvapiService = new NvapiService(_logging);
             
             // Services initialized asynchronously
             InitializeServicesAsync();
@@ -1320,13 +1157,10 @@ namespace OmenCore.ViewModels
             _autoUpdateService = new AutoUpdateService(_logging);
             _processMonitoringService = new ProcessMonitoringService(_logging);
             _gameProfileService = new GameProfileService(_logging, _processMonitoringService, _configService);
-            _fanCleaningService = new FanCleaningService(_logging, _ecAccess, _systemInfoService, _wmiBios, _oghProxy);
+            _fanCleaningService = new FanCleaningService(_logging, ec, _systemInfoService, _wmiBios, _oghProxy);
             _biosUpdateService = new BiosUpdateService(_logging);
-            _updateCheckService = new UpdateCheckService(_logging);
-            var profileExportService = new ProfileExportService(_logging, _configService);
-            var diagnosticsExportService = new DiagnosticsExportService(_logging, _configService);
             _hotkeyService = new HotkeyService(_logging);
-            _notificationService = new NotificationService(_logging);
+            // _notificationService created earlier (before FanService)
             _powerAutomationService = new PowerAutomationService(_logging, _fanService, _performanceModeService, _configService, _gpuSwitchService);
             _omenKeyService = new OmenKeyService(_logging, _configService);
             
@@ -1346,7 +1180,6 @@ namespace OmenCore.ViewModels
             _hotkeyService.ToggleBoostModeRequested += OnHotkeyToggleBoostMode;
             _hotkeyService.ToggleQuietModeRequested += OnHotkeyToggleQuietMode;
             _hotkeyService.ToggleWindowRequested += OnHotkeyToggleWindow;
-            _hotkeyService.ApplySettingsRequested += OnHotkeyApplySettings;
             
             // Wire up OMEN key events
             _omenKeyService.ToggleOmenCoreRequested += OnOmenKeyToggleWindow;
@@ -1435,12 +1268,10 @@ namespace OmenCore.ViewModels
             InstallUpdateCommand = _installUpdateCommand;
             _openReleaseNotesCommand = new RelayCommand(_ => OpenReleaseNotes(), _ => CanOpenReleaseNotes());
             OpenReleaseNotesCommand = _openReleaseNotesCommand;
-            OpenUpdateUrlCommand = new RelayCommand(_ => OpenUpdateUrl());
             _openGameProfileManagerCommand = new RelayCommand(_ => OpenGameProfileManager());
             OpenGameProfileManagerCommand = _openGameProfileManagerCommand;
             ExportConfigurationCommand = new AsyncRelayCommand(_ => ExportConfigurationAsync());
             ImportConfigurationCommand = new AsyncRelayCommand(_ => ImportConfigurationAsync());
-            ToggleLogsCommand = new RelayCommand(_ => ToggleLogs()); // GitHub #48: Collapsible logs
 
             _logging.LogEmitted += HandleLogLine;
 
@@ -1452,17 +1283,6 @@ namespace OmenCore.ViewModels
             OnPropertyChanged(nameof(MonitoringLowOverheadMode));
             OnPropertyChanged(nameof(MonitoringGraphsVisible));
             _monitoringInitialized = true;
-            
-            // Start uptime timer for dashboard (v2.2)
-            _uptimeTimer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromSeconds(1)
-            };
-            _uptimeTimer.Tick += (s, e) => OnPropertyChanged(nameof(SessionUptime));
-            _uptimeTimer.Start();
-            
-            // Restore saved settings on startup (fan preset, GPU boost, TCC offset)
-            _ = RestoreSettingsOnStartupAsync();
             _macroBufferNotifier = RecordingBuffer as INotifyCollectionChanged;
             if (_macroBufferNotifier != null)
             {
@@ -1478,9 +1298,6 @@ namespace OmenCore.ViewModels
             {
                 _ = CheckForUpdatesBannerAsync();
             }
-            
-            // Also check for updates using the new non-intrusive update check service (once per session)
-            _ = CheckForLatestVersionAsync();
             
             // Initialize game profile system
             InitializeGameProfilesAsync();
@@ -1539,7 +1356,7 @@ namespace OmenCore.ViewModels
             }
         }
 
-        private Task ApplyGameProfileAsync(GameProfile profile)
+        private async Task ApplyGameProfileAsync(GameProfile profile)
         {
             // Apply fan preset
             if (!string.IsNullOrEmpty(profile.FanPresetName) && FanControl != null)
@@ -1609,21 +1426,17 @@ namespace OmenCore.ViewModels
             }
 
             _logging.Info($"✓ Profile '{profile.Name}' applied successfully");
-            return Task.CompletedTask;
         }
 
-        private Task RestoreDefaultSettingsAsync()
+        private async Task RestoreDefaultSettingsAsync()
         {
-            // Restore to balanced defaults (but don't save to config - these are temporary game-exit defaults)
-            // The user's saved preferences should be preserved for next restart
+            // Restore to balanced defaults
             if (FanControl != null)
             {
                 var balanced = FanControl.FanPresets.FirstOrDefault(p => p.Name == "Balanced");
                 if (balanced != null)
                 {
-                    // Use SelectPresetByNameNoApply + manual apply to avoid saving to config
-                    FanControl.SelectPresetByNameNoApply("Balanced");
-                    _fanService?.ApplyAutoMode(); // Apply balanced/auto without saving
+                    FanControl.SelectedPreset = balanced;
                 }
             }
 
@@ -1632,13 +1445,11 @@ namespace OmenCore.ViewModels
                 var balanced = SystemControl.PerformanceModes.FirstOrDefault(m => m.Name == "Balanced");
                 if (balanced != null)
                 {
-                    // Set UI without triggering save
-                    SystemControl.SelectPerformanceModeWithoutSave("Balanced");
+                    SystemControl.SelectedPerformanceMode = balanced;
                 }
             }
 
-            _logging.Info("✓ Restored default settings (temporary, not saved to config)");
-            return Task.CompletedTask;
+            _logging.Info("✓ Restored default settings");
         }
 
         private void OpenGameProfileManager()
@@ -1696,9 +1507,29 @@ namespace OmenCore.ViewModels
                 {
                     _availableUpdate = null;
                     _updateInstallBlocked = false;
-                    // GitHub #48: Don't show banner when on latest version (kg290's request)
-                    UpdateBannerVisible = false;
-                    UpdateBannerMessage = string.Empty;
+                    if (showStatus)
+                    {
+                        UpdateBannerMessage = "You are running the latest version.";
+                        UpdateBannerVisible = true;
+                        // Auto-hide after 3 seconds
+                        _ = Task.Run(async () =>
+                        {
+                            await Task.Delay(3000);
+                            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                            {
+                                if (UpdateBannerMessage == "You are running the latest version.")
+                                {
+                                    UpdateBannerVisible = false;
+                                    UpdateBannerMessage = string.Empty;
+                                }
+                            });
+                        });
+                    }
+                    else
+                    {
+                        UpdateBannerVisible = false;
+                        UpdateBannerMessage = string.Empty;
+                    }
                 }
             }
             catch (Exception ex)
@@ -1844,59 +1675,6 @@ namespace OmenCore.ViewModels
             _installUpdateCommand.RaiseCanExecuteChanged();
             _openReleaseNotesCommand.RaiseCanExecuteChanged();
             _checkForUpdatesCommand.RaiseCanExecuteChanged();
-        }
-
-        private void OpenUpdateUrl()
-        {
-            if (!UpdateAvailable || string.IsNullOrWhiteSpace(UpdateUrl))
-                return;
-
-            try
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = UpdateUrl,
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception ex)
-            {
-                _logging.Error("Failed to open update URL", ex);
-            }
-        }
-
-        private async Task CheckForLatestVersionAsync()
-        {
-            if (IsCheckingForUpdates)
-                return;
-
-            try
-            {
-                IsCheckingForUpdates = true;
-                var updateInfo = await _updateCheckService.CheckForUpdatesAsync();
-
-                if (updateInfo != null)
-                {
-                    UpdateAvailable = true;
-                    UpdateVersion = updateInfo.Version;
-                    UpdateUrl = updateInfo.ReleaseUrl;
-                    _logging.Info($"🔔 Update available: {UpdateVersion}");
-                }
-                else
-                {
-                    UpdateAvailable = false;
-                    _logging.Info("✓ OmenCore is up to date");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logging.Error("Update check failed", ex);
-                UpdateAvailable = false;
-            }
-            finally
-            {
-                IsCheckingForUpdates = false;
-            }
         }
 
         private void HydrateCollections()
@@ -2310,9 +2088,7 @@ namespace OmenCore.ViewModels
 
         private void HardwareMonitoringServiceOnSampleUpdated(object? sender, MonitoringSample sample)
         {
-            App.Logging.Info($"[Monitor] Sample updated: CPU={sample.CpuTemperatureC:F1}°C, GPU={sample.GpuTemperatureC:F1}°C, Load={sample.CpuLoadPercent:F1}%/{sample.GpuLoadPercent:F1}%");
-            Application.Current?.Dispatcher?.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, 
-                () => LatestMonitoringSample = sample);
+            Application.Current?.Dispatcher?.BeginInvoke(() => LatestMonitoringSample = sample);
         }
 
         private void RecordingBufferOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -2401,279 +2177,70 @@ namespace OmenCore.ViewModels
             });
         }
 
-        /// <summary>
-        /// Restore saved settings (fan preset, GPU power boost, etc.) on startup.
-        /// Uses retry logic to handle hardware not being ready immediately after boot.
-        /// </summary>
-        private async Task RestoreSettingsOnStartupAsync()
-        {
-            const int maxRetries = 5;
-            const int retryDelayMs = 2000;
-            
-            await Task.Delay(1000); // Brief initial delay for hardware to settle
-            
-            _logging.Info("Restoring saved settings on startup...");
-            
-            // 1. Restore fan preset
-            var savedFanPreset = _config.LastFanPresetName;
-            if (!string.IsNullOrEmpty(savedFanPreset))
-            {
-                for (int attempt = 1; attempt <= maxRetries; attempt++)
-                {
-                    try
-                    {
-                        // Look for custom preset first
-                        var preset = _config.FanPresets
-                            .FirstOrDefault(p => p.Name.Equals(savedFanPreset, StringComparison.OrdinalIgnoreCase));
-                        
-                        if (preset == null)
-                        {
-                            // Handle built-in presets
-                            var nameLower = savedFanPreset.ToLowerInvariant();
-                            if (nameLower.Contains("max") && !nameLower.Contains("extreme"))
-                            {
-                                preset = new FanPreset { Name = "Max", Mode = FanMode.Max, Curve = new() { new FanCurvePoint { TemperatureC = 0, FanPercent = 100 } } };
-                            }
-                            else if (nameLower.Contains("extreme"))
-                            {
-                                // Extreme is a built-in preset with Performance mode and aggressive curve
-                                preset = new FanPreset 
-                                { 
-                                    Name = "Extreme", 
-                                    Mode = FanMode.Performance,
-                                    Curve = new() 
-                                    { 
-                                        new FanCurvePoint { TemperatureC = 40, FanPercent = 50 },
-                                        new FanCurvePoint { TemperatureC = 50, FanPercent = 65 },
-                                        new FanCurvePoint { TemperatureC = 60, FanPercent = 80 },
-                                        new FanCurvePoint { TemperatureC = 70, FanPercent = 90 },
-                                        new FanCurvePoint { TemperatureC = 80, FanPercent = 95 },
-                                        new FanCurvePoint { TemperatureC = 90, FanPercent = 100 }
-                                    }
-                                };
-                            }
-                            else if (nameLower.Contains("auto") || nameLower.Contains("default"))
-                            {
-                                _fanService?.ApplyAutoMode();
-                                _logging.Info($"✓ Fan preset restored: {savedFanPreset} (Auto)");
-                                break;
-                            }
-                            else if (nameLower.Contains("quiet") || nameLower.Contains("silent"))
-                            {
-                                _fanService?.ApplyQuietMode();
-                                _logging.Info($"✓ Fan preset restored: {savedFanPreset} (Quiet)");
-                                break;
-                            }
-                            else
-                            {
-                                // Unknown preset name, use as-is with Performance mode
-                                preset = new FanPreset { Name = savedFanPreset, Mode = FanMode.Performance };
-                            }
-                        }
-                        
-                        if (preset != null && _fanService != null)
-                        {
-                            _fanService.ApplyPreset(preset, immediate: true);
-                            _logging.Info($"✓ Fan preset restored on startup: {savedFanPreset} (attempt {attempt})");
-                            
-                            // Update FanControl SelectedPreset if available
-                            if (FanControl?.FanPresets != null)
-                            {
-                                var matchingPreset = FanControl.FanPresets.FirstOrDefault(p => 
-                                    p.Name.Equals(savedFanPreset, StringComparison.OrdinalIgnoreCase));
-                                if (matchingPreset != null)
-                                {
-                                    FanControl.SelectedPreset = matchingPreset;
-                                }
-                            }
-                        }
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logging.Warn($"Fan preset restore attempt {attempt} failed: {ex.Message}");
-                        if (attempt < maxRetries)
-                            await Task.Delay(retryDelayMs);
-                    }
-                }
-            }
-            else
-            {
-                _logging.Info("No saved fan preset to restore");
-            }
-            
-            // 2. Restore GPU Power Boost level
-            var savedGpuBoost = _config.LastGpuPowerBoostLevel;
-            if (!string.IsNullOrEmpty(savedGpuBoost) && _wmiBios != null)
-            {
-                for (int attempt = 1; attempt <= maxRetries; attempt++)
-                {
-                    try
-                    {
-                        var level = savedGpuBoost switch
-                        {
-                            "Minimum" => HpWmiBios.GpuPowerLevel.Minimum,
-                            "Medium" => HpWmiBios.GpuPowerLevel.Medium,
-                            "Maximum" => HpWmiBios.GpuPowerLevel.Maximum,
-                            "Extended" => HpWmiBios.GpuPowerLevel.Extended3,
-                            _ => HpWmiBios.GpuPowerLevel.Medium
-                        };
-                        
-                        if (_wmiBios.SetGpuPower(level))
-                        {
-                            _logging.Info($"✓ GPU Power Boost restored: {savedGpuBoost} (attempt {attempt})");
-                            // Update SystemControl if available
-                            if (SystemControl != null)
-                            {
-                                SystemControl.GpuPowerBoostLevel = savedGpuBoost;
-                            }
-                            break;
-                        }
-                        else
-                        {
-                            _logging.Warn($"GPU Power Boost restore returned false (attempt {attempt})");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logging.Warn($"GPU Power Boost restore attempt {attempt} failed: {ex.Message}");
-                    }
-                    
-                    if (attempt < maxRetries)
-                        await Task.Delay(retryDelayMs);
-                }
-            }
-            
-            // 3. Restore Battery Care mode (80% charge limit)
-            if (_config.Battery?.ChargeLimitEnabled == true && _wmiBios != null)
-            {
-                for (int attempt = 1; attempt <= maxRetries; attempt++)
-                {
-                    try
-                    {
-                        if (_wmiBios.SetBatteryCareMode(true))
-                        {
-                            _logging.Info($"✓ Battery Care (80% charge limit) restored on startup (attempt {attempt})");
-                            break;
-                        }
-                        else
-                        {
-                            _logging.Warn($"Battery Care restore returned false (attempt {attempt})");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logging.Warn($"Battery Care restore attempt {attempt} failed: {ex.Message}");
-                    }
-                    
-                    if (attempt < maxRetries)
-                        await Task.Delay(retryDelayMs);
-                }
-            }
-            
-            _logging.Info("Settings restoration complete");
-        }
-
         private async void InitializeServicesAsync()
         {
             try
             {
-                var features = _config.Features ?? new FeaturePreferences();
+                _corsairDeviceService = await CorsairDeviceService.CreateAsync(_logging);
+                _logitechDeviceService = await LogitechDeviceService.CreateAsync(_logging);
+                _razerService = new OmenCore.Razer.RazerService(_logging);
                 
-                // Only initialize peripheral SDKs if user has explicitly enabled them
-                // This improves startup time for users without these peripherals
-                bool corsairEnabled = features.CorsairIntegrationEnabled;
-                bool logitechEnabled = features.LogitechIntegrationEnabled;
-                bool razerEnabled = features.RazerIntegrationEnabled;
+                await DiscoverCorsairDevices();
+                await DiscoverLogitechDevices();
                 
-                if (corsairEnabled)
+                // Initialize Lighting sub-ViewModel after async services are ready
+                if (_corsairDeviceService != null && _logitechDeviceService != null)
                 {
-                    _logging.Info("Initializing Corsair SDK (user-enabled)...");
-                    _corsairDeviceService = await CorsairDeviceService.CreateAsync(_logging);
-                    await DiscoverCorsairDevices();
-                }
-                else
-                {
-                    _logging.Info("Corsair SDK skipped (not enabled in settings)");
-                }
-                
-                if (logitechEnabled)
-                {
-                    _logging.Info("Initializing Logitech SDK (user-enabled)...");
-                    _logitechDeviceService = await LogitechDeviceService.CreateAsync(_logging);
-                    await DiscoverLogitechDevices();
-                }
-                else
-                {
-                    _logging.Info("Logitech SDK skipped (not enabled in settings)");
-                }
-                
-                if (razerEnabled)
-                {
-                    _logging.Info("Initializing Razer SDK (user-enabled)...");
-                    _razerService = new OmenCore.Razer.RazerService(_logging);
-                }
-                else
-                {
-                    _logging.Info("Razer SDK skipped (not enabled in settings)");
-                }
-                
-                // Initialize Lighting sub-ViewModel if any RGB capability is available
-                bool hasKeyboardLighting = _keyboardLightingService?.IsAvailable ?? false;
-                bool hasCorsairDevices = _corsairDeviceService?.Devices.Any() ?? false;
-                bool hasLogitechDevices = _logitechDeviceService?.Devices.Any() ?? false;
-                bool hasRazer = _razerService?.IsAvailable ?? false;
-                bool hasPeripherals = hasCorsairDevices || hasLogitechDevices;
-                
-                if (hasPeripherals || hasKeyboardLighting || hasRazer)
-                {
-                    // Initialize RGB manager and providers with priority: Corsair -> Logitech -> Razer -> SystemGeneric
-                    var rgbManager = new OmenCore.Services.Rgb.RgbManager();
+                    // Show lighting tab if:
+                    // 1. Corsair or Logitech peripheral devices are found, OR
+                    // 2. HP OMEN keyboard lighting is available, OR
+                    // 3. Razer Synapse is detected
+                    bool hasPeripherals = _corsairDeviceService.Devices.Any() || _logitechDeviceService.Devices.Any();
+                    bool hasKeyboardLighting = _keyboardLightingService?.IsAvailable ?? false;
+                    bool hasRazer = _razerService?.IsAvailable ?? false;
                     
-                    if (_corsairDeviceService != null)
+                    if (hasPeripherals || hasKeyboardLighting || hasRazer)
                     {
+                        // Initialize RGB manager and providers with priority: Corsair -> Logitech -> Razer -> SystemGeneric
+                        var rgbManager = new OmenCore.Services.Rgb.RgbManager();
                         var corsairProvider = new OmenCore.Services.Rgb.CorsairRgbProvider(_logging, _configService);
-                        rgbManager.RegisterProvider(corsairProvider);
-                    }
-                    
-                    if (_logitechDeviceService != null)
-                    {
                         var logitechProvider = new OmenCore.Services.Rgb.LogitechRgbProvider(_logging);
+                        rgbManager.RegisterProvider(corsairProvider);
                         rgbManager.RegisterProvider(logitechProvider);
-                    }
 
-                    if (_razerService != null)
-                    {
-                        var razerProvider = new OmenCore.Services.Rgb.RazerRgbProvider(_logging, _razerService);
-                        rgbManager.RegisterProvider(razerProvider);
-                    }
+                        if (_razerService != null)
+                        {
+                            var razerProvider = new OmenCore.Services.Rgb.RazerRgbProvider(_logging, _razerService);
+                            rgbManager.RegisterProvider(razerProvider);
+                        }
 
-                    var systemProvider = new OmenCore.Services.Rgb.SystemRgbProvider(rgbManager, _logging);
-                    rgbManager.RegisterProvider(systemProvider);
+                        var systemProvider = new OmenCore.Services.Rgb.SystemRgbProvider(rgbManager, _logging);
+                        rgbManager.RegisterProvider(systemProvider);
 
-                    await rgbManager.InitializeAllAsync();
+                        await rgbManager.InitializeAllAsync();
 
-                    Lighting = new LightingViewModel(_corsairDeviceService, _logitechDeviceService, _logging, _keyboardLightingService, _configService, _razerService, rgbManager, _hardwareMonitoringService, _performanceModeService);
-                    OnPropertyChanged(nameof(Lighting));
+                        Lighting = new LightingViewModel(_corsairDeviceService, _logitechDeviceService, _logging, _keyboardLightingService, _configService, _razerService, rgbManager);
+                        OnPropertyChanged(nameof(Lighting));
 
-                    // Apply saved keyboard colors on startup
-                    if (hasKeyboardLighting)
-                    {
-                        _ = Lighting.ApplySavedKeyboardColorsAsync();
-                    }
-                    
-                    if (hasKeyboardLighting && !hasPeripherals)
-                    {
-                        _logging.Info("Lighting sub-ViewModel initialized (keyboard lighting only)");
+                        // Apply saved keyboard colors on startup
+                        if (hasKeyboardLighting)
+                        {
+                            _ = Lighting.ApplySavedKeyboardColorsAsync();
+                        }
+                        
+                        if (hasKeyboardLighting && !hasPeripherals)
+                        {
+                            _logging.Info("Lighting sub-ViewModel initialized (keyboard lighting available)");
+                        }
+                        else
+                        {
+                            _logging.Info("Lighting sub-ViewModel initialized (devices found)");
+                        }
                     }
                     else
                     {
-                        _logging.Info($"Lighting sub-ViewModel initialized (Corsair: {hasCorsairDevices}, Logitech: {hasLogitechDevices}, Razer: {hasRazer}, Keyboard: {hasKeyboardLighting})");
+                        _logging.Info("Lighting sub-ViewModel skipped (no devices or keyboard lighting found)");
                     }
-                }
-                else
-                {
-                    _logging.Info("Lighting sub-ViewModel skipped (no RGB capabilities detected)");
                 }
             }
             catch (Exception ex)
@@ -2769,52 +2336,23 @@ namespace OmenCore.ViewModels
             _logging.Info($"Fan mode change requested from tray: {mode}");
             try
             {
-                // BUG FIX #33: Handle Max and Auto modes directly instead of searching for presets
-                switch (mode)
+                FanPreset? targetPreset = mode switch
                 {
-                    case "Max":
-                        // Use ApplyMaxCooling for true 100% fan speed via SetFanMax
-                        _fanService.ApplyMaxCooling();
-                        CurrentFanMode = "Max";
-                        _osdService?.SetFanMode("Max");  // Update OSD
-                        PushEvent($"🌀 Fan mode: Max (100%)");
-                        _logging.Info("Fan mode set to Max via ApplyMaxCooling");
-                        return;
-                        
-                    case "Auto":
-                        // Use ApplyAutoMode for BIOS-controlled auto mode
-                        _fanService.ApplyAutoMode();
-                        CurrentFanMode = "Auto";
-                        _osdService?.SetFanMode("Auto");  // Update OSD
-                        PushEvent($"🌀 Fan mode: Auto");
-                        _logging.Info("Fan mode set to Auto via ApplyAutoMode");
-                        return;
-                        
-                    case "Quiet":
-                        // Use ApplyQuietMode for quiet/silent mode
-                        _fanService.ApplyQuietMode();
-                        CurrentFanMode = "Quiet";
-                        _osdService?.SetFanMode("Quiet");  // Update OSD
-                        PushEvent($"🌀 Fan mode: Quiet");
-                        _logging.Info("Fan mode set to Quiet via ApplyQuietMode");
-                        return;
-                }
-                
-                // Fallback: search for matching preset (for custom modes)
-                FanPreset? targetPreset = FanPresets.FirstOrDefault(p => 
-                    p.Name.Equals(mode, StringComparison.OrdinalIgnoreCase));
+                    "Max" => FanPresets.FirstOrDefault(p => p.Name.Contains("Max", StringComparison.OrdinalIgnoreCase) || p.Name.Contains("Performance", StringComparison.OrdinalIgnoreCase)),
+                    "Quiet" => FanPresets.FirstOrDefault(p => p.Name.Contains("Quiet", StringComparison.OrdinalIgnoreCase) || p.Name.Contains("Silent", StringComparison.OrdinalIgnoreCase)),
+                    _ => FanPresets.FirstOrDefault(p => p.Name.Contains("Auto", StringComparison.OrdinalIgnoreCase) || p.Name.Contains("Balanced", StringComparison.OrdinalIgnoreCase))
+                };
 
                 if (targetPreset != null)
                 {
                     SelectedPreset = targetPreset;
                     _fanService.ApplyPreset(targetPreset);
                     CurrentFanMode = mode;
-                    _osdService?.SetFanMode(mode);  // Update OSD
                     PushEvent($"🌀 Fan mode: {mode}");
                 }
                 else
                 {
-                    _logging.Warn($"Unknown fan mode requested from tray: {mode}");
+                    // No matching preset found, just update state
                     CurrentFanMode = mode;
                     PushEvent($"🌀 Fan mode: {mode} (preset not found)");
                 }
@@ -2840,7 +2378,6 @@ namespace OmenCore.ViewModels
                         SystemControl.SelectedPerformanceMode = targetMode;
                         SystemControl.ApplyPerformanceModeCommand?.Execute(null);
                         CurrentPerformanceMode = mode;
-                        _osdService?.SetPerformanceMode(mode);  // Update OSD
                         PushEvent($"⚡ Performance: {mode}");
                     }
                 }
@@ -2849,7 +2386,6 @@ namespace OmenCore.ViewModels
                     // Direct service call as fallback
                     _performanceModeService.Apply(new PerformanceMode { Name = mode });
                     CurrentPerformanceMode = mode;
-                    _osdService?.SetPerformanceMode(mode);  // Update OSD
                     PushEvent($"⚡ Performance: {mode}");
                 }
             }
@@ -3047,13 +2583,6 @@ namespace OmenCore.ViewModels
                     return;
                 }
                 
-                // Suppress window activation during remote session changes (e.g., RDP)
-                if (App.ShouldSuppressWindowActivation)
-                {
-                    _logging.Debug("Toggle window suppressed (remote session state change)");
-                    return;
-                }
-                
                 _logging.Info($"Toggle window: IsVisible={mainWindow.IsVisible}, WindowState={mainWindow.WindowState}, ShowInTaskbar={mainWindow.ShowInTaskbar}");
                 
                 // Check if window is currently shown and not minimized
@@ -3108,31 +2637,6 @@ namespace OmenCore.ViewModels
                 }
             });
         }
-
-        private void OnHotkeyApplySettings(object? sender, EventArgs e)
-        {
-            Application.Current?.Dispatcher?.BeginInvoke(() =>
-            {
-                try
-                {
-                    // Apply current performance mode if one is selected
-                    if (SystemControl?.SelectedPerformanceMode != null)
-                    {
-                        SystemControl.ApplyPerformanceModeCommand.Execute(null);
-                        ShowHotkeyOsd("Performance", SystemControl.SelectedPerformanceMode.Name, "Ctrl+S");
-                        PushEvent($"⚡ Applied: {SystemControl.SelectedPerformanceMode.Name} (hotkey)");
-                    }
-                    else
-                    {
-                        _logging.Info("Apply settings hotkey: No performance mode selected");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logging.Warn($"Hotkey apply settings failed: {ex.Message}");
-                }
-            });
-        }
         
         private void OnOmenKeyToggleWindow(object? sender, EventArgs e)
         {
@@ -3142,7 +2646,8 @@ namespace OmenCore.ViewModels
         
         private void OnOmenKeyToggleMaxCooling(object? sender, EventArgs e)
         {
-            Application.Current?.Dispatcher?.BeginInvoke(() => {
+            Application.Current?.Dispatcher?.BeginInvoke(async () =>
+            {
                 try
                 {
                     // Toggle between Max and Auto
@@ -3164,8 +2669,6 @@ namespace OmenCore.ViewModels
                 {
                     _logging.Warn($"OMEN key max cooling toggle failed: {ex.Message}");
                 }
-
-                return Task.CompletedTask;
             });
         }
 

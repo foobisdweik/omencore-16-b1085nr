@@ -157,6 +157,7 @@ namespace OmenCore.Services
 
         /// <summary>
         /// Register default hotkeys
+        /// v2.6.0: Removed Ctrl+S which conflicted with save in other applications (Issue #53)
         /// </summary>
         public void RegisterDefaultHotkeys()
         {
@@ -175,8 +176,12 @@ namespace OmenCore.Services
             // Ctrl+Shift+O = Show/hide OmenCore window
             RegisterHotkey(HotkeyAction.ToggleWindow, ModifierKeys.Control | ModifierKeys.Shift, Key.O);
             
-            // Ctrl+S = Apply settings
-            RegisterHotkey(HotkeyAction.ApplySettings, ModifierKeys.Control, Key.S);
+            // v2.6.0: REMOVED Ctrl+S - it conflicts with save shortcuts in Photoshop, VSCode, etc.
+            // Users can still click the Apply button or use Ctrl+Shift+Alt+A if they need a hotkey
+            // RegisterHotkey(HotkeyAction.ApplySettings, ModifierKeys.Control, Key.S); // DISABLED
+            
+            // v2.6.0: Use safe multi-modifier combo that won't conflict with other apps
+            RegisterHotkey(HotkeyAction.ApplySettings, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt, Key.A);
             
             _logging.Info($"Registered {_registeredHotkeys.Count} default hotkeys");
         }

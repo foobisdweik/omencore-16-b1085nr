@@ -169,6 +169,15 @@ namespace OmenCore.Models
         public bool ExperimentalEcKeyboardEnabled { get; set; } = false;
         
         /// <summary>
+        /// EXPERIMENTAL: Enable exclusive EC access diagnostic mode.
+        /// When enabled, EC providers will acquire exclusive mutex access and hold it,
+        /// collecting diagnostic snapshots when other applications try to access EC registers.
+        /// This helps diagnose EC register contention issues but may interfere with other apps.
+        /// WARNING: This is for diagnostic purposes only and may cause system instability.
+        /// </summary>
+        public bool ExclusiveEcAccessDiagnosticsEnabled { get; set; } = false;
+        
+        /// <summary>
         /// Preferred keyboard lighting backend: "Auto" (default), "WmiBios", "Wmi", "Ec".
         /// Auto will use WMI BIOS > WMI > EC priority.
         /// Setting a specific backend forces that backend if available.

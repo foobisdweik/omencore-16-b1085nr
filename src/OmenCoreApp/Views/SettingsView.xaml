@@ -1285,6 +1285,26 @@
                                                   VerticalAlignment="Center"/>
                                 </Grid>
                                 
+                                <!-- Exclusive EC Diagnostics -->
+                                <Grid Margin="0,12,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Exclusive EC Diagnostics" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                        <TextBlock FontSize="11" Foreground="#FFB74D" TextWrapping="Wrap">
+                                            <Run Text="⚠️ Diagnostic mode: Acquires exclusive EC access to detect conflicts."/><LineBreak/>
+                                            <Run Text="May interfere with OMEN Gaming Hub or other fan control apps."/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <ToggleButton Grid.Column="1" 
+                                                  Style="{StaticResource ModernToggleButton}"
+                                                  IsChecked="{Binding ExclusiveEcAccessDiagnosticsEnabled}"
+                                                  VerticalAlignment="Center"/>
+                                </Grid>
+                                
                                 <!-- Keyboard Backend Selector -->
                                 <Grid Margin="0,12,0,0">
                                     <Grid.ColumnDefinitions>

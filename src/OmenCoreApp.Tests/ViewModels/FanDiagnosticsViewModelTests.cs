@@ -150,6 +150,7 @@ namespace OmenCoreApp.Tests.ViewModels
             public bool ApplyPreset(FanPreset preset) => true;
             public bool ApplyCustomCurve(System.Collections.Generic.IEnumerable<FanCurvePoint> curve) => true;
             public bool SetFanSpeed(int percent) { LastSetPercent = percent; SetCallCount++; return true; }
+            public bool SetFanSpeeds(int cpuPercent, int gpuPercent) { LastSetPercent = System.Math.Max(cpuPercent, gpuPercent); SetCallCount++; return true; }
             public bool SetMaxFanSpeed(bool enabled) => true;
             public bool SetPerformanceMode(string modeName) => true;
             public bool RestoreAutoControl() => true;

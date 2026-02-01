@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using OmenCore.Models;
 using OmenCore.Services;
 
@@ -55,7 +56,9 @@ namespace OmenCore.Hardware
     public class FanControllerFactory
     {
         private readonly LoggingService? _logging;
-        private readonly LibreHardwareMonitorImpl _hwMonitor;
+        private readonly IHardwareMonitorBridge _hwMonitor;
+        private readonly LibreHardwareMonitorImpl? _libreHwMonitor; // Optional, for enhanced metrics
+        private readonly HpWmiBios _wmiBios; // For self-sufficient mode
         private readonly IEcAccess? _ecAccess;
         private readonly IReadOnlyDictionary<string, int>? _registerMap;
         private readonly DeviceCapabilities? _capabilities;
@@ -67,17 +70,97 @@ namespace OmenCore.Hardware
         public string ActiveBackend { get; private set; } = "None";
 
         public FanControllerFactory(
-            LibreHardwareMonitorImpl hwMonitor,
+            IHardwareMonitorBridge hwMonitor,
             IEcAccess? ecAccess = null,
             IReadOnlyDictionary<string, int>? registerMap = null,
             LoggingService? logging = null,
             DeviceCapabilities? capabilities = null)
         {
             _hwMonitor = hwMonitor;
+            _libreHwMonitor = hwMonitor as LibreHardwareMonitorImpl; // May be null if using WmiBiosMonitor
+            _wmiBios = new HpWmiBios(logging); // Always available for self-sufficient fallback
             _ecAccess = ecAccess;
             _registerMap = registerMap;
             _logging = logging;
             _capabilities = capabilities;
+        }
+        
+        /// <summary>
+        /// Get fan speeds using the best available source.
+        /// Priority: LibreHardwareMonitor > WMI BIOS
+        /// </summary>
+        private IEnumerable<(string Name, double Rpm)> GetFanSpeedsInternal()
+        {
+            // Try LibreHardwareMonitor first if available
+            if (_libreHwMonitor != null)
+            {
+                try
+                {
+                    return _libreHwMonitor.GetFanSpeeds();
+                }
+                catch
+                {
+                    // Fall through to WMI BIOS
+                }
+            }
+            
+            // Fall back to WMI BIOS
+            var rpms = _wmiBios.GetFanRpmDirect();
+            var result = new List<(string, double)>();
+            
+            if (rpms.HasValue)
+            {
+                var (cpuRpm, gpuRpm) = rpms.Value;
+                if (HpWmiBios.IsValidRpm(cpuRpm))
+                {
+                    result.Add(("CPU Fan", cpuRpm));
+                }
+                
+                if (HpWmiBios.IsValidRpm(gpuRpm))
+                {
+                    result.Add(("GPU Fan", gpuRpm));
+                }
+            }
+            
+            return result;
+        }
+        
+        /// <summary>
+        /// Get CPU temperature using the best available source.
+        /// </summary>
+        private double GetCpuTemperatureInternal()
+        {
+            if (_libreHwMonitor != null)
+            {
+                try
+                {
+                    var temp = _libreHwMonitor.GetCpuTemperature();
+                    if (temp > 0) return temp;
+                }
+                catch { }
+            }
+            
+            // Fall back to WMI BIOS
+            return _wmiBios.GetTemperature() ?? 0;
+        }
+        
+        /// <summary>
+        /// Get GPU temperature using the best available source.
+        /// </summary>
+        private double GetGpuTemperatureInternal()
+        {
+            if (_libreHwMonitor != null)
+            {
+                try
+                {
+                    var temp = _libreHwMonitor.GetGpuTemperature();
+                    if (temp > 0) return temp;
+                }
+                catch { }
+            }
+            
+            // Fall back to WMI BIOS
+            return _wmiBios.GetGpuTemperature() ?? 0;
         }
 
         /// <summary>
@@ -208,7 +291,7 @@ namespace OmenCore.Hardware
             _logging?.Warn("⚠️ No fan control backend available - using monitoring-only mode");
             _logging?.Info("  Sensors will still work, but fan control will be unavailable");
             _logging?.Info("  Please report this configuration on GitHub for potential support");
-            return new FallbackFanController(_hwMonitor, _logging);
+            return new FallbackFanController(_libreHwMonitor, _logging);
         }
 
         /// <summary>
@@ -225,7 +308,7 @@ namespace OmenCore.Hardware
                 if (_oghProxy.IsAvailable)
                 {
                     _logging?.Info($"OGH proxy available - Services: {string.Join(", ", _oghProxy.Status.RunningServices)}");
-                    return new OghFanControllerWrapper(_oghProxy, _hwMonitor, _logging);
+                    return new OghFanControllerWrapper(_oghProxy, _libreHwMonitor, _logging);
                 }
                 
                 // Try starting OGH services if installed but not running
@@ -234,7 +317,7 @@ namespace OmenCore.Hardware
                     _logging?.Info("OGH installed but not running, attempting to start services...");
                     if (_oghProxy.TryStartOghServices() && _oghProxy.IsAvailable)
                     {
-                        return new OghFanControllerWrapper(_oghProxy, _hwMonitor, _logging);
+                        return new OghFanControllerWrapper(_oghProxy, _libreHwMonitor, _logging);
                     }
                 }
             }
@@ -252,7 +335,7 @@ namespace OmenCore.Hardware
         {
             try
             {
-                var controller = new WmiFanController(_hwMonitor, _logging);
+                var controller = new WmiFanController(_libreHwMonitor!, _logging);
                 if (controller.IsAvailable)
                 {
                     return new WmiFanControllerWrapper(controller, _logging);
@@ -273,12 +356,12 @@ namespace OmenCore.Hardware
         {
             try
             {
-                if (_ecAccess != null && _ecAccess.IsAvailable && _registerMap != null)
+                if (_ecAccess != null && _ecAccess.IsAvailable && _registerMap != null && _libreHwMonitor != null)
                 {
-                    var controller = new FanController(_ecAccess, _registerMap, _hwMonitor, _logging);
+                    var controller = new FanController(_ecAccess, _registerMap, _libreHwMonitor, _logging);
                     if (controller.IsEcReady)
                     {
-                        return new EcFanControllerWrapper(controller, _hwMonitor, _logging);
+                        return new EcFanControllerWrapper(controller, _libreHwMonitor, _logging);
                     }
                 }
             }
@@ -287,6 +370,110 @@ namespace OmenCore.Hardware
                 _logging?.Warn($"EC controller initialization failed: {ex.Message}");
             }
             return null;
+        }
+
+        /// <summary>
+        /// Read fan RPM directly from EC registers (fallback when other methods fail).
+        /// Based on FanController.ReadActualFanRpm logic.
+        /// </summary>
+        private (int fan1Rpm, int fan2Rpm) ReadFanRpmFromEc()
+        {
+            if (_ecAccess == null || !_ecAccess.IsAvailable)
+                return (0, 0);
+            // Retry/backoff strategy to mitigate inter-process EC contention.
+            // Some contention manifests as transient 0 RPM or thrown timeouts when other apps access EC.
+            const int attempts = 5;
+            var readings = new List<(int f1, int f2)>();
+            for (int attempt = 1; attempt <= attempts; attempt++)
+            {
+                try
+                {
+                    // Try alternative registers first (0x4A-0x4B for Fan1, 0x4C-0x4D for Fan2) - 16-bit RPM
+                    try
+                    {
+                        var fan1Low = _ecAccess.ReadByte(0x4A);
+                        var fan1High = _ecAccess.ReadByte(0x4B);
+                        var fan2Low = _ecAccess.ReadByte(0x4C);
+                        var fan2High = _ecAccess.ReadByte(0x4D);
+                        _logging?.Debug($"EC Read alt RPM regs (attempt {attempt}): 0x4A=0x{fan1Low:X2}, 0x4B=0x{fan1High:X2}, 0x4C=0x{fan2Low:X2}, 0x4D=0x{fan2High:X2}");
+
+                        var fan1Rpm = (fan1High << 8) | fan1Low;
+                        var fan2Rpm = (fan2High << 8) | fan2Low;
+
+                        // Validate RPM range (0-8000 is valid for laptop fans)
+                        // 0xFF or 0xFFFF values indicate "no data" or error states
+                        if ((HpWmiBios.IsValidRpm(fan1Rpm) && fan1Rpm > 0) || 
+                            (HpWmiBios.IsValidRpm(fan2Rpm) && fan2Rpm > 0))
+                        {
+                            // Only return valid readings
+                            var validF1 = HpWmiBios.IsValidRpm(fan1Rpm) ? fan1Rpm : 0;
+                            var validF2 = HpWmiBios.IsValidRpm(fan2Rpm) ? fan2Rpm : 0;
+                            readings.Add((validF1, validF2));
+                            _logging?.Info($"EC RPMs (alt regs, attempt {attempt}): Fan1={validF1} RPM, Fan2={validF2} RPM");
+                            // Good reading - return immediately
+                            return (validF1, validF2);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logging?.Debug($"EC alt register read failed (attempt {attempt}): {ex.Message}");
+                        if (ex is TimeoutException || ex.Message.Contains("mutex", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Log contention event
+                            _logging?.Warn($"EC contention detected during alt read (attempt {attempt}): {ex.Message}");
+                        }
+                    }
+
+                    // Try primary registers (0x34/0x35) - units of 100 RPM
+                    const ushort REG_FAN1_RPM = 0x34;
+                    const ushort REG_FAN2_RPM = 0x35;
+
+                    var fan1Unit = _ecAccess.ReadByte(REG_FAN1_RPM);
+                    var fan2Unit = _ecAccess.ReadByte(REG_FAN2_RPM);
+                    _logging?.Debug($"EC Read primary RPM regs (attempt {attempt}): 0x{REG_FAN1_RPM:X2}=0x{fan1Unit:X2}, 0x{REG_FAN2_RPM:X2}=0x{fan2Unit:X2}");
+
+                    // Skip 0xFF values (invalid/error indicator)
+                    // Max valid unit is 80 (8000 RPM / 100)
+                    if (fan1Unit > 0 && fan1Unit < 0xFF || fan2Unit > 0 && fan2Unit < 0xFF)
+                    {
+                        // Only compute RPM for valid units (< 80 = 8000 RPM max)
+                        var fan1Rpm = (fan1Unit > 0 && fan1Unit <= 80) ? fan1Unit * 100 : 0;
+                        var fan2Rpm = (fan2Unit > 0 && fan2Unit <= 80) ? fan2Unit * 100 : 0;
+                        
+                        if (fan1Rpm > 0 || fan2Rpm > 0)
+                        {
+                            readings.Add((fan1Rpm, fan2Rpm));
+                            _logging?.Info($"EC RPMs (primary, attempt {attempt}): Fan1={fan1Rpm} RPM, Fan2={fan2Rpm} RPM");
+                            return (fan1Rpm, fan2Rpm);
+                        }
+                    }
+
+                    // If we reach here, we got zeros - wait and retry
+                }
+                catch (Exception ex)
+                {
+                    _logging?.Warn($"EC Read attempt {attempt} failed: {ex.Message}");
+                }
+
+                // Backoff with jitter
+                try
+                {
+                    var delayMs = 50 * attempt + (new Random()).Next(20, 80);
+                    System.Threading.Thread.Sleep(delayMs);
+                }
+                catch { }
+            }
+
+            // If we collected any non-zero readings, pick the most recent non-zero
+            for (int i = readings.Count - 1; i >= 0; i--)
+            {
+                var r = readings[i];
+                if (r.f1 > 0 || r.f2 > 0) return r;
+            }
+
+            // Nothing useful found
+            _logging?.Debug("EC ReadFanRpmFromEc: no valid RPM readings after retries");
+            return (0, 0);
         }
     }
 
@@ -299,7 +486,7 @@ namespace OmenCore.Hardware
         public bool VerifyMaxApplied(out string details)
         {
             // Best-effort: check hardware monitor for RPMs or return fallback message
-            var fans = _hwMonitor.GetFanSpeeds();
+            var fans = SensorHelper.GetFanSpeeds(_hwMonitor);
             if (fans.Any())
             {
                 details = $"HardwareMonitor RPMs: {string.Join(',', fans.Select(f => f.Rpm))}";
@@ -310,11 +497,11 @@ namespace OmenCore.Hardware
         }
         
         private readonly OghServiceProxy _proxy;
-        private readonly LibreHardwareMonitorImpl _hwMonitor;
+        private readonly LibreHardwareMonitorImpl? _hwMonitor;
         private readonly LoggingService? _logging;
         private bool _disposed;
 
-        public OghFanControllerWrapper(OghServiceProxy proxy, LibreHardwareMonitorImpl hwMonitor, LoggingService? logging = null)
+        public OghFanControllerWrapper(OghServiceProxy proxy, LibreHardwareMonitorImpl? hwMonitor, LoggingService? logging = null)
         {
             _proxy = proxy;
             _hwMonitor = hwMonitor;
@@ -405,20 +592,26 @@ namespace OmenCore.Hardware
         public IEnumerable<FanTelemetry> ReadFanSpeeds()
         {
             var fans = new List<FanTelemetry>();
-            
-            // Try to get fan data from OGH
-            var oghFans = _proxy.GetFanData();
-            if (oghFans != null && oghFans.Length > 0)
+
+            // Prefer OGH-provided fan telemetry when available
+            try
             {
-                foreach (var fan in oghFans)
+                var oghFans = _proxy.GetFanData();
+                if (oghFans != null && oghFans.Length > 0)
                 {
-                    fans.Add(fan);
+                    foreach (var fan in oghFans)
+                        fans.Add(fan);
                 }
             }
-            else
+            catch (Exception ex)
             {
-                // Fall back to hardware monitor
-                var fanSpeeds = _hwMonitor.GetFanSpeeds();
+                _logging?.Debug($"OGH GetFanData error: {ex.Message}");
+            }
+
+            // Fall back to sensor helper if OGH didn't provide data
+            if (fans.Count == 0)
+            {
+                var fanSpeeds = SensorHelper.GetFanSpeeds(_hwMonitor);
                 int index = 0;
                 foreach (var (name, rpm) in fanSpeeds)
                 {
@@ -426,8 +619,8 @@ namespace OmenCore.Hardware
                     {
                         Name = name,
                         SpeedRpm = (int)rpm,
-                        DutyCyclePercent = EstimateDutyFromRpm((int)rpm),
-                        Temperature = index == 0 ? _hwMonitor.GetCpuTemperature() : _hwMonitor.GetGpuTemperature()
+                        DutyCyclePercent = 0, // Unknown from HW monitor
+                        Temperature = index == 0 ? SensorHelper.GetCpuTemperature(_hwMonitor) : SensorHelper.GetGpuTemperature(_hwMonitor)
                     });
                     index++;
                 }
@@ -436,8 +629,8 @@ namespace OmenCore.Hardware
             // Ensure we have at least placeholder entries
             if (fans.Count == 0)
             {
-                fans.Add(new FanTelemetry { Name = "CPU Fan", SpeedRpm = 0, DutyCyclePercent = 0, Temperature = _hwMonitor.GetCpuTemperature() });
-                fans.Add(new FanTelemetry { Name = "GPU Fan", SpeedRpm = 0, DutyCyclePercent = 0, Temperature = _hwMonitor.GetGpuTemperature() });
+                fans.Add(new FanTelemetry { Name = "CPU Fan", SpeedRpm = 0, DutyCyclePercent = 0, Temperature = SensorHelper.GetCpuTemperature(_hwMonitor) });
+                fans.Add(new FanTelemetry { Name = "GPU Fan", SpeedRpm = 0, DutyCyclePercent = 0, Temperature = SensorHelper.GetGpuTemperature(_hwMonitor) });
             }
             
             return fans;
@@ -602,10 +795,10 @@ namespace OmenCore.Hardware
         }
 
         private readonly FanController _controller;
-        private readonly LibreHardwareMonitorImpl _hwMonitor;
+        private readonly LibreHardwareMonitorImpl? _hwMonitor;
         private readonly LoggingService? _logging;
 
-        public EcFanControllerWrapper(FanController controller, LibreHardwareMonitorImpl hwMonitor, LoggingService? logging = null)
+        public EcFanControllerWrapper(FanController controller, LibreHardwareMonitorImpl? hwMonitor, LoggingService? logging = null)
         {
             _controller = controller;
             _hwMonitor = hwMonitor;
@@ -818,10 +1011,10 @@ namespace OmenCore.Hardware
             return false;
         }
         
-        private readonly LibreHardwareMonitorImpl _hwMonitor;
+        private readonly LibreHardwareMonitorImpl? _hwMonitor;
         private readonly LoggingService? _logging;
 
-        public FallbackFanController(LibreHardwareMonitorImpl hwMonitor, LoggingService? logging = null)
+        public FallbackFanController(LibreHardwareMonitorImpl? hwMonitor, LoggingService? logging = null)
         {
             _hwMonitor = hwMonitor;
             _logging = logging;
@@ -877,8 +1070,8 @@ namespace OmenCore.Hardware
         {
             var fans = new List<FanTelemetry>();
 
-            // Get fan speeds from hardware monitor
-            var fanSpeeds = _hwMonitor.GetFanSpeeds();
+            // Get fan speeds from hardware monitor (with WMI BIOS fallback)
+            var fanSpeeds = SensorHelper.GetFanSpeeds(_hwMonitor);
             int index = 0;
 
             foreach (var (name, rpm) in fanSpeeds)
@@ -888,7 +1081,7 @@ namespace OmenCore.Hardware
                     Name = name,
                     SpeedRpm = (int)rpm,
                     DutyCyclePercent = EstimateDutyFromRpm((int)rpm),
-                    Temperature = index == 0 ? _hwMonitor.GetCpuTemperature() : _hwMonitor.GetGpuTemperature()
+                    Temperature = index == 0 ? SensorHelper.GetCpuTemperature(_hwMonitor) : SensorHelper.GetGpuTemperature(_hwMonitor)
                 });
                 index++;
             }
@@ -896,8 +1089,8 @@ namespace OmenCore.Hardware
             // Fallback if no fans detected
             if (fans.Count == 0)
             {
-                fans.Add(new FanTelemetry { Name = "CPU Fan", SpeedRpm = 0, DutyCyclePercent = 0, Temperature = _hwMonitor.GetCpuTemperature() });
-                fans.Add(new FanTelemetry { Name = "GPU Fan", SpeedRpm = 0, DutyCyclePercent = 0, Temperature = _hwMonitor.GetGpuTemperature() });
+                fans.Add(new FanTelemetry { Name = "CPU Fan", SpeedRpm = 0, DutyCyclePercent = 0, Temperature = SensorHelper.GetCpuTemperature(_hwMonitor) });
+                fans.Add(new FanTelemetry { Name = "GPU Fan", SpeedRpm = 0, DutyCyclePercent = 0, Temperature = SensorHelper.GetGpuTemperature(_hwMonitor) });
             }
 
             return fans;
@@ -924,6 +1117,87 @@ namespace OmenCore.Hardware
         public void Dispose()
         {
             // Nothing to dispose
+        }
+    }
+    
+    /// <summary>
+    /// Static helper for getting sensor data from the best available source.
+    /// Used by fan controller wrappers to get data without requiring LibreHardwareMonitor.
+    /// </summary>
+    internal static class SensorHelper
+    {
+        private static HpWmiBios? _wmiBios;
+        
+        private static HpWmiBios WmiBios => _wmiBios ??= new HpWmiBios(null);
+        
+        /// <summary>
+        /// Get fan speeds from LibreHardwareMonitor or WMI BIOS fallback.
+        /// </summary>
+        public static IEnumerable<(string Name, double Rpm)> GetFanSpeeds(LibreHardwareMonitorImpl? libreHw)
+        {
+            // Try LibreHardwareMonitor first
+            if (libreHw != null)
+            {
+                try
+                {
+                    var speeds = libreHw.GetFanSpeeds();
+                    if (speeds.Any())
+                        return speeds;
+                }
+                catch { }
+            }
+            
+            // Fall back to WMI BIOS
+            var rpms = WmiBios.GetFanRpmDirect();
+            var result = new List<(string, double)>();
+            
+            if (rpms.HasValue)
+            {
+                var (cpuRpm, gpuRpm) = rpms.Value;
+                if (HpWmiBios.IsValidRpm(cpuRpm))
+                    result.Add(("CPU Fan", cpuRpm));
+                
+                if (HpWmiBios.IsValidRpm(gpuRpm))
+                    result.Add(("GPU Fan", gpuRpm));
+            }
+            
+            return result;
+        }
+        
+        /// <summary>
+        /// Get CPU temperature from LibreHardwareMonitor or WMI BIOS fallback.
+        /// </summary>
+        public static double GetCpuTemperature(LibreHardwareMonitorImpl? libreHw)
+        {
+            if (libreHw != null)
+            {
+                try
+                {
+                    var temp = libreHw.GetCpuTemperature();
+                    if (temp > 0) return temp;
+                }
+                catch { }
+            }
+            
+            return WmiBios.GetTemperature() ?? 0;
+        }
+        
+        /// <summary>
+        /// Get GPU temperature from LibreHardwareMonitor or WMI BIOS fallback.
+        /// </summary>
+        public static double GetGpuTemperature(LibreHardwareMonitorImpl? libreHw)
+        {
+            if (libreHw != null)
+            {
+                try
+                {
+                    var temp = libreHw.GetGpuTemperature();
+                    if (temp > 0) return temp;
+                }
+                catch { }
+            }
+            
+            return WmiBios.GetGpuTemperature() ?? 0;
         }
     }
 }

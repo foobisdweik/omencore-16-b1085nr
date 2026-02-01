@@ -22,7 +22,7 @@ namespace OmenCore.Hardware
     public class WmiFanController : IDisposable
     {
         private readonly HpWmiBios _wmiBios;
-        private readonly LibreHardwareMonitorImpl _hwMonitor;
+        private readonly LibreHardwareMonitorImpl? _hwMonitor;
         private readonly LoggingService? _logging;
         private bool _disposed;
 
@@ -75,11 +75,63 @@ namespace OmenCore.Hardware
         /// </summary>
         public int VerifyFailCount => _commandVerifyFailCount;
 
-        public WmiFanController(LibreHardwareMonitorImpl hwMonitor, LoggingService? logging = null)
+        public WmiFanController(LibreHardwareMonitorImpl? hwMonitor, LoggingService? logging = null)
         {
             _hwMonitor = hwMonitor;
             _logging = logging;
             _wmiBios = new HpWmiBios(logging);
+        }
+        
+        // Helper methods for getting sensor data with WMI BIOS fallback
+        private double GetCpuTemperature()
+        {
+            if (_hwMonitor != null)
+            {
+                try
+                {
+                    var temp = _hwMonitor.GetCpuTemperature();
+                    if (temp > 0) return temp;
+                }
+                catch { }
+            }
+            return _wmiBios.GetTemperature() ?? 0;
+        }
+        
+        private double GetGpuTemperature()
+        {
+            if (_hwMonitor != null)
+            {
+                try
+                {
+                    var temp = _hwMonitor.GetGpuTemperature();
+                    if (temp > 0) return temp;
+                }
+                catch { }
+            }
+            return _wmiBios.GetGpuTemperature() ?? 0;
+        }
+        
+        private IEnumerable<(string Name, double Rpm)> GetFanSpeeds()
+        {
+            if (_hwMonitor != null)
+            {
+                try
+                {
+                    var speeds = _hwMonitor.GetFanSpeeds();
+                    if (speeds.Any()) return speeds;
+                }
+                catch { }
+            }
+            // Fallback to WMI BIOS
+            var rpms = _wmiBios.GetFanRpmDirect();
+            var result = new List<(string, double)>();
+            if (rpms.HasValue)
+            {
+                var (cpu, gpu) = rpms.Value;
+                if (HpWmiBios.IsValidRpm(cpu)) result.Add(("CPU Fan", cpu));
+                if (HpWmiBios.IsValidRpm(gpu)) result.Add(("GPU Fan", gpu));
+            }
+            return result;
         }
 
         /// <summary>
@@ -245,8 +297,8 @@ namespace OmenCore.Hardware
                 }
 
                 // Get current temperature to determine fan level
-                var cpuTemp = (int)_hwMonitor.GetCpuTemperature();
-                var gpuTemp = (int)_hwMonitor.GetGpuTemperature();
+                var cpuTemp = (int)GetCpuTemperature();
+                var gpuTemp = (int)GetGpuTemperature();
                 var maxTemp = Math.Max(cpuTemp, gpuTemp);
 
                 // Find appropriate curve point
@@ -701,17 +753,21 @@ namespace OmenCore.Hardware
 
         /// <summary>
         /// Read current fan telemetry data.
+        /// v2.6.0: Uses GetFanRpmDirect() for V2 systems with proper sanity validation.
         /// </summary>
         public IEnumerable<FanTelemetry> ReadFanSpeeds()
         {
             var fans = new List<FanTelemetry>();
 
             // Get fan speeds from hardware monitor
-            var fanSpeeds = _hwMonitor.GetFanSpeeds();
+            var fanSpeeds = GetFanSpeeds();
             int index = 0;
 
             foreach (var (name, rpm) in fanSpeeds)
             {
+                // v2.6.0: Validate RPM from LibreHardwareMonitor
+                int validatedRpm = (rpm > 0 && rpm <= 8000) ? (int)rpm : 0;
+                
                 var fanLevel = _wmiBios.GetFanLevel();
                 int levelPercent = 0;
                 
@@ -721,18 +777,18 @@ namespace OmenCore.Hardware
                         ? fanLevel.Value.fan1 * 100 / 55 
                         : fanLevel.Value.fan2 * 100 / 55;
                 }
-                else
+                else if (validatedRpm > 0)
                 {
                     // Estimate from RPM
-                    levelPercent = EstimateDutyFromRpm((int)rpm);
+                    levelPercent = EstimateDutyFromRpm(validatedRpm);
                 }
 
                 fans.Add(new FanTelemetry
                 {
                     Name = name,
-                    SpeedRpm = (int)rpm,
+                    SpeedRpm = validatedRpm,
                     DutyCyclePercent = Math.Clamp(levelPercent, 0, 100),
-                    Temperature = index == 0 ? _hwMonitor.GetCpuTemperature() : _hwMonitor.GetGpuTemperature()
+                    Temperature = index == 0 ? GetCpuTemperature() : GetGpuTemperature()
                 });
                 index++;
             }
@@ -742,34 +798,73 @@ namespace OmenCore.Hardware
             if (fans.Count == 0)
             {
                 var biosTemp = _wmiBios.GetTemperature();
-                var cpuTemp = _hwMonitor.GetCpuTemperature();
-                var gpuTemp = _hwMonitor.GetGpuTemperature();
+                var gpuBiosTemp = _wmiBios.GetGpuTemperature();
+                var cpuTemp = GetCpuTemperature();
+                var gpuTemp = GetGpuTemperature();
                 
-                // Get fan speed from HP WMI BIOS - returns krpm (0-55 = 0-5500 RPM)
+                // v2.6.0: Use WMI BIOS temp if LibreHardwareMonitor fails
+                if (cpuTemp <= 0 && biosTemp.HasValue) cpuTemp = biosTemp.Value;
+                if (gpuTemp <= 0 && gpuBiosTemp.HasValue) gpuTemp = gpuBiosTemp.Value;
+                
+                // v2.6.0: Try direct RPM command first for V2 systems
                 _logging?.Debug("[FanRPM] LibreHardwareMonitor found 0 fans, using WMI BIOS fallback");
-                var fanLevel = _wmiBios.GetFanLevel();
-                _logging?.Debug($"[FanRPM] GetFanLevel returned: {(fanLevel.HasValue ? $"fan1={fanLevel.Value.fan1}, fan2={fanLevel.Value.fan2}" : "NULL")}");
+                
                 int fan1Rpm = 0;
                 int fan2Rpm = 0;
                 int fan1Percent = 0;
                 int fan2Percent = 0;
+                bool gotValidData = false;
                 
-                if (fanLevel.HasValue && (fanLevel.Value.fan1 > 0 || fanLevel.Value.fan2 > 0))
+                // Try direct RPM reading first (V2 systems)
+                var directRpm = _wmiBios.GetFanRpmDirect();
+                if (directRpm.HasValue && (directRpm.Value.fan1Rpm > 0 || directRpm.Value.fan2Rpm > 0))
                 {
-                    // HP WMI BIOS returns fan level in krpm units:
-                    // 0 = 0 RPM (off)
-                    // 55 = 5500 RPM (max)
-                    // Convert krpm to RPM: multiply by 100 (e.g., 35 krpm = 3500 RPM)
-                    fan1Rpm = fanLevel.Value.fan1 * 100;
-                    fan2Rpm = fanLevel.Value.fan2 * 100;
-                    
-                    // Calculate percent based on max RPM range (5500 RPM = 100%)
+                    fan1Rpm = directRpm.Value.fan1Rpm;
+                    fan2Rpm = directRpm.Value.fan2Rpm;
                     fan1Percent = Math.Clamp((fan1Rpm * 100) / 5500, 0, 100);
                     fan2Percent = Math.Clamp((fan2Rpm * 100) / 5500, 0, 100);
-                    
-                    _logging?.Info($"HP WMI Fan levels: Fan1={fanLevel.Value.fan1} krpm ({fan1Rpm} RPM, {fan1Percent}%), Fan2={fanLevel.Value.fan2} krpm ({fan2Rpm} RPM, {fan2Percent}%)");
+                    gotValidData = true;
+                    _logging?.Debug($"[FanRPM] Direct RPM: CPU={fan1Rpm} ({fan1Percent}%), GPU={fan2Rpm} ({fan2Percent}%)");
                 }
-                else
+                
+                // Try fan level if direct RPM unavailable
+                if (!gotValidData)
+                {
+                    var fanLevel = _wmiBios.GetFanLevel();
+                    _logging?.Debug($"[FanRPM] GetFanLevel returned: {(fanLevel.HasValue ? $"fan1={fanLevel.Value.fan1}, fan2={fanLevel.Value.fan2}" : "NULL")}");
+                    
+                    if (fanLevel.HasValue && (fanLevel.Value.fan1 > 0 || fanLevel.Value.fan2 > 0))
+                    {
+                        // HP WMI BIOS returns fan level in krpm units:
+                        // 0 = 0 RPM (off)
+                        // 55 = 5500 RPM (max)
+                        // Convert krpm to RPM: multiply by 100
+                        fan1Rpm = fanLevel.Value.fan1 * 100;
+                        fan2Rpm = fanLevel.Value.fan2 * 100;
+                        
+                        // Sanity check the calculated RPM
+                        if (fan1Rpm > 8000 || fan2Rpm > 8000)
+                        {
+                            _logging?.Warn($"[FanRPM] Invalid calculated RPM from level: {fan1Rpm}, {fan2Rpm} - using as level directly");
+                            // The value might be actual RPM, not level - use as-is if in valid range
+                            // fanLevel.Value.fan1/fan2 are bytes (0-255), but treat them as raw RPM if calculated RPM is invalid
+                            int rawFan1 = fanLevel.Value.fan1;
+                            int rawFan2 = fanLevel.Value.fan2;
+                            if (rawFan1 > 0 && rawFan1 <= 8000) fan1Rpm = rawFan1;
+                            if (rawFan2 > 0 && rawFan2 <= 8000) fan2Rpm = rawFan2;
+                        }
+                        
+                        // Calculate percent based on max RPM range (5500 RPM = 100%)
+                        fan1Percent = Math.Clamp((fan1Rpm * 100) / 5500, 0, 100);
+                        fan2Percent = Math.Clamp((fan2Rpm * 100) / 5500, 0, 100);
+                        gotValidData = true;
+                        
+                        _logging?.Info($"HP WMI Fan levels: Fan1={fanLevel.Value.fan1} -> {fan1Rpm} RPM ({fan1Percent}%), Fan2={fanLevel.Value.fan2} -> {fan2Rpm} RPM ({fan2Percent}%)");
+                    }
+                }
+                
+                // Fallback to estimation if WMI fails
+                if (!gotValidData)
                 {
                     // WMI BIOS GetFanLevel failed or returned zeros
                     // Many HP OMEN laptops don't support reading current fan level
@@ -866,6 +961,7 @@ namespace OmenCore.Hardware
         /// <summary>
         /// Small verification helper: after attempting to enable max, checks fan RPM/duty a few times
         /// to confirm the hardware actually ramped. Returns true if verification passes.
+        /// v2.6.0: Uses raw WMI reads to avoid circular dependency with estimated values.
         /// </summary>
         private bool VerifyMaxAppliedWithRetries()
         {
@@ -876,34 +972,58 @@ namespace OmenCore.Hardware
             {
                 try
                 {
-                    // Read current fan status
-                    var fans = ReadFanSpeeds().ToArray();
-                    if (fans.Length >= 2)
+                    // v2.6.0: Use raw WMI BIOS read instead of ReadFanSpeeds() which may return estimates
+                    var rawRpm = _wmiBios.GetFanRpmDirect();
+                    if (rawRpm.HasValue)
                     {
-                        bool cpuOk = fans[0].DutyCyclePercent >= 90 || fans[0].SpeedRpm >= 3000;
-                        bool gpuOk = fans[1].DutyCyclePercent >= 90 || fans[1].SpeedRpm >= 3000;
-
-                        _logging?.Debug($"[VerifyMax] Attempt {attempt}/{attempts}: CPU {fans[0].DutyCyclePercent}% ({fans[0].SpeedRpm} RPM), GPU {fans[1].DutyCyclePercent}% ({fans[1].SpeedRpm} RPM)");
-
-                        if (cpuOk && gpuOk)
+                        int maxRpm = Math.Max(rawRpm.Value.fan1Rpm, rawRpm.Value.fan2Rpm);
+                        _logging?.Debug($"[VerifyMax] Attempt {attempt}/{attempts}: Raw RPM - CPU={rawRpm.Value.fan1Rpm}, GPU={rawRpm.Value.fan2Rpm}");
+                        
+                        // For max mode, fans should be spinning fast (at least 4000 RPM)
+                        if (maxRpm >= 4000)
+                        {
+                            _logging?.Info($"[VerifyMax] ✓ Verified: {maxRpm} RPM");
                             return true;
+                        }
+                        
+                        // Check if increasing from baseline
+                        if (_lastCommandRpmBefore.HasValue && maxRpm > _lastCommandRpmBefore.Value + 500)
+                        {
+                            _logging?.Info($"[VerifyMax] ✓ RPM increased: {_lastCommandRpmBefore.Value} -> {maxRpm} (+{maxRpm - _lastCommandRpmBefore.Value})");
+                            return true;
+                        }
                     }
-                    else if (fans.Length == 1)
+                    else
                     {
-                        var f = fans[0];
-                        bool ok = f.DutyCyclePercent >= 90 || f.SpeedRpm >= 3000;
-                        _logging?.Debug($"[VerifyMax] Attempt {attempt}/{attempts}: Single fan {f.DutyCyclePercent}% ({f.SpeedRpm} RPM)");
-                        if (ok) return true;
+                        // Fallback to fan level if RPM command not available
+                        var fanLevel = _wmiBios.GetFanLevel();
+                        if (fanLevel.HasValue)
+                        {
+                            int maxLevel = Math.Max(fanLevel.Value.fan1, fanLevel.Value.fan2);
+                            _logging?.Debug($"[VerifyMax] Attempt {attempt}/{attempts}: Fan level - CPU={fanLevel.Value.fan1}, GPU={fanLevel.Value.fan2}");
+                            
+                            // Level 50+ is ~90% duty (max is 55)
+                            if (maxLevel >= 50)
+                            {
+                                _logging?.Info($"[VerifyMax] ✓ Verified via level: {maxLevel}/55");
+                                return true;
+                            }
+                        }
+                        else
+                        {
+                            _logging?.Debug($"[VerifyMax] Attempt {attempt}/{attempts}: No fan data available from WMI");
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logging?.Warn($"[VerifyMax] ReadFanSpeeds failed: {ex.Message}");
+                    _logging?.Warn($"[VerifyMax] Error: {ex.Message}");
                 }
 
                 System.Threading.Thread.Sleep(delayMs);
             }
-
+            
+            _logging?.Warn("[VerifyMax] Failed after 3 attempts - fan command may not be effective on this model");
             return false;
         }
 
@@ -1289,7 +1409,7 @@ namespace OmenCore.Hardware
         {
             try
             {
-                var fanSpeeds = _hwMonitor.GetFanSpeeds();
+                var fanSpeeds = GetFanSpeeds();
                 var firstFan = fanSpeeds.FirstOrDefault();
                 return firstFan.Rpm; // Access the Rpm property of the tuple
             }

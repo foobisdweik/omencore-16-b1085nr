@@ -107,6 +107,12 @@ namespace OmenCore.Hardware
         /// Enable experimental keyboard EC writes. Set this to true when ExperimentalEcKeyboardEnabled is on.
         /// </summary>
         public static bool EnableExperimentalKeyboardWrites { get; set; } = false;
+        
+        /// <summary>
+        /// Enable exclusive EC access diagnostic mode.
+        /// When enabled, acquires and holds the EC mutex exclusively for diagnostic purposes.
+        /// </summary>
+        public static bool EnableExclusiveEcAccessDiagnostics { get; set; } = false;
 
         // EC mutex to prevent concurrent access
         private static readonly Mutex EcMutex = new(false, @"Global\Access_EC");
@@ -301,56 +307,126 @@ namespace OmenCore.Hardware
             }
         }
 
+        /// <summary>
+        /// Maximum retry attempts for EC operations when another app (e.g., OmenMon) holds the mutex
+        /// </summary>
+        private const int EC_CONFLICT_MAX_RETRIES = 3;
+        
+        /// <summary>
+        /// Delay between retry attempts in milliseconds
+        /// </summary>
+        private const int EC_CONFLICT_RETRY_DELAY_MS = 100;
+        
+        /// <summary>
+        /// Event raised when EC conflict is detected (another app like OmenMon holds the mutex)
+        /// </summary>
+        public static event EventHandler<string>? EcConflictDetected;
+
         public byte ReadByte(ushort address)
+        {
+            return ReadByteWithRetry(address, EC_CONFLICT_MAX_RETRIES);
+        }
+        
+        /// <summary>
+        /// Read byte with retry logic for EC conflicts with other applications
+        /// </summary>
+        private byte ReadByteWithRetry(ushort address, int maxRetries)
         {
             EnsureAvailable();
 
-            bool gotMutex = false;
-            try
+            Exception? lastException = null;
+            
+            for (int attempt = 0; attempt <= maxRetries; attempt++)
             {
-                gotMutex = EcMutex.WaitOne(200);
-                if (!gotMutex)
+                bool gotMutex = false;
+                try
                 {
-                    throw new TimeoutException("Failed to acquire EC mutex");
-                }
+                    // Increase timeout on retries to give other apps time to release
+                    int timeoutMs = attempt == 0 ? 200 : 500;
+                    gotMutex = EcMutex.WaitOne(timeoutMs);
+                    
+                    if (!gotMutex)
+                    {
+                        if (attempt < maxRetries)
+                        {
+                            // Log conflict and retry
+                            System.Diagnostics.Debug.WriteLine($"[PawnIO] EC mutex contention detected (attempt {attempt + 1}/{maxRetries + 1}), retrying...");
+                            
+                            // Raise event on first conflict detection
+                            if (attempt == 0)
+                            {
+                                EcConflictDetected?.Invoke(null, "EC mutex acquisition failed - another application (possibly OmenMon) holds EC access");
+                            }
+                            
+                            Thread.Sleep(EC_CONFLICT_RETRY_DELAY_MS);
+                            continue;
+                        }
+                        
+                        if (EnableExclusiveEcAccessDiagnostics)
+                        {
+                            throw new TimeoutException("EC mutex acquisition failed after retries - another application holds EC access (exclusive diagnostics mode)");
+                        }
+                        else
+                        {
+                            throw new TimeoutException("Failed to acquire EC mutex after multiple attempts - check if OmenMon or another EC app is running");
+                        }
+                    }
 
-                // Wait for IBF to clear
-                if (!WaitForInputBufferEmpty())
+                    // Wait for IBF to clear
+                    if (!WaitForInputBufferEmpty())
+                    {
+                        throw new TimeoutException("EC input buffer not empty");
+                    }
+
+                    // Send read command
+                    WritePort(EC_CMD_PORT, EC_CMD_READ);
+
+                    // Wait for IBF to clear
+                    if (!WaitForInputBufferEmpty())
+                    {
+                        throw new TimeoutException("EC input buffer not empty after command");
+                    }
+
+                    // Send address
+                    WritePort(EC_DATA_PORT, (byte)address);
+
+                    // Wait for OBF to be set
+                    if (!WaitForOutputBufferFull())
+                    {
+                        throw new TimeoutException("EC output buffer not full");
+                    }
+
+                    // Read data - success!
+                    return ReadPort(EC_DATA_PORT);
+                }
+                catch (TimeoutException ex) when (attempt < maxRetries && !gotMutex)
                 {
-                    throw new TimeoutException("EC input buffer not empty");
+                    lastException = ex;
+                    Thread.Sleep(EC_CONFLICT_RETRY_DELAY_MS);
+                    continue;
                 }
-
-                // Send read command
-                WritePort(EC_CMD_PORT, EC_CMD_READ);
-
-                // Wait for IBF to clear
-                if (!WaitForInputBufferEmpty())
+                finally
                 {
-                    throw new TimeoutException("EC input buffer not empty after command");
+                    if (gotMutex)
+                    {
+                        EcMutex.ReleaseMutex();
+                    }
                 }
-
-                // Send address
-                WritePort(EC_DATA_PORT, (byte)address);
-
-                // Wait for OBF to be set
-                if (!WaitForOutputBufferFull())
-                {
-                    throw new TimeoutException("EC output buffer not full");
-                }
-
-                // Read data
-                return ReadPort(EC_DATA_PORT);
             }
-            finally
-            {
-                if (gotMutex)
-                {
-                    EcMutex.ReleaseMutex();
-                }
-            }
+            
+            // Should not reach here, but if it does, throw the last exception
+            throw lastException ?? new TimeoutException("EC read failed after retries");
         }
 
         public void WriteByte(ushort address, byte value)
+        {
+            WriteByteWithRetry(address, value, EC_CONFLICT_MAX_RETRIES);
+        }
+        
+        /// <summary>
+        /// Write byte with retry logic for EC conflicts with other applications
+        /// </summary>
+        private void WriteByteWithRetry(ushort address, byte value, int maxRetries)
         {
             EnsureAvailable();
 
@@ -367,52 +443,94 @@ namespace OmenCore.Hardware
                     $"Only approved addresses can be written. Allowed: {allowedList}");
             }
 
-            bool gotMutex = false;
-            try
+            Exception? lastException = null;
+            
+            for (int attempt = 0; attempt <= maxRetries; attempt++)
             {
-                gotMutex = EcMutex.WaitOne(200);
-                if (!gotMutex)
+                bool gotMutex = false;
+                try
                 {
-                    throw new TimeoutException("Failed to acquire EC mutex");
-                }
+                    // Increase timeout on retries to give other apps time to release
+                    int timeoutMs = attempt == 0 ? 200 : 500;
+                    gotMutex = EcMutex.WaitOne(timeoutMs);
+                    
+                    if (!gotMutex)
+                    {
+                        if (attempt < maxRetries)
+                        {
+                            // Log conflict and retry
+                            System.Diagnostics.Debug.WriteLine($"[PawnIO] EC mutex contention detected on write (attempt {attempt + 1}/{maxRetries + 1}), retrying...");
+                            
+                            // Raise event on first conflict detection
+                            if (attempt == 0)
+                            {
+                                EcConflictDetected?.Invoke(null, "EC mutex acquisition failed - another application (possibly OmenMon) holds EC access");
+                            }
+                            
+                            Thread.Sleep(EC_CONFLICT_RETRY_DELAY_MS);
+                            continue;
+                        }
+                        
+                        if (EnableExclusiveEcAccessDiagnostics)
+                        {
+                            throw new TimeoutException("EC mutex acquisition failed after retries - another application holds EC access (exclusive diagnostics mode)");
+                        }
+                        else
+                        {
+                            throw new TimeoutException("Failed to acquire EC mutex after multiple attempts - check if OmenMon or another EC app is running");
+                        }
+                    }
 
-                // Wait for IBF to clear
-                if (!WaitForInputBufferEmpty())
+                    // Wait for IBF to clear
+                    if (!WaitForInputBufferEmpty())
+                    {
+                        throw new TimeoutException("EC input buffer not empty");
+                    }
+
+                    // Send write command
+                    WritePort(EC_CMD_PORT, EC_CMD_WRITE);
+
+                    // Wait for IBF to clear
+                    if (!WaitForInputBufferEmpty())
+                    {
+                        throw new TimeoutException("EC input buffer not empty after command");
+                    }
+
+                    // Send address
+                    WritePort(EC_DATA_PORT, (byte)address);
+
+                    // Wait for IBF to clear
+                    if (!WaitForInputBufferEmpty())
+                    {
+                        throw new TimeoutException("EC input buffer not empty after address");
+                    }
+
+                    // Send data
+                    WritePort(EC_DATA_PORT, value);
+
+                    // Small delay to let EC process
+                    Thread.Sleep(1);
+                    
+                    // Success!
+                    return;
+                }
+                catch (TimeoutException ex) when (attempt < maxRetries && !gotMutex)
                 {
-                    throw new TimeoutException("EC input buffer not empty");
+                    lastException = ex;
+                    Thread.Sleep(EC_CONFLICT_RETRY_DELAY_MS);
+                    continue;
                 }
-
-                // Send write command
-                WritePort(EC_CMD_PORT, EC_CMD_WRITE);
-
-                // Wait for IBF to clear
-                if (!WaitForInputBufferEmpty())
+                finally
                 {
-                    throw new TimeoutException("EC input buffer not empty after command");
+                    if (gotMutex)
+                    {
+                        EcMutex.ReleaseMutex();
+                    }
                 }
-
-                // Send address
-                WritePort(EC_DATA_PORT, (byte)address);
-
-                // Wait for IBF to clear
-                if (!WaitForInputBufferEmpty())
-                {
-                    throw new TimeoutException("EC input buffer not empty after address");
-                }
-
-                // Send data
-                WritePort(EC_DATA_PORT, value);
-
-                // Small delay to let EC process
-                Thread.Sleep(1);
             }
-            finally
-            {
-                if (gotMutex)
-                {
-                    EcMutex.ReleaseMutex();
-                }
-            }
+            
+            // Should not reach here, but if it does, throw the last exception
+            throw lastException ?? new TimeoutException("EC write failed after retries");
         }
 
         private bool WaitForInputBufferEmpty()
