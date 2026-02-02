@@ -61,6 +61,16 @@
 - **Keyboard Backlight Quick Access**: Tray menu for Off/Low/Medium/High/Toggle brightness
 - **State Sync**: GPU power and keyboard state synced between tray and main app
 
+### Unified RGB Layer (#18)
+- **RgbSceneService**: Centralized RGB scene management with presets, scheduling, and performance mode triggers
+- **ScreenSamplingService**: Real-time screen edge color sampling for ambient lighting
+- **8 Built-in Scenes**: OMEN Red, Gaming, Night Mode, Work, Rainbow, Cool Blue, Ambient, Lights Off
+- **Scene Quick Select UI**: Grid of clickable scene buttons in Lighting tab
+- **Ambient Mode Toggle**: Enable screen-reactive lighting that syncs RGB to screen colors
+- **Performance Mode Triggers**: Auto-switch scenes when performance mode changes (e.g., Gaming scene on Performance mode)
+- **Time-based Scheduling**: Schedule scenes for specific times (e.g., Night Mode at 10 PM)
+- **Per-Zone Colors**: Scenes can define different colors for each keyboard zone
+
 ---
 
 ## 🐛 Bug Fixes
@@ -157,9 +167,9 @@
 - [x] BIOS query reliability + UI (#11)
 - [x] Tray quick actions (#15)
 - [x] Temperature history bug fix (v2.6.1)
+- [x] Unified RGB layer (#18)
 
 ### 🔲 Remaining High Priority
-- [ ] Unified RGB layer (#18)
 - [ ] Logitech SDK (#19)
 - [ ] Corsair iCUE SDK (#20)
 
