@@ -15,6 +15,72 @@ namespace OmenCore.Hardware
         public string ModelName { get; set; } = "";
         public string SerialNumber { get; set; } = "";
         
+        // ═══════════════════════════════════════════════════════════════════════════════════
+        // Model-specific capabilities (from ModelCapabilityDatabase)
+        // ═══════════════════════════════════════════════════════════════════════════════════
+        
+        /// <summary>
+        /// The model-specific capability configuration loaded from the database.
+        /// Provides per-model feature flags for UI visibility and functionality.
+        /// </summary>
+        public ModelCapabilities? ModelConfig { get; set; }
+        
+        /// <summary>
+        /// Whether this device's model is in the known model database.
+        /// If false, default capabilities are assumed and some features may not work.
+        /// </summary>
+        public bool IsKnownModel { get; set; }
+        
+        /// <summary>
+        /// Whether capabilities have been verified by runtime probing.
+        /// True after ProbeCapabilities() has been called and validated.
+        /// </summary>
+        public bool RuntimeProbed { get; set; }
+        
+        // ═══════════════════════════════════════════════════════════════════════════════════
+        // UI Visibility Helpers (combine runtime detection with model database)
+        // ═══════════════════════════════════════════════════════════════════════════════════
+        
+        /// <summary>Whether to show fan curve editor in UI.</summary>
+        public bool ShowFanCurveEditor => CanSetFanSpeed && (ModelConfig?.SupportsFanCurves ?? true);
+        
+        /// <summary>Whether to show independent CPU/GPU curves in UI.</summary>
+        public bool ShowIndependentFanCurves => ShowFanCurveEditor && (ModelConfig?.SupportsIndependentFanCurves ?? true);
+        
+        /// <summary>Whether to show MUX switch controls in UI.</summary>
+        public bool ShowMuxSwitch => HasMuxSwitch || (ModelConfig?.HasMuxSwitch ?? false);
+        
+        /// <summary>Whether to show GPU Power Boost controls in UI.</summary>
+        public bool ShowGpuPowerBoost => HasGpuPowerControl || (ModelConfig?.SupportsGpuPowerBoost ?? true);
+        
+        /// <summary>Whether to show RGB lighting controls in UI.</summary>
+        public bool ShowRgbLighting => HasZoneLighting || HasPerKeyLighting || 
+                                        (ModelConfig?.HasFourZoneRgb ?? false) || 
+                                        (ModelConfig?.HasPerKeyRgb ?? false);
+        
+        /// <summary>Whether to show undervolt controls in UI.</summary>
+        public bool ShowUndervolt => CanUndervolt && (ModelConfig?.SupportsUndervolt ?? true);
+        
+        /// <summary>Whether to show performance mode selector in UI.</summary>
+        public bool ShowPerformanceModes => HasOemPerformanceModes || (ModelConfig?.SupportsPerformanceModes ?? true);
+        
+        /// <summary>Warning message about model-specific limitations.</summary>
+        public string? ModelWarning
+        {
+            get
+            {
+                if (ModelConfig == null) return null;
+                
+                if (!IsKnownModel)
+                    return "Unknown model - some features may not work correctly. Please report your model to improve support.";
+                    
+                if (!ModelConfig.UserVerified)
+                    return "This model's capabilities have not been fully verified. Please report any issues.";
+                    
+                return ModelConfig.Notes;
+            }
+        }
+        
         // Chassis/Form factor
         public ChassisType Chassis { get; set; } = ChassisType.Unknown;
         public bool IsDesktop => Chassis == ChassisType.Desktop || Chassis == ChassisType.Tower || 
@@ -131,6 +197,28 @@ namespace OmenCore.Hardware
             lines.AppendLine($"  Installed: {(OghInstalled ? "Yes" : "No")}");
             lines.AppendLine($"  Running: {(OghRunning ? "Yes" : "No")}");
             lines.AppendLine($"  Using as Fallback: {(UsingOghFallback ? "Yes" : "No")}");
+            lines.AppendLine();
+            
+            // Model database info
+            lines.AppendLine("Model Database:");
+            lines.AppendLine($"  Known Model: {(IsKnownModel ? "Yes" : "No")}");
+            if (ModelConfig != null)
+            {
+                lines.AppendLine($"  DB Model: {ModelConfig.ModelName}");
+                lines.AppendLine($"  Year: {ModelConfig.ModelYear}");
+                lines.AppendLine($"  Family: {ModelConfig.Family}");
+                lines.AppendLine($"  User Verified: {(ModelConfig.UserVerified ? "Yes" : "No")}");
+            }
+            lines.AppendLine();
+            
+            // UI Visibility flags
+            lines.AppendLine("UI Features:");
+            lines.AppendLine($"  Show Fan Curves: {(ShowFanCurveEditor ? "Yes" : "No")}");
+            lines.AppendLine($"  Show Independent Curves: {(ShowIndependentFanCurves ? "Yes" : "No")}");
+            lines.AppendLine($"  Show MUX Switch: {(ShowMuxSwitch ? "Yes" : "No")}");
+            lines.AppendLine($"  Show GPU Power Boost: {(ShowGpuPowerBoost ? "Yes" : "No")}");
+            lines.AppendLine($"  Show RGB Lighting: {(ShowRgbLighting ? "Yes" : "No")}");
+            lines.AppendLine($"  Show Undervolt: {(ShowUndervolt ? "Yes" : "No")}");
             
             return lines.ToString();
         }

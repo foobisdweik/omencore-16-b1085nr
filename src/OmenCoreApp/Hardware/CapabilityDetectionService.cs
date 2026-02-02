@@ -41,6 +41,9 @@ namespace OmenCore.Hardware
             // Phase 1: Device identification
             DetectDeviceInfo();
             
+            // Phase 1.5: Load model-specific capabilities from database
+            LoadModelCapabilities();
+            
             // Phase 2: Security status
             DetectSecurityStatus();
             
@@ -68,6 +71,9 @@ namespace OmenCore.Hardware
             // Phase 10: Lighting capabilities
             DetectLightingCapabilities();
             
+            // Phase 11: Refine capabilities based on model database
+            RefineCapabilitiesFromModel();
+            
             // Log summary
             _logging?.Info("═══════════════════════════════════════════════════");
             _logging?.Info("Capability detection complete:");
@@ -75,6 +81,132 @@ namespace OmenCore.Hardware
             _logging?.Info(Capabilities.GetSummary());
             
             return Capabilities;
+        }
+        
+        /// <summary>
+        /// Load model-specific capabilities from the database.
+        /// </summary>
+        private void LoadModelCapabilities()
+        {
+            _logging?.Info("Phase 1.5: Loading model-specific capabilities...");
+            
+            var productId = Capabilities.ProductId;
+            
+            // Check if model is in the database
+            Capabilities.IsKnownModel = ModelCapabilityDatabase.IsKnownModel(productId);
+            
+            if (Capabilities.IsKnownModel)
+            {
+                Capabilities.ModelConfig = ModelCapabilityDatabase.GetCapabilities(productId);
+                _logging?.Info($"  ✓ Found model in database: {Capabilities.ModelConfig.ModelName}");
+                _logging?.Info($"    Year: {Capabilities.ModelConfig.ModelYear}, Family: {Capabilities.ModelConfig.Family}");
+                
+                if (Capabilities.ModelConfig.UserVerified)
+                {
+                    _logging?.Info($"    ✓ User-verified configuration");
+                }
+                else
+                {
+                    _logging?.Warn($"    ⚠ Configuration not yet verified by users");
+                }
+                
+                if (!string.IsNullOrEmpty(Capabilities.ModelConfig.Notes))
+                {
+                    _logging?.Info($"    Note: {Capabilities.ModelConfig.Notes}");
+                }
+            }
+            else
+            {
+                // Try to get capabilities by model family
+                if (Capabilities.ModelFamily != OmenModelFamily.Unknown)
+                {
+                    Capabilities.ModelConfig = ModelCapabilityDatabase.GetCapabilitiesByFamily(Capabilities.ModelFamily);
+                    _logging?.Warn($"  ⚠ Model not in database - using {Capabilities.ModelFamily} family defaults");
+                }
+                else
+                {
+                    Capabilities.ModelConfig = ModelCapabilityDatabase.DefaultCapabilities;
+                    _logging?.Warn($"  ⚠ Unknown model - using default capabilities");
+                }
+                
+                _logging?.Info($"  💡 Please report your model (Product ID: {productId}) to improve support");
+            }
+        }
+        
+        /// <summary>
+        /// Refine detected capabilities based on model database.
+        /// Model-specific info overrides runtime detection in some cases.
+        /// </summary>
+        private void RefineCapabilitiesFromModel()
+        {
+            if (Capabilities.ModelConfig == null) return;
+            
+            _logging?.Info("Phase 11: Refining capabilities from model database...");
+            
+            var model = Capabilities.ModelConfig;
+            
+            // Apply model-specific overrides
+            
+            // Fan control
+            if (!model.SupportsFanControlWmi && !model.SupportsFanControlEc)
+            {
+                // Model is known to not support fan control (e.g., desktops)
+                if (Capabilities.FanControl != FanControlMethod.None && Capabilities.FanControl != FanControlMethod.MonitoringOnly)
+                {
+                    _logging?.Warn($"  Fan control disabled per model database (not supported on {model.ModelName})");
+                    Capabilities.FanControl = FanControlMethod.MonitoringOnly;
+                    Capabilities.CanSetFanSpeed = false;
+                }
+            }
+            
+            // Fan count override
+            if (model.FanZoneCount != Capabilities.FanCount)
+            {
+                _logging?.Info($"  Fan count adjusted: {Capabilities.FanCount} → {model.FanZoneCount} (per model database)");
+                Capabilities.FanCount = model.FanZoneCount;
+            }
+            
+            // MUX switch
+            if (model.HasMuxSwitch && !Capabilities.HasMuxSwitch)
+            {
+                _logging?.Info($"  MUX switch enabled per model database");
+                Capabilities.HasMuxSwitch = true;
+            }
+            else if (!model.HasMuxSwitch && Capabilities.HasMuxSwitch)
+            {
+                _logging?.Info($"  MUX switch disabled per model database (not present on {model.ModelName})");
+                Capabilities.HasMuxSwitch = false;
+            }
+            
+            // Lighting
+            if (model.HasPerKeyRgb && !Capabilities.HasPerKeyLighting)
+            {
+                _logging?.Info($"  Per-key RGB enabled per model database");
+                Capabilities.HasPerKeyLighting = true;
+                Capabilities.Lighting = LightingCapability.PerKey;
+            }
+            else if (!model.HasFourZoneRgb && !model.HasPerKeyRgb && Capabilities.HasZoneLighting)
+            {
+                _logging?.Info($"  Zone lighting disabled per model database (not present on {model.ModelName})");
+                Capabilities.HasZoneLighting = false;
+                Capabilities.Lighting = model.HasKeyboardBacklight ? LightingCapability.SingleColor : LightingCapability.None;
+            }
+            
+            // Undervolt
+            if (!model.SupportsUndervolt && Capabilities.CanUndervolt)
+            {
+                _logging?.Info($"  Undervolt disabled per model database (not supported on {model.ModelName})");
+                Capabilities.CanUndervolt = false;
+                Capabilities.UndervoltMethod = UndervoltMethod.None;
+            }
+            
+            // Performance modes
+            if (model.PerformanceModes.Length > 0 && Capabilities.AvailablePerformanceModes.Length == 0)
+            {
+                Capabilities.AvailablePerformanceModes = model.PerformanceModes;
+                Capabilities.HasOemPerformanceModes = true;
+                _logging?.Info($"  Performance modes set from model database: {string.Join(", ", model.PerformanceModes)}");
+            }
         }
 
         private void DetectDeviceInfo()
@@ -675,6 +807,133 @@ namespace OmenCore.Hardware
             }
         }
 
+        /// <summary>
+        /// Probe hardware capabilities at runtime to verify detection accuracy.
+        /// This performs actual hardware tests to confirm what works on this specific device.
+        /// Should be called after DetectCapabilities() for more accurate results.
+        /// </summary>
+        public void ProbeRuntimeCapabilities()
+        {
+            _logging?.Info("═══════════════════════════════════════════════════");
+            _logging?.Info("Probing runtime capabilities...");
+            _logging?.Info("═══════════════════════════════════════════════════");
+            
+            int successCount = 0;
+            int failCount = 0;
+            
+            // Test 1: Fan RPM readback
+            if (Capabilities.CanReadRpm)
+            {
+                try
+                {
+                    if (_wmiBios?.IsAvailable == true)
+                    {
+                        var rpmResult = _wmiBios.GetFanRpmDirect();
+                        
+                        if (rpmResult.HasValue && (rpmResult.Value.fan1Rpm > 0 || rpmResult.Value.fan2Rpm > 0))
+                        {
+                            _logging?.Info($"  ✓ Fan RPM readback works: CPU={rpmResult.Value.fan1Rpm}, GPU={rpmResult.Value.fan2Rpm}");
+                            successCount++;
+                        }
+                        else if (rpmResult.HasValue)
+                        {
+                            _logging?.Warn($"  ⚠ Fan RPM returned 0 - fans may be off or readback not working");
+                        }
+                        else
+                        {
+                            _logging?.Warn($"  ✗ Fan RPM readback returned null");
+                            failCount++;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logging?.Warn($"  ✗ Fan RPM probe failed: {ex.Message}");
+                    failCount++;
+                }
+            }
+            
+            // Test 2: Temperature readback
+            if (Capabilities.CanReadCpuTemp)
+            {
+                try
+                {
+                    if (_wmiBios?.IsAvailable == true)
+                    {
+                        var cpuTemp = _wmiBios.GetTemperature();
+                        
+                        if (cpuTemp.HasValue && cpuTemp.Value > 20 && cpuTemp.Value < 100)
+                        {
+                            _logging?.Info($"  ✓ CPU temperature readback works: {cpuTemp.Value}°C");
+                            successCount++;
+                        }
+                        else if (cpuTemp.HasValue)
+                        {
+                            _logging?.Warn($"  ⚠ CPU temperature out of range: {cpuTemp.Value}°C");
+                        }
+                        else
+                        {
+                            _logging?.Warn($"  ✗ CPU temperature readback returned null");
+                            failCount++;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logging?.Warn($"  ✗ CPU temperature probe failed: {ex.Message}");
+                    failCount++;
+                }
+            }
+            
+            // Test 3: Fan level read (verifies WMI BIOS communication)
+            if (Capabilities.HasFanModes || Capabilities.CanSetFanSpeed)
+            {
+                try
+                {
+                    if (_wmiBios?.IsAvailable == true)
+                    {
+                        var level = _wmiBios.GetFanLevel();
+                        if (level.HasValue)
+                        {
+                            _logging?.Info($"  ✓ Fan level readback works: Fan1={level.Value.fan1}, Fan2={level.Value.fan2}");
+                            successCount++;
+                        }
+                        else
+                        {
+                            _logging?.Warn($"  ✗ Fan level readback returned null");
+                            failCount++;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logging?.Warn($"  ✗ Fan level probe failed: {ex.Message}");
+                    failCount++;
+                }
+            }
+            
+            // Test 4: Check if model-specific features match reality
+            if (Capabilities.ModelConfig != null)
+            {
+                var model = Capabilities.ModelConfig;
+                
+                // Verify fan zone count
+                if (model.FanZoneCount == 1 && Capabilities.FanCount > 1)
+                {
+                    _logging?.Info($"  Note: Model database says 1 fan, but detected {Capabilities.FanCount}");
+                }
+                else if (model.FanZoneCount == 2 && Capabilities.FanCount == 1)
+                {
+                    _logging?.Info($"  Note: Model database says 2 fans, but only detected 1");
+                }
+            }
+            
+            Capabilities.RuntimeProbed = true;
+            
+            _logging?.Info($"Runtime probe complete: {successCount} passed, {failCount} failed");
+            _logging?.Info("═══════════════════════════════════════════════════");
+        }
+        
         /// <summary>
         /// Get the recommended fan control provider based on detected capabilities.
         /// </summary>
