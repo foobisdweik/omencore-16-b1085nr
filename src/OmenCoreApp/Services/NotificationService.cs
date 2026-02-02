@@ -244,10 +244,8 @@ namespace OmenCore.Services
             try
             {
                 new ToastContentBuilder()
-                    .AddText($"🛡️ Thermal Protection Activated")
-                    .AddText($"Temperature: {temperature:F0}°C")
-                    .AddText($"Level: {protectionLevel}")
-                    .AddText("Fans boosted to prevent overheating.")
+                    .AddText($"🛡️ Thermal Protection: {protectionLevel}")
+                    .AddText($"{temperature:F0}°C - Fans boosted to max")
                     .SetToastDuration(ToastDuration.Short)
                     .Show();
                     

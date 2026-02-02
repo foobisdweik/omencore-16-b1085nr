@@ -36,6 +36,8 @@ namespace OmenCore.Services
         private readonly List<SystemAlert> _activeAlerts = new();
         private readonly object _dashboardLock = new();
         private HardwareMetrics? _lastMetrics;
+        private const int ReadSampleTimeoutMs = 10000; // 10 second timeout for sample reads
+        private int _consecutiveTimeouts = 0; // Track consecutive timeouts for diagnostics
 
         public ReadOnlyObservableCollection<MonitoringSample> Samples { get; }
         public event EventHandler<MonitoringSample>? SampleUpdated;
@@ -140,10 +142,20 @@ namespace OmenCore.Services
             var consecutiveErrors = 0;
             const int maxErrors = 5;
             int iteration = 0;
+            var lastHeartbeat = DateTime.Now;
+            const int HeartbeatIntervalSeconds = 60; // Log heartbeat every minute
 
             while (!token.IsCancellationRequested)
             {
                 iteration++;
+                
+                // Periodic heartbeat to confirm loop is still running
+                if ((DateTime.Now - lastHeartbeat).TotalSeconds >= HeartbeatIntervalSeconds)
+                {
+                    _logging.Info($"[MonitorLoop] ❤️ Heartbeat: iteration {iteration}, errors={consecutiveErrors}, timeouts={_consecutiveTimeouts}");
+                    lastHeartbeat = DateTime.Now;
+                }
+                
                 _logging.Debug($"[MonitorLoop] Iteration {iteration} starting...");
                 
                 // Check if paused (S0 Modern Standby support)
@@ -164,7 +176,32 @@ namespace OmenCore.Services
                 try
                 {
                     _logging.Debug($"[MonitorLoop] Iteration {iteration}: Reading sample from bridge...");
-                    var sample = await _bridge.ReadSampleAsync(token);
+                    
+                    // Add timeout to prevent infinite hangs in hardware monitoring
+                    using var readCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    readCts.CancelAfter(ReadSampleTimeoutMs);
+                    
+                    MonitoringSample? sample;
+                    try
+                    {
+                        sample = await _bridge.ReadSampleAsync(readCts.Token);
+                        _consecutiveTimeouts = 0; // Reset on successful read
+                    }
+                    catch (OperationCanceledException) when (!token.IsCancellationRequested)
+                    {
+                        // Timeout occurred (not overall cancellation)
+                        _consecutiveTimeouts++;
+                        _logging.Warn($"[MonitorLoop] ReadSampleAsync timed out after {ReadSampleTimeoutMs}ms (consecutive: {_consecutiveTimeouts})");
+                        
+                        if (_consecutiveTimeouts >= 3)
+                        {
+                            _logging.Warn("[MonitorLoop] Multiple consecutive timeouts - hardware monitoring may be stuck");
+                        }
+                        
+                        // Continue to next iteration instead of hanging
+                        continue;
+                    }
+                    
                     consecutiveErrors = 0; // Reset error counter on success
 
                     _logging.Info($"MonitorLoop: Got sample - CPU: {sample.CpuTemperatureC}°C, GPU: {sample.GpuTemperatureC}°C, CPULoad: {sample.CpuLoadPercent}%, GPULoad: {sample.GpuLoadPercent}%, RAM: {sample.RamUsageGb}GB");

@@ -30,6 +30,14 @@ namespace OmenCore.ViewModels
         private int _gpuFanPercent;
         private int _cpuFanRpm;
         private int _gpuFanRpm;
+        
+        // v2.6.1: Additional telemetry for enhanced General tab
+        private double _cpuLoad;
+        private double _gpuLoad;
+        private double _gpuPowerWatts;
+        private double _cpuPowerWatts;
+        private double _ramUsedGb;
+        private double _ramTotalGb;
 
         public GeneralViewModel(
             FanService fanService,
@@ -148,6 +156,45 @@ namespace OmenCore.ViewModels
             get => _gpuFanRpm;
             set { _gpuFanRpm = value; OnPropertyChanged(); }
         }
+        
+        // v2.6.1: Additional telemetry properties
+        public double CpuLoad
+        {
+            get => _cpuLoad;
+            set { _cpuLoad = value; OnPropertyChanged(); }
+        }
+        
+        public double GpuLoad
+        {
+            get => _gpuLoad;
+            set { _gpuLoad = value; OnPropertyChanged(); }
+        }
+        
+        public double GpuPowerWatts
+        {
+            get => _gpuPowerWatts;
+            set { _gpuPowerWatts = value; OnPropertyChanged(); }
+        }
+        
+        public double CpuPowerWatts
+        {
+            get => _cpuPowerWatts;
+            set { _cpuPowerWatts = value; OnPropertyChanged(); }
+        }
+        
+        public double RamUsedGb
+        {
+            get => _ramUsedGb;
+            set { _ramUsedGb = value; OnPropertyChanged(); }
+        }
+        
+        public double RamTotalGb
+        {
+            get => _ramTotalGb;
+            set { _ramTotalGb = value; OnPropertyChanged(); }
+        }
+        
+        public double RamPercent => RamTotalGb > 0 ? (RamUsedGb / RamTotalGb) * 100 : 0;
 
         // Profile selection indicators
         public bool IsPerformanceSelected => SelectedProfile == "Performance";
@@ -393,6 +440,31 @@ namespace OmenCore.ViewModels
             catch (Exception ex) 
             { 
                 System.Diagnostics.Debug.WriteLine($"[GeneralVM] Temperature update error: {ex.Message}"); 
+            }
+        }
+        
+        /// <summary>
+        /// v2.6.1: Update from MainViewModel's monitoring sample for enhanced telemetry
+        /// </summary>
+        public void UpdateFromMonitoringSample(MonitoringSample? sample)
+        {
+            if (sample == null) return;
+            
+            try
+            {
+                CpuTemp = sample.CpuTemperatureC;
+                GpuTemp = sample.GpuTemperatureC;
+                CpuLoad = sample.CpuLoadPercent;
+                GpuLoad = sample.GpuLoadPercent;
+                GpuPowerWatts = sample.GpuPowerWatts;
+                CpuPowerWatts = sample.CpuPowerWatts;
+                RamUsedGb = sample.RamUsageGb;
+                RamTotalGb = sample.RamTotalGb;
+                OnPropertyChanged(nameof(RamPercent));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[GeneralVM] Monitoring sample update error: {ex.Message}");
             }
         }
 

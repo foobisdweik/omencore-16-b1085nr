@@ -126,76 +126,188 @@
                 </StackPanel>
             </Border>
 
-            <!-- Live Status -->
+            <!-- Live Status - v2.6.1: Enhanced with more metrics -->
             <Grid Grid.Row="2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Temperatures -->
-                <Border Grid.Column="0" Style="{StaticResource SurfaceCard}" Padding="20" Margin="0,0,8,0">
+                <!-- CPU Stats -->
+                <Border Grid.Column="0" Style="{StaticResource SurfaceCard}" Padding="16" Margin="0,0,6,0">
                     <StackPanel>
-                        <TextBlock Text="TEMPERATURES" Style="{StaticResource Label}" Margin="0,0,0,16"/>
+                        <TextBlock Text="🔥 CPU" Style="{StaticResource Label}" Margin="0,0,0,12"/>
                         
-                        <Grid Margin="0,0,0,12">
+                        <!-- Temperature -->
+                        <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="CPU" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                            <ProgressBar Grid.Column="1" Value="{Binding CpuTemp}" Maximum="100" Height="8" Margin="16,0" 
+                            <TextBlock Grid.Column="0" Text="Temp" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                            <ProgressBar Grid.Column="1" Value="{Binding CpuTemp, Mode=OneWay}" Maximum="100" Height="6" Margin="12,0" 
                                          Background="{StaticResource SurfaceMediumBrush}" Foreground="{StaticResource AccentBrush}"/>
                             <TextBlock Grid.Column="2" Text="{Binding CpuTemp, StringFormat={}{0:F0}°C}" 
-                                       FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" Width="55" TextAlignment="Right"/>
+                                       FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" Width="45" TextAlignment="Right"/>
                         </Grid>
                         
+                        <!-- Load -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Load" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                            <ProgressBar Grid.Column="1" Value="{Binding CpuLoad, Mode=OneWay}" Maximum="100" Height="6" Margin="12,0" 
+                                         Background="{StaticResource SurfaceMediumBrush}" Foreground="{StaticResource WarningBrush}"/>
+                            <TextBlock Grid.Column="2" Text="{Binding CpuLoad, StringFormat={}{0:F0}%}" 
+                                       FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" Width="45" TextAlignment="Right"/>
+                        </Grid>
+                        
+                        <!-- Power -->
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="GPU" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                            <ProgressBar Grid.Column="1" Value="{Binding GpuTemp}" Maximum="100" Height="8" Margin="16,0" 
-                                         Background="{StaticResource SurfaceMediumBrush}" Foreground="{StaticResource AccentBlueBrush}"/>
-                            <TextBlock Grid.Column="2" Text="{Binding GpuTemp, StringFormat={}{0:F0}°C}" 
-                                       FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}" Width="55" TextAlignment="Right"/>
+                            <TextBlock Grid.Column="0" Text="Power" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Text="{Binding CpuPowerWatts, StringFormat={}{0:F0}W}" 
+                                       FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" TextAlignment="Right"/>
                         </Grid>
+                        
+                        <!-- Fan -->
+                        <Border BorderThickness="0,1,0,0" BorderBrush="{StaticResource BorderBrush}" Margin="0,12,0,0" Padding="0,12,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="🌀 Fan" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{Binding CpuFanRpm, StringFormat={}{0} RPM}" 
+                                           FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" TextAlignment="Right"/>
+                            </Grid>
+                        </Border>
                     </StackPanel>
                 </Border>
 
-                <!-- Fan Speeds -->
-                <Border Grid.Column="1" Style="{StaticResource SurfaceCard}" Padding="20" Margin="8,0,0,0">
+                <!-- GPU Stats -->
+                <Border Grid.Column="1" Style="{StaticResource SurfaceCard}" Padding="16" Margin="6,0,6,0">
                     <StackPanel>
-                        <TextBlock Text="FAN SPEEDS" Style="{StaticResource Label}" Margin="0,0,0,16"/>
+                        <TextBlock Text="🎯 GPU" Style="{StaticResource Label}" Margin="0,0,0,12"/>
                         
-                        <Grid Margin="0,0,0,12">
+                        <!-- Temperature -->
+                        <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="CPU Fan" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                            <ProgressBar Grid.Column="1" Value="{Binding CpuFanPercent}" Maximum="100" Height="8" Margin="16,0" 
-                                         Background="{StaticResource SurfaceMediumBrush}" Foreground="{StaticResource AccentBrush}"/>
-                            <TextBlock Grid.Column="2" Text="{Binding CpuFanRpm, StringFormat={}{0} RPM}" 
-                                       FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" Width="80" TextAlignment="Right"/>
+                            <TextBlock Grid.Column="0" Text="Temp" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                            <ProgressBar Grid.Column="1" Value="{Binding GpuTemp, Mode=OneWay}" Maximum="100" Height="6" Margin="12,0" 
+                                         Background="{StaticResource SurfaceMediumBrush}" Foreground="{StaticResource AccentBlueBrush}"/>
+                            <TextBlock Grid.Column="2" Text="{Binding GpuTemp, StringFormat={}{0:F0}°C}" 
+                                       FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}" Width="45" TextAlignment="Right"/>
                         </Grid>
                         
+                        <!-- Load -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Load" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                            <ProgressBar Grid.Column="1" Value="{Binding GpuLoad, Mode=OneWay}" Maximum="100" Height="6" Margin="12,0" 
+                                         Background="{StaticResource SurfaceMediumBrush}" Foreground="{StaticResource WarningBrush}"/>
+                            <TextBlock Grid.Column="2" Text="{Binding GpuLoad, StringFormat={}{0:F0}%}" 
+                                       FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" Width="45" TextAlignment="Right"/>
+                        </Grid>
+                        
+                        <!-- Power -->
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Power" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Text="{Binding GpuPowerWatts, StringFormat={}{0:F0}W}" 
+                                       FontSize="14" FontWeight="Bold" Foreground="{StaticResource AccentGreenBrush}" TextAlignment="Right"/>
+                        </Grid>
+                        
+                        <!-- Fan -->
+                        <Border BorderThickness="0,1,0,0" BorderBrush="{StaticResource BorderBrush}" Margin="0,12,0,0" Padding="0,12,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="🌀 Fan" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{Binding GpuFanRpm, StringFormat={}{0} RPM}" 
+                                           FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}" TextAlignment="Right"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Memory Stats -->
+                <Border Grid.Column="2" Style="{StaticResource SurfaceCard}" Padding="16" Margin="6,0,0,0">
+                    <StackPanel>
+                        <TextBlock Text="💾 MEMORY" Style="{StaticResource Label}" Margin="0,0,0,12"/>
+                        
+                        <!-- RAM Usage -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="GPU Fan" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                            <ProgressBar Grid.Column="1" Value="{Binding GpuFanPercent}" Maximum="100" Height="8" Margin="16,0" 
-                                         Background="{StaticResource SurfaceMediumBrush}" Foreground="{StaticResource AccentBlueBrush}"/>
-                            <TextBlock Grid.Column="2" Text="{Binding GpuFanRpm, StringFormat={}{0} RPM}" 
-                                       FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" Width="80" TextAlignment="Right"/>
+                            <TextBlock Grid.Column="0" Text="RAM" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                            <ProgressBar Grid.Column="1" Value="{Binding RamPercent, Mode=OneWay}" Maximum="100" Height="6" Margin="12,0" 
+                                         Background="{StaticResource SurfaceMediumBrush}" Foreground="{StaticResource AccentPurpleBrush}"/>
+                            <TextBlock Grid.Column="2" Text="{Binding RamPercent, StringFormat={}{0:F0}%}" 
+                                       FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" Width="45" TextAlignment="Right"/>
                         </Grid>
+                        
+                        <!-- RAM Details -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Used" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                                <TextBlock Text="{Binding RamUsedGb, StringFormat={}{0:F1}}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentPurpleBrush}"/>
+                                <TextBlock Text=" / " FontSize="14" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                <TextBlock Text="{Binding RamTotalGb, StringFormat={}{0:F0} GB}" FontSize="14" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </Grid>
+                        
+                        <!-- Current Profile -->
+                        <Border BorderThickness="0,1,0,0" BorderBrush="{StaticResource BorderBrush}" Margin="0,12,0,0" Padding="0,12,0,0">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="⚡ Mode" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding CurrentPerformanceMode}" 
+                                               FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" TextAlignment="Right"/>
+                                </Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="🌀 Fans" FontSize="12" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding CurrentFanMode}" 
+                                               FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" TextAlignment="Right"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
             </Grid>

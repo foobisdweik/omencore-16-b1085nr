@@ -466,6 +466,9 @@ namespace OmenCore.ViewModels
                 
                 _latestMonitoringSample = value;
                 
+                // v2.6.1: Push update to GeneralViewModel for enhanced General tab
+                _general?.UpdateFromMonitoringSample(value);
+                
                 // Batch property notifications to reduce overhead
                 OnPropertyChanged(string.Empty); // Notifies all properties changed
             }

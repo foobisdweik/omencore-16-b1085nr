@@ -79,9 +79,9 @@ namespace OmenCore.Services
         // Thermal protection - override Auto mode when temps get too high
         // Configurable via FanHysteresisSettings for user customization
         private double _thermalProtectionThreshold = 80.0;      // °C - start ramping fans (configurable)
-        private const double ThermalEmergencyThreshold = 88.0;  // °C - max fans immediately
-        private const double ThermalSafeReleaseTemp = 55.0;     // °C - truly safe to release to Auto mode
-        private const int ThermalReleaseMinFanPercent = 30;     // Min fan % when releasing above safe temp
+        private const double ThermalEmergencyThreshold = 85.0;  // v2.6.1: lowered from 88°C for high-power laptops
+        private const double ThermalSafeReleaseTemp = 60.0;     // v2.6.1: raised from 55°C - temps below this are truly safe
+        private const int ThermalReleaseMinFanPercent = 50;     // v2.6.1: raised from 30% to prevent temp yo-yo
         private volatile bool _thermalProtectionActive = false;
         
         // Diagnostic mode - suspends curve engine to allow manual fan testing
@@ -815,8 +815,17 @@ namespace OmenCore.Services
                 }
                 else if (_preThermalFanPercent > 0)
                 {
-                    _logging.Info($"Restoring fan speed {_preThermalFanPercent}% after thermal protection");
-                    _fanController.SetFanSpeed(_preThermalFanPercent);
+                    // v2.6.1: Don't restore to low fan speeds if temps are still warm!
+                    // This was causing temp yo-yo on high-power laptops (i9/4090)
+                    int restorePercent = _preThermalFanPercent;
+                    if (stillWarm && restorePercent < ThermalReleaseMinFanPercent)
+                    {
+                        _logging.Info($"Temps still warm ({maxTemp:F0}°C) - using minimum {ThermalReleaseMinFanPercent}% instead of {restorePercent}%");
+                        restorePercent = ThermalReleaseMinFanPercent;
+                    }
+                    _logging.Info($"Restoring fan speed {restorePercent}% after thermal protection");
+                    _fanController.SetFanSpeed(restorePercent);
+                    _lastAppliedFanPercent = restorePercent;
                 }
                 else
                 {

@@ -50,18 +50,18 @@
                     <DataTemplate>
                         <Border Background="{StaticResource SurfaceDarkBrush}" Padding="8" Margin="0,0,0,8" CornerRadius="6">
                             <StackPanel>
-                                <TextBlock Text="{Binding FanName}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding FanName, Mode=OneWay}" FontWeight="SemiBold" />
                                         <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}">
                                             <Run Text="Requested: " />
-                                            <Run Text="{Binding RequestedPercent}" />
+                                            <Run Text="{Binding RequestedPercent, Mode=OneWay}" />
                                             <Run Text="%  , RPM: " />
-                                            <Run Text="{Binding ActualRpmAfter}" />
+                                            <Run Text="{Binding ActualRpmAfter, Mode=OneWay}" />
                                             <Run Text=" (±" />
-                                            <Run Text="{Binding DeviationPercent, StringFormat={}{0:F1}%}" />
+                                            <Run Text="{Binding DeviationPercent, StringFormat={}{0:F1}%, Mode=OneWay}" />
                                             <Run Text=")" />
                                         </TextBlock>
                                         <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}">
-                                            <Run Text="{Binding ErrorMessage}" />
+                                            <Run Text="{Binding ErrorMessage, Mode=OneWay}" />
                                         </TextBlock>
                             </StackPanel>
                         </Border>
