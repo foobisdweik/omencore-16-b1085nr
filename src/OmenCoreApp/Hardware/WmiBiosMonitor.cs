@@ -67,6 +67,17 @@ namespace OmenCore.Hardware
             return BuildSampleFromCache();
         }
         
+        /// <summary>
+        /// WMI BIOS monitor doesn't need restart - it has no persistent state.
+        /// Always returns true as there's nothing to restart.
+        /// </summary>
+        public Task<bool> TryRestartAsync()
+        {
+            _logging?.Info("[WmiBiosMonitor] TryRestartAsync called - WMI BIOS monitor requires no restart");
+            // WMI BIOS has no persistent state to restart - always succeeds
+            return Task.FromResult(true);
+        }
+        
         private void UpdateReadings()
         {
             if (_disposed || !_wmiBios.IsAvailable) return;

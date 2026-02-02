@@ -9,6 +9,12 @@ namespace OmenCore.Hardware
     public interface IHardwareMonitorBridge
     {
         Task<MonitoringSample> ReadSampleAsync(CancellationToken token);
+        
+        /// <summary>
+        /// Request bridge to reinitialize/restart hardware monitoring.
+        /// Called when consecutive timeouts indicate hardware monitoring is stuck.
+        /// </summary>
+        Task<bool> TryRestartAsync();
     }
 
     public class LibreHardwareMonitorBridge : IHardwareMonitorBridge
@@ -59,6 +65,12 @@ namespace OmenCore.Hardware
             };
 
             return Task.FromResult(sample);
+        }
+
+        public Task<bool> TryRestartAsync()
+        {
+            // Mock bridge doesn't need restart - always succeeds
+            return Task.FromResult(true);
         }
 
         private void Step(ref double value, double min, double max)

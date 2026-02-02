@@ -44,6 +44,8 @@ namespace OmenCore.Services
         private volatile MonitoringHealthStatus _healthStatus = MonitoringHealthStatus.Unknown;
         private const int StaleSampleThresholdSeconds = 15;  // Mark stale after 15s without update
         private const int DegradedTimeoutThreshold = 2;      // Mark degraded after 2 consecutive timeouts
+        private const int RestartTimeoutThreshold = 3;       // Attempt bridge restart after 3 consecutive timeouts
+        private bool _restartInProgress = false;             // Prevent concurrent restart attempts
 
         public ReadOnlyObservableCollection<MonitoringSample> Samples { get; }
         public event EventHandler<MonitoringSample>? SampleUpdated;
@@ -228,6 +230,36 @@ namespace OmenCore.Services
                         {
                             UpdateHealthStatus(MonitoringHealthStatus.Degraded);
                             _logging.Warn("[MonitorLoop] Multiple consecutive timeouts - hardware monitoring may be stuck");
+                        }
+                        
+                        // Auto-restart bridge after reaching threshold (v2.7.0)
+                        if (_consecutiveTimeouts >= RestartTimeoutThreshold && !_restartInProgress)
+                        {
+                            _restartInProgress = true;
+                            _logging.Warn($"[MonitorLoop] 🔄 Consecutive timeouts reached threshold ({RestartTimeoutThreshold}), attempting bridge restart...");
+                            
+                            try
+                            {
+                                var restarted = await _bridge.TryRestartAsync();
+                                if (restarted)
+                                {
+                                    _logging.Info("[MonitorLoop] ✅ Bridge restart successful - resuming monitoring");
+                                    _consecutiveTimeouts = 0;
+                                    UpdateHealthStatus(MonitoringHealthStatus.Healthy);
+                                }
+                                else
+                                {
+                                    _logging.Error("[MonitorLoop] ❌ Bridge restart failed - monitoring may remain degraded");
+                                }
+                            }
+                            catch (Exception restartEx)
+                            {
+                                _logging.Error($"[MonitorLoop] ❌ Bridge restart exception: {restartEx.Message}");
+                            }
+                            finally
+                            {
+                                _restartInProgress = false;
+                            }
                         }
                         
                         // Continue to next iteration instead of hanging

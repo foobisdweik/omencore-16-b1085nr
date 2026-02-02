@@ -11,6 +11,7 @@
 - **Monitoring Health Status Indicator**: Dashboard now shows real-time monitoring health (Healthy/Degraded/Stale) with color-coded status and sample age
 - **Last Sample Age Display**: Shows how fresh sensor data is (e.g., "Just now", "5s ago")
 - **Synthetic Data Removal**: Charts no longer show fake data when no real samples exist - proper empty states instead
+- **Worker Auto-Restart/Failover**: Hardware monitoring bridge automatically restarts after 3 consecutive timeouts
 
 ### WMI & BIOS Improvements
 - **WMI Heartbeat Health Tracking**: New health status for WMI heartbeat (Healthy/Degraded/Failing)
@@ -58,7 +59,7 @@
 ## 🔧 Technical Changes
 
 ### Services Modified
-- `HardwareMonitoringService.cs`: Added `MonitoringHealthStatus` enum, health tracking, removed synthetic data generation
+- `HardwareMonitoringService.cs`: Added `MonitoringHealthStatus` enum, health tracking, removed synthetic data generation, added auto-restart after 3 consecutive timeouts
 - `HotkeyService.cs`: Added `ShouldSuppressForRdp()` check in WndProc
 - `OmenKeyService.cs`: Added RDP suppression in hook callback and WMI event handler
 - `HpWmiBios.cs`: Added `WmiHeartbeatHealth` enum, heartbeat failure tracking, `HeartbeatHealthChanged` event
@@ -68,6 +69,9 @@
 
 ### Hardware Modified
 - `WmiFanController.cs`: Reduced countdown extension interval (15s → 8s) for more aggressive fan retention
+- `HardwareMonitorBridge.cs`: Added `TryRestartAsync()` method to interface for bridge restart capability
+- `LibreHardwareMonitorImpl.cs`: Added `TryRestartAsync()` implementation - restarts worker or reinitializes in-process monitor
+- `WmiBiosMonitor.cs`: Added `TryRestartAsync()` stub (WMI BIOS has no persistent state)
 
 ### ViewModels Modified
 - `DashboardViewModel.cs`: Added `MonitoringHealthStatus`, `MonitoringHealthStatusText`, `MonitoringHealthColor`, `LastSampleAge`, `HasHistoricalData`, `HasLiveData`

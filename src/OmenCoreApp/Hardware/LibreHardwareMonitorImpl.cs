@@ -313,6 +313,56 @@ namespace OmenCore.Hardware
             InitializeComputer();
         }
 
+        /// <summary>
+        /// Attempt to restart the hardware monitoring bridge.
+        /// Called by HardwareMonitoringService when consecutive timeouts indicate the bridge is stuck.
+        /// For worker mode: restarts the out-of-process worker.
+        /// For in-process mode: reinitializes LibreHardwareMonitor.
+        /// </summary>
+        public async Task<bool> TryRestartAsync()
+        {
+            _logger?.Invoke("[Monitor] TryRestartAsync called - attempting to restart hardware monitoring...");
+            
+            try
+            {
+                if (_useWorker && _workerClient != null)
+                {
+                    // Worker mode: try to restart the worker process
+                    _logger?.Invoke("[Monitor] Restarting out-of-process worker...");
+                    await _workerClient.StopAsync();
+                    await Task.Delay(500); // Brief cooldown
+                    var started = await _workerClient.StartAsync();
+                    
+                    if (started)
+                    {
+                        _logger?.Invoke("[Monitor] ✅ Worker restarted successfully");
+                        _initialized = true;
+                        return true;
+                    }
+                    else
+                    {
+                        _logger?.Invoke("[Monitor] ⚠️ Worker restart failed, falling back to in-process mode");
+                        _useWorker = false;
+                        Reinitialize();
+                        return _initialized;
+                    }
+                }
+                else
+                {
+                    // In-process mode: reinitialize
+                    _logger?.Invoke("[Monitor] Reinitializing in-process hardware monitor...");
+                    Reinitialize();
+                    _logger?.Invoke($"[Monitor] Reinitialization complete, initialized={_initialized}");
+                    return _initialized;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.Invoke($"[Monitor] ❌ TryRestartAsync failed: {ex.Message}");
+                return false;
+            }
+        }
+
         public async Task<MonitoringSample> ReadSampleAsync(CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
