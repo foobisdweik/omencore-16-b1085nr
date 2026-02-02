@@ -39,6 +39,14 @@ namespace OmenCore.Utils
         private bool _disposed;
         private readonly ConfigurationService? _configService;
         
+        // v2.6.1: Track fan menu items for checkmarks
+        private MenuItem? _fanAutoMenuItem;
+        private MenuItem? _fanMaxMenuItem;
+        private MenuItem? _fanQuietMenuItem;
+        private MenuItem? _perfBalancedMenuItem;
+        private MenuItem? _perfPerformanceMenuItem;
+        private MenuItem? _perfQuietMenuItem;
+        
         // Throttling to prevent flicker during system events (brightness keys, etc.)
         // Use Interlocked for thread-safe access from timer callback
         private int _isUpdatingIcon = 0; // 0 = false, 1 = true (for Interlocked)
@@ -209,16 +217,16 @@ namespace OmenCore.Utils
             // Fan submenu
             _fanModeMenuItem = new MenuItem { Header = "🌀 Fan Control ▶" };
             
-            var fanAuto = new MenuItem { Header = "⚡ Auto — System controlled" };
-            fanAuto.Click += (s, e) => SetFanMode("Auto");
-            var fanMax = new MenuItem { Header = "🔥 Max — Maximum cooling" };
-            fanMax.Click += (s, e) => SetFanMode("Max");
-            var fanQuiet = new MenuItem { Header = "🤫 Quiet — Reduced noise" };
-            fanQuiet.Click += (s, e) => SetFanMode("Quiet");
+            _fanAutoMenuItem = new MenuItem { Header = "✓ ⚡ Auto — System controlled" };
+            _fanAutoMenuItem.Click += (s, e) => SetFanMode("Auto");
+            _fanMaxMenuItem = new MenuItem { Header = "   🔥 Max — Maximum cooling" };
+            _fanMaxMenuItem.Click += (s, e) => SetFanMode("Max");
+            _fanQuietMenuItem = new MenuItem { Header = "   🤫 Quiet — Reduced noise" };
+            _fanQuietMenuItem.Click += (s, e) => SetFanMode("Quiet");
             
-            _fanModeMenuItem.Items.Add(fanAuto);
-            _fanModeMenuItem.Items.Add(fanMax);
-            _fanModeMenuItem.Items.Add(fanQuiet);
+            _fanModeMenuItem.Items.Add(_fanAutoMenuItem);
+            _fanModeMenuItem.Items.Add(_fanMaxMenuItem);
+            _fanModeMenuItem.Items.Add(_fanQuietMenuItem);
             _fanModeMenuItem.ItemContainerStyle = menuItemStyle;
             _fanModeMenuItem.SubmenuOpened += (s, e) =>
             {
@@ -248,16 +256,16 @@ namespace OmenCore.Utils
             // Performance submenu
             _performanceModeMenuItem = new MenuItem { Header = "⚡ Power Profile ▶" };
             
-            var perfBalanced = new MenuItem { Header = "⚖️ Balanced — Default" };
-            perfBalanced.Click += (s, e) => SetPerformanceMode("Balanced");
-            var perfPerformance = new MenuItem { Header = "🚀 Performance — Max power" };
-            perfPerformance.Click += (s, e) => SetPerformanceMode("Performance");
-            var perfQuiet = new MenuItem { Header = "🔋 Power Saver — Battery life" };
-            perfQuiet.Click += (s, e) => SetPerformanceMode("Quiet");
+            _perfBalancedMenuItem = new MenuItem { Header = "✓ ⚖️ Balanced — Default" };
+            _perfBalancedMenuItem.Click += (s, e) => SetPerformanceMode("Balanced");
+            _perfPerformanceMenuItem = new MenuItem { Header = "   🚀 Performance — Max power" };
+            _perfPerformanceMenuItem.Click += (s, e) => SetPerformanceMode("Performance");
+            _perfQuietMenuItem = new MenuItem { Header = "   🔋 Power Saver — Battery life" };
+            _perfQuietMenuItem.Click += (s, e) => SetPerformanceMode("Quiet");
             
-            _performanceModeMenuItem.Items.Add(perfBalanced);
-            _performanceModeMenuItem.Items.Add(perfPerformance);
-            _performanceModeMenuItem.Items.Add(perfQuiet);
+            _performanceModeMenuItem.Items.Add(_perfBalancedMenuItem);
+            _performanceModeMenuItem.Items.Add(_perfPerformanceMenuItem);
+            _performanceModeMenuItem.Items.Add(_perfQuietMenuItem);
             _performanceModeMenuItem.ItemContainerStyle = menuItemStyle;
             _performanceModeMenuItem.SubmenuOpened += (s, e) =>
             {
@@ -410,17 +418,28 @@ namespace OmenCore.Utils
                 var cpuLoad = _latestSample.CpuLoadPercent;
                 var gpuLoad = _latestSample.GpuLoadPercent;
 
-                // Update tooltip with enhanced system info
+                // Update tooltip with enhanced system info including fan RPM and GPU power (v2.6.1)
                 var memUsedGb = _latestSample.RamUsageGb;
                 var memTotalGb = _latestSample.RamTotalGb;
                 var memPercent = memTotalGb > 0 ? (memUsedGb * 100.0 / memTotalGb) : 0;
                 
+                // v2.6.1: Add fan RPM display
+                var fan1Rpm = _latestSample.Fan1Rpm;
+                var fan2Rpm = _latestSample.Fan2Rpm;
+                var fanRpmDisplay = fan2Rpm > 0 
+                    ? $"{fan1Rpm}/{fan2Rpm} RPM" 
+                    : (fan1Rpm > 0 ? $"{fan1Rpm} RPM" : "");
+                    
+                // v2.6.1: Add GPU power display
+                var gpuPower = _latestSample.GpuPowerWatts;
+                var gpuPowerDisplay = gpuPower > 0 ? $" · {gpuPower:F0}W" : "";
+                
                 _trayIcon.ToolTipText = $"🎮 OmenCore v2.6.1\n" +
                                        $"━━━━━━━━━━━━━━━━━━\n" +
                                        $"🔥 CPU: {cpuTemp:F0}°C @ {cpuLoad:F0}%\n" +
-                                       $"🎯 GPU: {gpuTemp:F0}°C @ {gpuLoad:F0}%\n" +
+                                       $"🎯 GPU: {gpuTemp:F0}°C @ {gpuLoad:F0}%{gpuPowerDisplay}\n" +
                                        $"💾 RAM: {memUsedGb:F1}/{memTotalGb:F1} GB ({memPercent:F0}%)\n" +
-                                       $"🌀 Fan: {_currentFanMode} | ⚡ {_currentPerformanceMode}\n" +
+                                       $"🌀 {_currentFanMode}{(fanRpmDisplay.Length > 0 ? $" · {fanRpmDisplay}" : "")} | ⚡ {_currentPerformanceMode}\n" +
                                        $"━━━━━━━━━━━━━━━━━━\n" +
                                        $"Left-click to open dashboard";
 
@@ -471,8 +490,25 @@ namespace OmenCore.Utils
             {
                 _fanModeMenuItem.Header = $"🌀 Fan Control ▶ [{mode}]";
             }
+            
+            // v2.6.1: Update checkmarks on fan menu items
+            UpdateFanModeCheckmarks(mode);
+            
             FanModeChangeRequested?.Invoke(mode);
             App.Logging.Info($"Fan mode changed from tray: {mode}");
+        }
+        
+        /// <summary>
+        /// Update checkmarks on fan mode menu items (v2.6.1)
+        /// </summary>
+        private void UpdateFanModeCheckmarks(string activeMode)
+        {
+            if (_fanAutoMenuItem != null)
+                _fanAutoMenuItem.Header = (activeMode == "Auto" ? "✓" : "  ") + " ⚡ Auto — System controlled";
+            if (_fanMaxMenuItem != null)
+                _fanMaxMenuItem.Header = (activeMode == "Max" ? "✓" : "  ") + " 🔥 Max — Maximum cooling";
+            if (_fanQuietMenuItem != null)
+                _fanQuietMenuItem.Header = (activeMode == "Quiet" ? "✓" : "  ") + " 🤫 Quiet — Reduced noise";
         }
 
         private void SetPerformanceMode(string mode)
@@ -482,8 +518,25 @@ namespace OmenCore.Utils
             {
                 _performanceModeMenuItem.Header = $"⚡ Power Profile ▶ [{mode}]";
             }
+            
+            // v2.6.1: Update checkmarks on performance menu items
+            UpdatePerformanceModeCheckmarks(mode);
+            
             PerformanceModeChangeRequested?.Invoke(mode);
             App.Logging.Info($"Performance mode changed from tray: {mode}");
+        }
+        
+        /// <summary>
+        /// Update checkmarks on performance mode menu items (v2.6.1)
+        /// </summary>
+        private void UpdatePerformanceModeCheckmarks(string activeMode)
+        {
+            if (_perfBalancedMenuItem != null)
+                _perfBalancedMenuItem.Header = (activeMode == "Balanced" ? "✓" : "  ") + " ⚖️ Balanced — Default";
+            if (_perfPerformanceMenuItem != null)
+                _perfPerformanceMenuItem.Header = (activeMode == "Performance" ? "✓" : "  ") + " 🚀 Performance — Max power";
+            if (_perfQuietMenuItem != null)
+                _perfQuietMenuItem.Header = (activeMode == "Quiet" ? "✓" : "  ") + " 🔋 Power Saver — Battery life";
         }
 
         private string GetRefreshRateDisplay()

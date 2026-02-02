@@ -1,8 +1,37 @@
-# OmenCore v2.6.1 - Bug Fix Release
+# OmenCore v2.6.1 - Bug Fix & UX Improvements
 
-**Release Date:** January 2025
+**Release Date:** February 2026
 
-This is a bug fix release addressing issues reported via Discord after the v2.6.0 release.
+This release addresses bugs reported via Discord and adds quality-of-life improvements to the system tray experience.
+
+---
+
+## ✨ New Features
+
+### 🎯 Enhanced System Tray
+
+**Fan RPM in Tooltip**
+- Tray tooltip now shows actual fan RPM values (e.g., "Max · 4200/4100 RPM")
+- Displays both CPU and GPU fan speeds on dual-fan systems
+
+**GPU Power Display**
+- Tooltip now shows GPU power consumption in watts (e.g., "GPU: 65°C @ 80% · 125W")
+- Helps monitor power draw during gaming
+
+**Visual Mode Checkmarks**
+- Fan and performance mode submenus now show ✓ next to the active mode
+- Instantly see which mode is currently selected
+
+**Mode Change Notifications**
+- Toast notification appears when changing fan mode from Quick Access
+- Shows icon based on mode: 🚀 Max, 🤫 Quiet, ⚖️ Auto
+
+### ⚡ Performance
+
+**UI Virtualization**
+- Enabled `VirtualizingStackPanel` for ListBox controls
+- Uses recycling mode for better memory efficiency
+- Smoother scrolling in lists with many items
 
 ---
 
@@ -86,13 +115,13 @@ This is a drop-in replacement for v2.6.0. Simply install over your existing inst
 ### Windows
 | File | SHA256 |
 |------|--------|
-| `OmenCoreSetup-2.6.1.exe` | `361D8A4F6B886041C9EF043C3F38F2E359D0C254C506C5FDE8A03A8129C5754F` |
-| `OmenCore-2.6.1-win-x64-portable.zip` | `8AFA57A3D19D65715ED8074505A1DE50859EDE8D33FD36B2BBA1FE7804A6AEB8` |
+| `OmenCoreSetup-2.6.1.exe` | `941741B381CE6E85C6B36405DA63BD339EEC9CD5BE2C4DFFBDFB46E760333FC0` |
+| `OmenCore-2.6.1-win-x64-portable.zip` | `4E0A4AFDBF0B9ECB48C97371B7D42A276126D250C8F8569ABF09BA96E93A1AC5` |
 
 ### Linux
 | File | SHA256 |
 |------|--------|
-| `OmenCore-2.6.1-linux-x64.zip` | `0CD404CE33398D5DBB4F3951D8DD422B34C07EC400B631A3BA9337AF865B8DEA` |
+| `OmenCore-2.6.1-linux-x64.zip` | `684680E081C30AE421576E4FF2D2476E435B15F9F4C6A955871E9F52E98DF814` |
 
 ---
 

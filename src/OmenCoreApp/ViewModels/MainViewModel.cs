@@ -2352,6 +2352,9 @@ namespace OmenCore.ViewModels
                     _fanService.ApplyPreset(targetPreset, immediate: true);
                     CurrentFanMode = mode;
                     PushEvent($"🌀 Fan mode: {mode}");
+                    
+                    // v2.6.1: Show notification for fan mode changes from tray
+                    _notificationService.ShowFanModeChanged(mode, "Quick Access");
                 }
                 else
                 {
