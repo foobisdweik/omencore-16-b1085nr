@@ -29,9 +29,10 @@ namespace OmenCore.Services
                     IsBuiltIn = true,
                     Curve = new List<FanCurvePoint>
                     {
-                        new() { TemperatureC = 40, FanPercent = 30 },
-                        new() { TemperatureC = 70, FanPercent = 60 },
-                        new() { TemperatureC = 90, FanPercent = 80 }
+                        new() { TemperatureC = 40, FanPercent = 35 },
+                        new() { TemperatureC = 60, FanPercent = 55 },
+                        new() { TemperatureC = 75, FanPercent = 80 },
+                        new() { TemperatureC = 85, FanPercent = 100 }
                     }
                 },
                 new FanPreset
@@ -40,9 +41,10 @@ namespace OmenCore.Services
                     IsBuiltIn = true,
                     Curve = new List<FanCurvePoint>
                     {
-                        new() { TemperatureC = 40, FanPercent = 40 },
-                        new() { TemperatureC = 70, FanPercent = 75 },
-                        new() { TemperatureC = 95, FanPercent = 100 }
+                        new() { TemperatureC = 40, FanPercent = 45 },
+                        new() { TemperatureC = 60, FanPercent = 70 },
+                        new() { TemperatureC = 75, FanPercent = 90 },
+                        new() { TemperatureC = 85, FanPercent = 100 }
                     }
                 },
                 new FanPreset

@@ -810,16 +810,17 @@ namespace OmenCore.ViewModels
 
         private static List<FanCurvePoint> GetDefaultAutoCurve()
         {
-            // Updated curve based on user feedback for better cooling response
+            // v2.6.1: More aggressive curve for high-power laptops (i9/i7 + RTX 40xx)
+            // Reaches 100% by 85°C to prevent thermal throttling
             return new List<FanCurvePoint>
             {
-                new() { TemperatureC = 40, FanPercent = 30 },
-                new() { TemperatureC = 50, FanPercent = 40 },
-                new() { TemperatureC = 60, FanPercent = 55 },
-                new() { TemperatureC = 70, FanPercent = 70 },
-                new() { TemperatureC = 80, FanPercent = 75 },
-                new() { TemperatureC = 90, FanPercent = 85 },
-                new() { TemperatureC = 92, FanPercent = 100 }
+                new() { TemperatureC = 40, FanPercent = 35 },
+                new() { TemperatureC = 50, FanPercent = 45 },
+                new() { TemperatureC = 60, FanPercent = 60 },
+                new() { TemperatureC = 70, FanPercent = 75 },
+                new() { TemperatureC = 75, FanPercent = 85 },
+                new() { TemperatureC = 80, FanPercent = 95 },
+                new() { TemperatureC = 85, FanPercent = 100 }
             };
         }
 

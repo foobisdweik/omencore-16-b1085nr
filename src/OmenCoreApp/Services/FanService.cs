@@ -516,30 +516,31 @@ namespace OmenCore.Services
         
         /// <summary>
         /// Apply multi-layer safety bounds clamping to prevent dangerous fan curves.
-        /// Implements emergency thermal protection at 88°C.
+        /// Implements emergency thermal protection at 85°C (v2.6.1: lowered from 88°C).
         /// </summary>
         private double ApplySafetyBoundsClamping(double fanPercent, double temperatureC)
         {
-            // Emergency thermal protection: Force 100% fans at 88°C or above
-            if (temperatureC >= 88.0)
+            // v2.6.1: Emergency thermal protection at 85°C (was 88°C)
+            // High-power laptops (i9/RTX 4090) need more aggressive cooling
+            if (temperatureC >= 85.0)
             {
                 if (fanPercent < 100.0)
                 {
-                    _logging.Warn($"EMERGENCY: Temperature {temperatureC:F1}°C >= 88°C, forcing fans to 100% (was {fanPercent:F0}%)");
+                    _logging.Warn($"EMERGENCY: Temperature {temperatureC:F1}°C >= 85°C, forcing fans to 100% (was {fanPercent:F0}%)");
                     return 100.0;
                 }
             }
             
-            // Critical thermal protection: Minimum 80% fans at 80°C or above
+            // Critical thermal protection: Minimum 90% fans at 80°C or above (was 80%)
             if (temperatureC >= 80.0)
             {
-                return Math.Max(fanPercent, 80.0);
+                return Math.Max(fanPercent, 90.0);
             }
             
-            // High thermal protection: Minimum 60% fans at 70°C or above
+            // High thermal protection: Minimum 70% fans at 70°C or above (was 60%)
             if (temperatureC >= 70.0)
             {
-                return Math.Max(fanPercent, 60.0);
+                return Math.Max(fanPercent, 70.0);
             }
             
             // Medium thermal protection: Minimum 40% fans at 60°C or above

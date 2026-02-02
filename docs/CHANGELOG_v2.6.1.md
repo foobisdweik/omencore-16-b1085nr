@@ -33,6 +33,29 @@ This release addresses bugs reported via Discord and adds quality-of-life improv
 - Uses recycling mode for better memory efficiency
 - Smoother scrolling in lists with many items
 
+### 🌡️ More Aggressive Auto Fan Curves
+
+**Problem:** Default Auto curve was too gentle for high-power laptops (i9/RTX 4090), reaching 92°C before hitting 100% fan speed.
+
+**Improvements:**
+- **Auto Curve:** Now reaches 100% at 85°C (was 92°C)
+  - 70°C → 75% (was 70%)
+  - 75°C → 85% (new point)
+  - 80°C → 95% (was 75%)
+  - 85°C → 100% (was at 92°C)
+  
+- **Balanced Preset:** Reaches 100% at 85°C (was 80% at 90°C)
+- **Performance Preset:** Reaches 100% at 85°C (was 95°C)
+
+**Thermal Protection Thresholds (v2.6.1):**
+| Temperature | Minimum Fan Speed |
+|-------------|-------------------|
+| ≥85°C | 100% (EMERGENCY) |
+| ≥80°C | 90% (was 80%) |
+| ≥70°C | 70% (was 60%) |
+| ≥60°C | 40% |
+| ≥50°C | 20% |
+
 ---
 
 ## 🐛 Bug Fixes
@@ -115,8 +138,8 @@ This is a drop-in replacement for v2.6.0. Simply install over your existing inst
 ### Windows
 | File | SHA256 |
 |------|--------|
-| `OmenCoreSetup-2.6.1.exe` | `941741B381CE6E85C6B36405DA63BD339EEC9CD5BE2C4DFFBDFB46E760333FC0` |
-| `OmenCore-2.6.1-win-x64-portable.zip` | `4E0A4AFDBF0B9ECB48C97371B7D42A276126D250C8F8569ABF09BA96E93A1AC5` |
+| `OmenCoreSetup-2.6.1.exe` | `3C70000BA84242A27B363CCB92E0A329939CABC356D651E8D7E0C1F6E41B081F` |
+| `OmenCore-2.6.1-win-x64-portable.zip` | `B5615E686AFBBA5ADC4CCCEBFF88E8CCE720A881ADC21F731D172F259CB71DA4` |
 
 ### Linux
 | File | SHA256 |
