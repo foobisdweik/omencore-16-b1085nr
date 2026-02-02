@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Family Fallbacks**: Unknown models inherit defaults from their detected family (OMEN16, Victus, etc.)
 
 ### 🐛 Bug Fixes
+- **Temperature History Not Recording**: Fixed bug where temperature charts showed no data when temps were stable (ShouldUpdateUI optimization was incorrectly skipping history updates)
 - **Monitoring Timeout Handling**: Fixed consecutive timeout detection logic for accurate degraded mode triggering
 - **Fan Curve Temperature Bounds**: Curve preview properly handles temperatures outside defined points
 
