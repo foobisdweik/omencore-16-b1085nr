@@ -40,9 +40,109 @@ namespace OmenCore.ViewModels
                 {
                     _currentTemperature = value;
                     OnPropertyChanged();
+                    OnPropertyChanged(nameof(PredictedFanPercent));
+                    OnPropertyChanged(nameof(CurvePreviewText));
                 }
             }
         }
+        
+        #region Curve Preview (v2.7.0)
+        
+        /// <summary>
+        /// Predicted fan percentage based on current temperature and active curve.
+        /// Shows what fan speed the curve would produce at the current temperature.
+        /// </summary>
+        public int PredictedFanPercent
+        {
+            get
+            {
+                if (CustomFanCurve == null || CustomFanCurve.Count == 0)
+                    return 0;
+                
+                var sorted = CustomFanCurve.OrderBy(p => p.TemperatureC).ToList();
+                var temp = CurrentTemperature;
+                
+                // Find the curve point for current temperature
+                // If temp is below all points, use lowest
+                if (temp <= sorted.First().TemperatureC)
+                    return sorted.First().FanPercent;
+                
+                // If temp is above all points, use highest  
+                if (temp >= sorted.Last().TemperatureC)
+                    return sorted.Last().FanPercent;
+                
+                // Interpolate between points
+                for (int i = 0; i < sorted.Count - 1; i++)
+                {
+                    if (temp >= sorted[i].TemperatureC && temp <= sorted[i + 1].TemperatureC)
+                    {
+                        var t1 = sorted[i].TemperatureC;
+                        var t2 = sorted[i + 1].TemperatureC;
+                        var f1 = sorted[i].FanPercent;
+                        var f2 = sorted[i + 1].FanPercent;
+                        
+                        // Linear interpolation
+                        var ratio = (temp - t1) / (t2 - t1);
+                        return (int)(f1 + (f2 - f1) * ratio);
+                    }
+                }
+                
+                return sorted.Last().FanPercent;
+            }
+        }
+        
+        /// <summary>
+        /// Human-readable curve preview text showing predicted fan speed.
+        /// </summary>
+        public string CurvePreviewText => $"At {CurrentTemperature:F0}°C → {PredictedFanPercent}%";
+        
+        /// <summary>
+        /// Validates the curve and returns any warnings.
+        /// </summary>
+        public string CurveValidationMessage
+        {
+            get
+            {
+                if (CustomFanCurve == null || CustomFanCurve.Count < 2)
+                    return "⚠️ Curve needs at least 2 points";
+                
+                var sorted = CustomFanCurve.OrderBy(p => p.TemperatureC).ToList();
+                
+                // Check for decreasing fan speed at higher temps (dangerous)
+                for (int i = 0; i < sorted.Count - 1; i++)
+                {
+                    if (sorted[i + 1].FanPercent < sorted[i].FanPercent && 
+                        sorted[i + 1].TemperatureC > 60) // Only warn above 60°C
+                    {
+                        return $"⚠️ Fan drops to {sorted[i + 1].FanPercent}% at {sorted[i + 1].TemperatureC}°C";
+                    }
+                }
+                
+                // Check if max temp point is too low
+                var maxTempPoint = sorted.Last();
+                if (maxTempPoint.TemperatureC < 80)
+                {
+                    return $"ℹ️ Consider adding a point at 85-95°C";
+                }
+                
+                // Check if fan never reaches 100%
+                if (sorted.All(p => p.FanPercent < 90))
+                {
+                    return "ℹ️ Curve never reaches 100% - may cause thermal throttling";
+                }
+                
+                return "✓ Curve looks good";
+            }
+        }
+        
+        private void NotifyCurvePreviewChanged()
+        {
+            OnPropertyChanged(nameof(PredictedFanPercent));
+            OnPropertyChanged(nameof(CurvePreviewText));
+            OnPropertyChanged(nameof(CurveValidationMessage));
+        }
+        
+        #endregion
 
         public FanPreset? SelectedPreset
         {
@@ -365,6 +465,9 @@ namespace OmenCore.ViewModels
             
             // Subscribe to thermal samples to update current temperature
             ((INotifyCollectionChanged)_fanService.ThermalSamples).CollectionChanged += ThermalSamples_CollectionChanged;
+            
+            // Subscribe to curve changes for live preview (v2.7.0)
+            CustomFanCurve.CollectionChanged += (s, e) => NotifyCurvePreviewChanged();
             
             // Initialize built-in presets
             FanPresets.Add(new FanPreset 

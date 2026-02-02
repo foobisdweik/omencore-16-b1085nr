@@ -277,6 +277,8 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         
                         <!-- Header with instructions -->
@@ -339,8 +341,49 @@
                                                  CurrentTemperature="{Binding CurrentTemperature}"
                                                  MinHeight="280"/>
                         
-                        <!-- Current curve points summary -->
+                        <!-- Curve Preview & Validation (v2.7.0) -->
                         <Border Grid.Row="2" 
+                                Background="{StaticResource SurfaceDarkBrush}"
+                                CornerRadius="6"
+                                Padding="12"
+                                Margin="0,16,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <!-- Live Preview -->
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="📊" FontSize="14" Margin="0,0,6,0"/>
+                                    <TextBlock Text="Live Preview:" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
+                                    <TextBlock Text="{Binding CurvePreviewText}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource AccentBrush}"/>
+                                </StackPanel>
+                                
+                                <!-- Predicted Fan Speed -->
+                                <Border Grid.Column="2" Background="#2000FF88" CornerRadius="4" Padding="12,4">
+                                    <TextBlock Text="{Binding PredictedFanPercent, StringFormat='{}{0}%'}" 
+                                               FontSize="16" FontWeight="Bold" 
+                                               Foreground="#00FF88"/>
+                                </Border>
+                            </Grid>
+                        </Border>
+                        
+                        <!-- Curve Validation Message -->
+                        <Border Grid.Row="3" 
+                                Background="{StaticResource SurfaceDarkBrush}"
+                                CornerRadius="6"
+                                Padding="8"
+                                Margin="0,0,0,8">
+                            <TextBlock Text="{Binding CurveValidationMessage}" 
+                                       FontSize="11" 
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+                        
+                        <!-- Current curve points summary -->
+                        <Border Grid.Row="4" 
                                 Background="{StaticResource SurfaceDarkBrush}"
                                 CornerRadius="6"
                                 Padding="12"

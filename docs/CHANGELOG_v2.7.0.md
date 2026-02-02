@@ -30,6 +30,8 @@
 
 ### Fan Diagnostics
 - **Guided Fan Diagnostic Script**: One-click test sequence (30% → 60% → 100%) for both CPU and GPU fans with pass/fail summary
+- **Fan Curve Live Preview**: Shows predicted fan speed at current temperature in real-time
+- **Curve Validation Messages**: Warnings for dangerous curves (fan drops at high temps, missing high-temp points)
 
 ### Standalone Operation
 - **Dependency Audit System**: Startup validation checks for OGH, HP services, WMI BIOS, LHM, PawnIO
@@ -82,6 +84,7 @@
 - `MainViewModel.cs`: Added `_osdService.SetPerformanceMode()` call in `OnPerformanceModeApplied` handler
 - `SettingsViewModel.cs`: Added `StandaloneStatus`, `StandaloneStatusColor`, `StandaloneStatusSummary`, `DependencyAudit`, `PawnIOOnlyMode` properties and `RefreshStandaloneStatus()` method
 - `FanDiagnosticsViewModel.cs`: Added guided diagnostic script with `RunGuidedDiagnosticAsync()`, progress tracking, and pass/fail summary
+- `FanControlViewModel.cs`: Added `PredictedFanPercent`, `CurvePreviewText`, `CurveValidationMessage` for live curve preview
 
 ### Views Modified
 - `DashboardView.xaml`: Added health status display in header with color-coded indicator
@@ -89,6 +92,7 @@
 - `OsdOverlayWindow.xaml.cs`: Replaced fake FPS estimation with GPU load display, added sample staleness detection (5s threshold)
 - `SettingsView.xaml`: Added Standalone Status panel with color-coded status/summary, PawnIO-Only Mode toggle
 - `FanDiagnosticsView.xaml`: Added Guided Diagnostic panel with Run Full Test button, progress bar, and results display
+- `FanControlView.xaml`: Added Curve Preview panel showing predicted fan % and validation messages
 
 ### Models Modified
 - `FeaturePreferences.cs`: Added `SuppressHotkeysInRdp` setting (default: true), `PawnIOOnlyMode` setting (default: false)
