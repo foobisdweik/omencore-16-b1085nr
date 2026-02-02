@@ -39,6 +39,28 @@
 - **No HP Software Required**: Clear visibility into what dependencies are detected vs required
 - **PawnIO-Only Mode Toggle**: Settings option to force PawnIO-only backend (disables HP service-dependent features)
 
+### Fan & Hardware Verification
+- **Fan RPM Verification Scoring**: 0-100 score for fan control accuracy (accuracy + stability + response)
+- **Fan Calibration Scoring**: Overall score for calibration runs based on all test points
+- **Verification Score Display**: Guided diagnostic now shows scores with rating (Excellent/Good/Fair/Poor/Failed)
+
+### Per-Model Capability Detection
+- **Model-Specific Capability Database**: Configurations for 20+ OMEN/Victus models
+- **Runtime Capability Probing**: Hardware verification of capabilities at startup
+- **UI Visibility Helpers**: `ShowFanCurveEditor`, `ShowMuxSwitch`, `ShowRgbLighting`, `ShowUndervolt`, `ShowPerformanceModes`
+- **Model Warnings**: Display warnings for known model limitations
+
+### BIOS Reliability Tracking
+- **Command Success/Failure Tracking**: Total attempts, successes, failures tracked
+- **Success Rate Calculation**: Percentage success rate with health rating
+- **BIOS Reliability UI**: Settings shows BIOS WMI reliability with refresh button
+- **Legacy WMI Indicator**: Shows when using legacy WMI fallback
+
+### System Tray Enhancements
+- **GPU Power Quick Access**: Tray menu for Minimum/Medium/Maximum GPU power levels
+- **Keyboard Backlight Quick Access**: Tray menu for Off/Low/Medium/High/Toggle brightness
+- **State Sync**: GPU power and keyboard state synced between tray and main app
+
 ---
 
 ## 🐛 Bug Fixes
@@ -125,22 +147,23 @@
 - [x] Empty states for charts (#16)
 - [x] Desktop safe mode detection (#12 - already existed)
 - [x] Standalone dependency audit + UI (#1)
+- [x] PawnIO-only mode (#2)
+- [x] Worker auto-restart/failover (#4)
+- [x] Guided fan diagnostic script (#5)
+- [x] Fan curve validation + preview (#6)
+- [x] Capability probe per model (#7)
+- [x] Fan RPM verification scoring (#9)
+- [x] GPU power/thermal policy UI (#10)
+- [x] BIOS query reliability + UI (#11)
+- [x] Tray quick actions (#15)
+- [x] Temperature history bug fix (v2.6.1)
 
 ### 🔲 Remaining High Priority
-- [ ] PawnIO-only mode (#2)
-- [ ] Worker auto-restart/failover (#4)
-- [ ] Guided fan diagnostic script (#5)
-- [ ] Fan curve validation + preview (#6)
-- [ ] Capability probe per model (#7)
-- [ ] Fan RPM verification scoring (#9)
 - [ ] Unified RGB layer (#18)
 - [ ] Logitech SDK (#19)
 - [ ] Corsair iCUE SDK (#20)
 
 ### 🔲 Remaining Medium Priority
-- [ ] GPU power/thermal policy UI (#10)
-- [ ] BIOS query reliability + UI (#11)
-- [ ] Tray quick actions (#15)
 - [ ] Visual polish - gauges/sparklines (#17)
 - [ ] Razer Chroma SDK (#21)
 - [ ] Linux low-overhead mode (#22)
