@@ -27,6 +27,8 @@ namespace OmenCore.ViewModels
         private readonly OmenCore.Services.Rgb.RgbManager? _rgbManager;
         private readonly HardwareMonitoringService? _hardwareMonitoringService;
         private readonly PerformanceModeService? _performanceModeService;
+        private readonly RgbSceneService? _sceneService;
+        private readonly ScreenSamplingService? _screenSamplingService;
         
         private CorsairDevice? _selectedCorsairDevice;
         private CorsairLightingPreset? _selectedCorsairPreset;
@@ -38,6 +40,10 @@ namespace OmenCore.ViewModels
         private int _logitechGreenValue = 0;
         private int _logitechBlueValue = 46;
         private MacroProfile? _selectedMacroProfile;
+        
+        // Scene-related fields
+        private RgbScene? _selectedScene;
+        private bool _isAmbientModeActive;
         
         // 4-Zone Keyboard colors
         private string _zone1ColorHex = "#E6002E"; // OMEN Red
@@ -81,6 +87,82 @@ namespace OmenCore.ViewModels
         public ObservableCollection<KeyboardPreset> KeyboardPresets { get; } = new();
         public ICommand ApplyCorsairPresetToSystemCommand { get; }
         public ICommand SyncAllRgbCommand { get; }
+        
+        #region Scene Properties
+        
+        /// <summary>
+        /// All available RGB scenes.
+        /// </summary>
+        public ObservableCollection<RgbScene> Scenes { get; } = new();
+        
+        /// <summary>
+        /// Currently selected scene.
+        /// </summary>
+        public RgbScene? SelectedScene
+        {
+            get => _selectedScene;
+            set
+            {
+                if (_selectedScene != value)
+                {
+                    _selectedScene = value;
+                    OnPropertyChanged();
+                    if (value != null && _sceneService != null)
+                    {
+                        _ = ApplySelectedSceneAsync();
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Whether ambient/screen sampling mode is active.
+        /// </summary>
+        public bool IsAmbientModeActive
+        {
+            get => _isAmbientModeActive;
+            set
+            {
+                if (_isAmbientModeActive != value)
+                {
+                    _isAmbientModeActive = value;
+                    OnPropertyChanged();
+                    ToggleAmbientMode(value);
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Whether scene service is available.
+        /// </summary>
+        public bool IsSceneServiceEnabled => _sceneService != null;
+        
+        /// <summary>
+        /// Current scene name for display.
+        /// </summary>
+        public string CurrentSceneName => _sceneService?.CurrentScene?.Name ?? "None";
+        
+        /// <summary>
+        /// Current ambient color hex value.
+        /// </summary>
+        public string AmbientColorHex { get; private set; } = "#000000";
+        
+        /// <summary>
+        /// Command to apply selected scene.
+        /// </summary>
+        public ICommand ApplySceneCommand { get; }
+        
+        /// <summary>
+        /// Command to save current settings as a new scene.
+        /// </summary>
+        public ICommand SaveAsSceneCommand { get; }
+        
+        /// <summary>
+        /// Command to toggle ambient mode.
+        /// </summary>
+        public ICommand ToggleAmbientModeCommand { get; }
+        
+        #endregion
         
         // Connection status properties for UI badges
         public bool IsCorsairConnected => CorsairDevices.Count > 0;
@@ -785,7 +867,7 @@ namespace OmenCore.ViewModels
         public ICommand SetZone3ColorCommand { get; }
         public ICommand SetZone4ColorCommand { get; }
 
-        public LightingViewModel(CorsairDeviceService? corsairService, LogitechDeviceService? logitechService, LoggingService logging, KeyboardLightingService? keyboardLightingService = null, ConfigurationService? configService = null, RazerService? razerService = null, OmenCore.Services.Rgb.RgbManager? rgbManager = null, HardwareMonitoringService? hardwareMonitoringService = null, PerformanceModeService? performanceModeService = null)
+        public LightingViewModel(CorsairDeviceService? corsairService, LogitechDeviceService? logitechService, LoggingService logging, KeyboardLightingService? keyboardLightingService = null, ConfigurationService? configService = null, RazerService? razerService = null, OmenCore.Services.Rgb.RgbManager? rgbManager = null, HardwareMonitoringService? hardwareMonitoringService = null, PerformanceModeService? performanceModeService = null, RgbSceneService? sceneService = null, ScreenSamplingService? screenSamplingService = null)
         {
             _corsairService = corsairService;
             _logitechService = logitechService;
@@ -796,6 +878,8 @@ namespace OmenCore.ViewModels
             _rgbManager = rgbManager;
             _hardwareMonitoringService = hardwareMonitoringService;
             _performanceModeService = performanceModeService;
+            _sceneService = sceneService;
+            _screenSamplingService = screenSamplingService;
             
             // Load saved keyboard colors from config
             LoadKeyboardColorsFromConfig();
@@ -837,6 +921,14 @@ namespace OmenCore.ViewModels
             SetZone2ColorCommand = new RelayCommand(_ => OpenColorPickerForZone(2, "Left"));
             SetZone3ColorCommand = new RelayCommand(_ => OpenColorPickerForZone(3, "Right"));
             SetZone4ColorCommand = new RelayCommand(_ => OpenColorPickerForZone(4, "Far Right"));
+            
+            // Scene Commands
+            ApplySceneCommand = new AsyncRelayCommand(async param => await ApplySceneFromParameterAsync(param));
+            SaveAsSceneCommand = new AsyncRelayCommand(async _ => await SaveCurrentAsSceneAsync());
+            ToggleAmbientModeCommand = new RelayCommand(_ => IsAmbientModeActive = !IsAmbientModeActive);
+            
+            // Initialize scenes from service
+            InitializeScenesFromService();
 
             // Initialize lighting presets - prefer saved config presets when available
             if (_configService?.Config?.CorsairLightingPresets != null && _configService.Config.CorsairLightingPresets.Count > 0)
@@ -1948,6 +2040,210 @@ namespace OmenCore.ViewModels
         }
         
         #endregion
+        
+        #endregion
+        
+        #region Scene Methods
+        
+        /// <summary>
+        /// Initialize scenes collection from service.
+        /// </summary>
+        private void InitializeScenesFromService()
+        {
+            if (_sceneService == null) return;
+            
+            Scenes.Clear();
+            foreach (var scene in _sceneService.Scenes)
+            {
+                Scenes.Add(scene);
+            }
+            
+            // Select current scene if any
+            _selectedScene = _sceneService.CurrentScene;
+            OnPropertyChanged(nameof(SelectedScene));
+            OnPropertyChanged(nameof(CurrentSceneName));
+            
+            // Subscribe to scene changes
+            _sceneService.SceneChanged += OnSceneServiceSceneChanged;
+            _sceneService.ScenesListChanged += OnSceneServiceListChanged;
+            
+            // Subscribe to ambient color changes
+            if (_screenSamplingService != null)
+            {
+                _screenSamplingService.ColorChanged += OnAmbientColorChanged;
+            }
+        }
+        
+        private void OnSceneServiceSceneChanged(object? sender, RgbSceneChangedEventArgs e)
+        {
+            Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                _selectedScene = e.CurrentScene;
+                OnPropertyChanged(nameof(SelectedScene));
+                OnPropertyChanged(nameof(CurrentSceneName));
+            });
+        }
+        
+        private void OnSceneServiceListChanged(object? sender, EventArgs e)
+        {
+            Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                Scenes.Clear();
+                if (_sceneService != null)
+                {
+                    foreach (var scene in _sceneService.Scenes)
+                    {
+                        Scenes.Add(scene);
+                    }
+                }
+            });
+        }
+        
+        private void OnAmbientColorChanged(object? sender, System.Drawing.Color color)
+        {
+            Application.Current?.Dispatcher?.Invoke(() =>
+            {
+                AmbientColorHex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+                OnPropertyChanged(nameof(AmbientColorHex));
+            });
+        }
+        
+        /// <summary>
+        /// Apply a scene from a command parameter.
+        /// </summary>
+        private async Task ApplySceneFromParameterAsync(object? parameter)
+        {
+            if (_sceneService == null)
+            {
+                _logging.Warn("Cannot apply scene: Scene service is null");
+                return;
+            }
+            
+            var scene = parameter as RgbScene;
+            if (scene == null)
+            {
+                _logging.Warn("Cannot apply scene: Invalid scene parameter");
+                return;
+            }
+            
+            try
+            {
+                _selectedScene = scene;
+                OnPropertyChanged(nameof(SelectedScene));
+                
+                var result = await _sceneService.ApplySceneAsync(scene);
+                if (result.Success)
+                {
+                    OnPropertyChanged(nameof(CurrentSceneName));
+                    _logging.Info($"Applied scene '{scene.Name}' successfully");
+                }
+                else
+                {
+                    _logging.Warn($"Scene '{scene.Name}' applied with errors: {string.Join(", ", result.Errors)}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Error($"Failed to apply scene '{scene.Name}'", ex);
+            }
+        }
+        
+        /// <summary>
+        /// Apply the currently selected scene.
+        /// </summary>
+        private async Task ApplySelectedSceneAsync()
+        {
+            if (_sceneService == null || _selectedScene == null)
+            {
+                _logging.Warn("Cannot apply scene: Scene service or scene is null");
+                return;
+            }
+            
+            try
+            {
+                var result = await _sceneService.ApplySceneAsync(_selectedScene);
+                if (result.Success)
+                {
+                    OnPropertyChanged(nameof(CurrentSceneName));
+                    _logging.Info($"Applied scene '{_selectedScene.Name}' successfully");
+                }
+                else
+                {
+                    _logging.Warn($"Scene '{_selectedScene.Name}' applied with errors: {string.Join(", ", result.Errors)}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logging.Error($"Failed to apply scene '{_selectedScene.Name}'", ex);
+            }
+        }
+        
+        /// <summary>
+        /// Save current lighting settings as a new scene.
+        /// </summary>
+        private async Task SaveCurrentAsSceneAsync()
+        {
+            if (_sceneService == null)
+            {
+                _logging.Warn("Cannot save scene: Scene service is not available");
+                return;
+            }
+            
+            await Task.Run(() =>
+            {
+                try
+                {
+                    var scene = _sceneService.CreateSceneFromCurrent($"Custom Scene {Scenes.Count + 1}");
+                    
+                    // Copy current zone colors
+                    scene.ZoneColors = new System.Collections.Generic.Dictionary<int, string>
+                    {
+                        { 0, Zone1ColorHex },
+                        { 1, Zone2ColorHex },
+                        { 2, Zone3ColorHex },
+                        { 3, Zone4ColorHex }
+                    };
+                    scene.PrimaryColor = Zone1ColorHex;
+                    
+                    _sceneService.AddScene(scene);
+                    
+                    Application.Current?.Dispatcher?.Invoke(() =>
+                    {
+                        Scenes.Add(scene);
+                        SelectedScene = scene;
+                    });
+                    
+                    _logging.Info($"Created new scene: {scene.Name}");
+                }
+                catch (Exception ex)
+                {
+                    _logging.Error("Failed to save current settings as scene", ex);
+                }
+            });
+        }
+        
+        /// <summary>
+        /// Toggle ambient/screen sampling mode.
+        /// </summary>
+        private void ToggleAmbientMode(bool enabled)
+        {
+            if (_screenSamplingService == null)
+            {
+                _logging.Warn("Screen sampling service not available");
+                return;
+            }
+            
+            if (enabled)
+            {
+                _screenSamplingService.Start();
+                _logging.Info("Ambient mode enabled");
+            }
+            else
+            {
+                _screenSamplingService.Stop();
+                _logging.Info("Ambient mode disabled");
+            }
+        }
         
         #endregion
     }
