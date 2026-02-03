@@ -78,6 +78,13 @@
 - **Real-time Updates**: Sparklines update with last 20 samples for smooth trend visualization
 - **Color-coded**: Each component has its own accent color (CPU=Red, GPU=Blue, RAM=Purple)
 
+### HP Driver & Support Guidance Panel (#26)
+- **Quick Links Panel**: New card in Settings→Hardware with HP driver and support resources
+- **HP Support Assistant**: Direct link to HP Support page for automatic driver detection
+- **Driver Downloads**: Quick access to HP's official driver download page
+- **OMEN Gaming Hub**: Link to official OMEN Hub in Microsoft Store for comparison/compatibility
+- **User-friendly Tips**: Helpful guidance on using HP Support Assistant for best results
+
 ---
 
 ## 🐛 Bug Fixes
@@ -176,6 +183,7 @@
 - [x] Temperature history bug fix (v2.6.1)
 - [x] Unified RGB layer (#18)
 - [x] Visual polish - gauges/sparklines (#17)
+- [x] HP update guidance panel (#26)
 
 ### 🔲 Remaining High Priority
 - [ ] Logitech SDK (#19)
@@ -187,7 +195,6 @@
 - [ ] Linux tray integration (#23)
 - [ ] Linux sensor robustness (#24)
 - [ ] Platform-aware update assets (#25)
-- [ ] HP update guidance panel (#26)
 
 ---
 

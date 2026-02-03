@@ -1072,6 +1072,85 @@
                     </StackPanel>
                 </Border>
 
+                <!-- HP Driver & Support Guidance (v2.7.0) -->
+                <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <Path Data="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M11,17V15H13V17H11M11,7H13V14H11V7Z" 
+                                  Fill="#29B6F6" 
+                                  Width="24" Height="24" Stretch="Uniform" 
+                                  VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <TextBlock Text="HP Driver &amp; Support Resources" FontSize="20" FontWeight="SemiBold" 
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                        </StackPanel>
+
+                        <TextBlock TextWrapping="Wrap" FontSize="13" 
+                                   Foreground="{StaticResource TextSecondaryBrush}" 
+                                   Margin="0,0,0,16">
+                            Keep your OMEN laptop up to date with official HP drivers, BIOS updates, and support tools.
+                            Using official HP drivers ensures best compatibility and performance.
+                        </TextBlock>
+
+                        <!-- Quick Links Grid -->
+                        <UniformGrid Columns="3" Margin="0,0,0,8">
+                            <!-- HP Support Assistant -->
+                            <Button Style="{StaticResource ModernButton}" 
+                                    Command="{Binding OpenHpSupportAssistantCommand}"
+                                    Margin="0,0,8,8" Padding="12,16">
+                                <StackPanel>
+                                    <TextBlock Text="🔧" FontSize="24" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                    <TextBlock Text="HP Support" FontSize="12" FontWeight="SemiBold" 
+                                               HorizontalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    <TextBlock Text="Assistant" FontSize="12" FontWeight="SemiBold" 
+                                               HorizontalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- HP Driver Downloads -->
+                            <Button Style="{StaticResource ModernButton}" 
+                                    Command="{Binding OpenHpDriversPageCommand}"
+                                    Margin="0,0,8,8" Padding="12,16">
+                                <StackPanel>
+                                    <TextBlock Text="💾" FontSize="24" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                    <TextBlock Text="Driver" FontSize="12" FontWeight="SemiBold" 
+                                               HorizontalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    <TextBlock Text="Downloads" FontSize="12" FontWeight="SemiBold" 
+                                               HorizontalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- HP OMEN Gaming Hub -->
+                            <Button Style="{StaticResource ModernButton}" 
+                                    Command="{Binding OpenOmenGamingHubCommand}"
+                                    Margin="0,0,0,8" Padding="12,16">
+                                <StackPanel>
+                                    <TextBlock Text="🎮" FontSize="24" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                    <TextBlock Text="OMEN Hub" FontSize="12" FontWeight="SemiBold" 
+                                               HorizontalAlignment="Center"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    <TextBlock Text="(Official)" FontSize="12" 
+                                               HorizontalAlignment="Center"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                            </Button>
+                        </UniformGrid>
+
+                        <!-- Info box -->
+                        <Border Background="#2229B6F6" CornerRadius="6" Padding="12" Margin="0,8,0,0">
+                            <TextBlock TextWrapping="Wrap" FontSize="12" 
+                                       Foreground="{StaticResource TextPrimaryBrush}">
+                                <Run Foreground="#29B6F6" FontWeight="Bold">💡 Tip:</Run>
+                                HP Support Assistant can automatically detect and install the correct drivers for your system.
+                                Install it from the Microsoft Store or HP's website for the best experience.
+                            </TextBlock>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
                 <!-- Fan Boost / Maintenance -->
                 <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16">
                     <StackPanel>

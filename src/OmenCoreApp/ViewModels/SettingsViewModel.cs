@@ -127,6 +127,9 @@ namespace OmenCore.ViewModels
             OpenGitHubCommand = new RelayCommand(_ => OpenUrl("https://github.com/theantipopau/omencore"));
             OpenReleaseNotesCommand = new RelayCommand(_ => OpenUrl("https://github.com/theantipopau/omencore/releases"));
             OpenIssuesCommand = new RelayCommand(_ => OpenUrl("https://github.com/theantipopau/omencore/issues"));
+            OpenHpSupportAssistantCommand = new RelayCommand(_ => OpenUrl("https://support.hp.com/drivers"));
+            OpenHpDriversPageCommand = new RelayCommand(_ => OpenUrl("https://support.hp.com/drivers"));
+            OpenOmenGamingHubCommand = new RelayCommand(_ => OpenUrl("https://apps.microsoft.com/detail/9nqdw009t0t0"));
             StartFanCleaningCommand = new AsyncRelayCommand(async _ => await StartFanCleaningAsync(), _ => CanStartFanCleaning && !IsFanCleaningActive);
             ResetToDefaultsCommand = new RelayCommand(_ => ResetToDefaults());
             InstallDriverCommand = new RelayCommand(_ => InstallDriver());
@@ -1562,6 +1565,9 @@ namespace OmenCore.ViewModels
         public ICommand OpenGitHubCommand { get; }
         public ICommand OpenReleaseNotesCommand { get; }
         public ICommand OpenIssuesCommand { get; }
+        public ICommand OpenHpSupportAssistantCommand { get; }
+        public ICommand OpenHpDriversPageCommand { get; }
+        public ICommand OpenOmenGamingHubCommand { get; }
         public ICommand StartFanCleaningCommand { get; }
         public ICommand ResetToDefaultsCommand { get; }
         public ICommand InstallDriverCommand { get; }
