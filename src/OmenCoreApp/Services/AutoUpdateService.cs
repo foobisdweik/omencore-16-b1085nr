@@ -7,10 +7,21 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 using OmenCore.Models;
 
 namespace OmenCore.Services
 {
+    /// <summary>
+    /// Installation type for platform-aware updates
+    /// </summary>
+    public enum InstallationType
+    {
+        Installer,  // Installed via Setup.exe
+        Portable,   // Running from extracted folder
+        Unknown
+    }
+
     /// <summary>
     /// Handles application auto-update functionality
     /// </summary>
@@ -21,6 +32,7 @@ namespace OmenCore.Services
         private readonly string _updateCheckUrl;
         private readonly string _downloadDirectory;
         private readonly Version _currentVersion;
+        private readonly InstallationType _installationType;
         private System.Timers.Timer? _checkTimer;
         private UpdatePreferences? _preferences;
         private bool _disposed;
@@ -28,6 +40,11 @@ namespace OmenCore.Services
         public event EventHandler<UpdateCheckResult>? UpdateCheckCompleted;
         public event EventHandler<UpdateDownloadProgress>? DownloadProgressChanged;
         public event EventHandler<UpdateInstallResult>? InstallCompleted;
+        
+        /// <summary>
+        /// Gets the detected installation type (Installer or Portable)
+        /// </summary>
+        public InstallationType InstallationType => _installationType;
         
         public AutoUpdateService(LoggingService logging, string updateCheckUrl = "https://api.github.com/repos/theantipopau/omencore/releases/latest")
         {
@@ -43,6 +60,56 @@ namespace OmenCore.Services
             _downloadDirectory = Path.Combine(Path.GetTempPath(), "OmenCore", "Updates");
             Directory.CreateDirectory(_downloadDirectory);
             _currentVersion = LoadCurrentVersion();
+            _installationType = DetectInstallationType();
+            _logging.Info($"Detected installation type: {_installationType}");
+        }
+        
+        /// <summary>
+        /// Detect whether running from installer or portable mode
+        /// </summary>
+        private InstallationType DetectInstallationType()
+        {
+            try
+            {
+                // Check for uninstall registry entry (indicates installer installation)
+                using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\OmenCore");
+                if (key != null)
+                    return InstallationType.Installer;
+                
+                // Check current user registry as well
+                using var keyUser = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\OmenCore");
+                if (keyUser != null)
+                    return InstallationType.Installer;
+                
+                // Check if running from Program Files (typical installer location)
+                // Use AppContext.BaseDirectory for single-file app compatibility
+                var baseDir = AppContext.BaseDirectory;
+                var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+                var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+                
+                if (!string.IsNullOrEmpty(baseDir) && 
+                    (baseDir.StartsWith(programFiles, StringComparison.OrdinalIgnoreCase) ||
+                     baseDir.StartsWith(programFilesX86, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return InstallationType.Installer;
+                }
+                
+                // Check for uninstaller in the same directory
+                if (!string.IsNullOrEmpty(baseDir) && 
+                    (File.Exists(Path.Combine(baseDir, "unins000.exe")) ||
+                     File.Exists(Path.Combine(baseDir, "Uninstall.exe"))))
+                {
+                    return InstallationType.Installer;
+                }
+                
+                // Default to portable if no installer indicators found
+                return InstallationType.Portable;
+            }
+            catch (Exception ex)
+            {
+                _logging.Warn($"Failed to detect installation type: {ex.Message}");
+                return InstallationType.Unknown;
+            }
         }
         
         /// <summary>
@@ -198,29 +265,12 @@ namespace OmenCore.Services
                     // Try to extract SHA256 hash from release notes
                     result.LatestVersion.Sha256Hash = ExtractHashFromBody(result.LatestVersion.ReleaseNotes) ?? string.Empty;
                     
-                    // Get download URL from assets
+                    // Get download URL from assets - platform-aware selection
                     if (root.TryGetProperty("assets", out var assets) && assets.GetArrayLength() > 0)
                     {
-                        JsonElement selectedAsset = default;
-                        var foundAsset = false;
-                        foreach (var asset in assets.EnumerateArray())
-                        {
-                            var name = asset.GetProperty("name").GetString() ?? string.Empty;
-                            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || name.Contains("Setup", StringComparison.OrdinalIgnoreCase))
-                            {
-                                selectedAsset = asset;
-                                foundAsset = true;
-                                break;
-                            }
+                        var selectedAsset = SelectPlatformAwareAsset(assets);
 
-                            if (!foundAsset && name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                            {
-                                selectedAsset = asset;
-                                foundAsset = true;
-                            }
-                        }
-
-                        if (foundAsset)
+                        if (selectedAsset.ValueKind != JsonValueKind.Undefined)
                         {
                             result.LatestVersion.DownloadUrl = selectedAsset.GetProperty("browser_download_url").GetString() ?? string.Empty;
                             var size = selectedAsset.TryGetProperty("size", out var sizeElement) ? sizeElement.GetInt64() : 0;
@@ -617,6 +667,69 @@ namespace OmenCore.Services
                 return match.Groups[1].Value;
             }
             return null;
+        }
+        
+        /// <summary>
+        /// Select the appropriate update asset based on installation type
+        /// </summary>
+        private JsonElement SelectPlatformAwareAsset(JsonElement assets)
+        {
+            JsonElement installerAsset = default;
+            JsonElement portableAsset = default;
+            JsonElement fallbackAsset = default;
+            
+            foreach (var asset in assets.EnumerateArray())
+            {
+                var name = asset.GetProperty("name").GetString() ?? string.Empty;
+                var nameLower = name.ToLowerInvariant();
+                
+                // Installer detection: Setup.exe, installer in name
+                if (nameLower.Contains("setup") && nameLower.EndsWith(".exe"))
+                {
+                    installerAsset = asset;
+                }
+                // Portable detection: .zip files, "portable" in name
+                else if (nameLower.Contains("portable") || 
+                         (nameLower.EndsWith(".zip") && !nameLower.Contains("source")))
+                {
+                    portableAsset = asset;
+                }
+                // Fallback: any .exe file
+                else if (nameLower.EndsWith(".exe") && fallbackAsset.ValueKind == JsonValueKind.Undefined)
+                {
+                    fallbackAsset = asset;
+                }
+            }
+            
+            // Select based on installation type
+            switch (_installationType)
+            {
+                case InstallationType.Installer:
+                    if (installerAsset.ValueKind != JsonValueKind.Undefined)
+                    {
+                        _logging.Info("Selected installer asset for installed version");
+                        return installerAsset;
+                    }
+                    break;
+                    
+                case InstallationType.Portable:
+                    if (portableAsset.ValueKind != JsonValueKind.Undefined)
+                    {
+                        _logging.Info("Selected portable asset for portable version");
+                        return portableAsset;
+                    }
+                    break;
+            }
+            
+            // Fallback: prefer installer, then portable, then any exe
+            if (installerAsset.ValueKind != JsonValueKind.Undefined)
+                return installerAsset;
+            if (portableAsset.ValueKind != JsonValueKind.Undefined)
+                return portableAsset;
+            if (fallbackAsset.ValueKind != JsonValueKind.Undefined)
+                return fallbackAsset;
+                
+            return default;
         }
 
         private static string FormatFileSize(long bytes)

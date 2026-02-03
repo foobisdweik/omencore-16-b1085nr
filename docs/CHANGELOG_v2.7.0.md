@@ -85,6 +85,13 @@
 - **OMEN Gaming Hub**: Link to official OMEN Hub in Microsoft Store for comparison/compatibility
 - **User-friendly Tips**: Helpful guidance on using HP Support Assistant for best results
 
+### Platform-Aware Update Assets (#25)
+- **Installation Type Detection**: Auto-detect whether running from installer or portable mode
+- **Registry Check**: Looks for uninstall registry entries to identify installed versions
+- **Directory Check**: Checks for Program Files location and uninstaller presence
+- **Smart Asset Selection**: Downloads installer for installed versions, portable ZIP for portable versions
+- **Seamless Updates**: Users always get the appropriate update format for their installation type
+
 ---
 
 ## 🐛 Bug Fixes
@@ -184,17 +191,15 @@
 - [x] Unified RGB layer (#18)
 - [x] Visual polish - gauges/sparklines (#17)
 - [x] HP update guidance panel (#26)
-
-### 🔲 Remaining High Priority
-- [ ] Logitech SDK (#19)
-- [ ] Corsair iCUE SDK (#20)
+- [x] Logitech SDK (#19) - Already implemented
+- [x] Corsair iCUE SDK (#20) - Already implemented
+- [x] Razer Chroma SDK (#21) - Already implemented
+- [x] Platform-aware update assets (#25)
 
 ### 🔲 Remaining Medium Priority
-- [ ] Razer Chroma SDK (#21)
 - [ ] Linux low-overhead mode (#22)
 - [ ] Linux tray integration (#23)
 - [ ] Linux sensor robustness (#24)
-- [ ] Platform-aware update assets (#25)
 
 ---
 
