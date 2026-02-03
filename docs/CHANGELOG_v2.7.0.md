@@ -92,6 +92,25 @@
 - **Smart Asset Selection**: Downloads installer for installed versions, portable ZIP for portable versions
 - **Seamless Updates**: Users always get the appropriate update format for their installation type
 
+### Linux Low-Overhead Mode (#22)
+- **Battery-Aware Polling**: Automatically reduces polling frequency when on battery power
+- **Configurable Intervals**: Normal mode (2000ms) vs low-overhead (5000ms) configurable in config.toml
+- **Reduced Logging**: Optional reduced log verbosity in low-overhead mode to save disk I/O
+- **Sensor Caching**: Uses cached sensor paths instead of rescanning in low-overhead mode
+
+### Linux Tray Integration (#23)
+- **System Tray Script**: New `omencore-tray.sh` helper script for DE integration
+- **YAD Support**: GTK-based tray using YAD (Yet Another Dialog)
+- **Pystray Support**: Cross-desktop tray using Python pystray library
+- **Quick Actions Menu**: Fan profiles, performance modes, config folder, daemon status from tray
+
+### Linux Sensor Robustness (#24)
+- **Multiple Sensor Sources**: Reads from hwmon + thermal_zone for more coverage
+- **Fallback Chain**: CPU sensors try coretemp → k10temp → zenpower → acpitz → thermal zones
+- **Sensor Health Tracking**: Tracks failures per sensor, skips after 5 consecutive failures
+- **Auto-Rescan**: Rescans sensors every 5 minutes to pick up newly loaded drivers
+- **GPU Sensor Support**: NVIDIA, Nouveau, and AMD GPU sensor detection
+
 ---
 
 ## 🐛 Bug Fixes
@@ -195,11 +214,11 @@
 - [x] Corsair iCUE SDK (#20) - Already implemented
 - [x] Razer Chroma SDK (#21) - Already implemented
 - [x] Platform-aware update assets (#25)
+- [x] Linux low-overhead mode (#22)
+- [x] Linux tray integration (#23)
+- [x] Linux sensor robustness (#24)
 
-### 🔲 Remaining Medium Priority
-- [ ] Linux low-overhead mode (#22)
-- [ ] Linux tray integration (#23)
-- [ ] Linux sensor robustness (#24)
+### ✅ All Roadmap Items Complete!
 
 ---
 

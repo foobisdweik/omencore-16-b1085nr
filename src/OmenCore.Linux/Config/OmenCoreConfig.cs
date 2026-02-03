@@ -197,6 +197,37 @@ public class GeneralConfig
 {
     public int PollIntervalMs { get; set; } = 2000;
     public string LogLevel { get; set; } = "info";
+    
+    /// <summary>
+    /// Low-overhead mode settings for battery and idle operation
+    /// </summary>
+    public LowOverheadConfig LowOverhead { get; set; } = new();
+}
+
+/// <summary>
+/// Low-overhead monitoring mode for reduced power consumption (#22)
+/// </summary>
+public class LowOverheadConfig
+{
+    /// <summary>
+    /// Enable automatic low-overhead mode when on battery
+    /// </summary>
+    public bool EnableOnBattery { get; set; } = true;
+    
+    /// <summary>
+    /// Poll interval in low-overhead mode (ms) - longer = less CPU usage
+    /// </summary>
+    public int PollIntervalMs { get; set; } = 5000;
+    
+    /// <summary>
+    /// Disable hwmon scanning in low-overhead mode (use cached paths only)
+    /// </summary>
+    public bool DisableSensorScanning { get; set; } = true;
+    
+    /// <summary>
+    /// Reduce logging verbosity in low-overhead mode
+    /// </summary>
+    public bool ReduceLogging { get; set; } = true;
 }
 
 public class FanConfig

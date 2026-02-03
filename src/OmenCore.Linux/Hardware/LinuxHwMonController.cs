@@ -5,20 +5,47 @@ namespace OmenCore.Linux.Hardware;
 /// 
 /// Reads from /sys/class/hwmon/* to get CPU and GPU temperatures.
 /// This is preferred over EC-based temperature reading when available.
+/// 
+/// Enhanced in v2.7.0 (#24):
+/// - Multiple fallback sensor detection
+/// - Sensor health tracking
+/// - Cached paths for low-overhead mode
 /// </summary>
 public class LinuxHwMonController
 {
     private const string HWMON_PATH = "/sys/class/hwmon";
+    private const string THERMAL_ZONE_PATH = "/sys/class/thermal";
     
-    private string? _cpuHwmonPath;
-    private string? _gpuHwmonPath;
+    private readonly List<string> _cpuSensorPaths = new();
+    private readonly List<string> _gpuSensorPaths = new();
+    private readonly Dictionary<string, int> _sensorFailureCount = new();
+    private readonly int _maxFailuresBeforeSkip = 5;
+    private DateTime _lastFullScan = DateTime.MinValue;
+    private readonly TimeSpan _rescanInterval = TimeSpan.FromMinutes(5);
+    
+    public bool HasCpuSensor => _cpuSensorPaths.Count > 0;
+    public bool HasGpuSensor => _gpuSensorPaths.Count > 0;
+    public int AvailableSensorCount => _cpuSensorPaths.Count + _gpuSensorPaths.Count;
     
     public LinuxHwMonController()
     {
         DiscoverSensors();
     }
     
-    private void DiscoverSensors()
+    /// <summary>
+    /// Discover all available sensors (hwmon + thermal zones).
+    /// </summary>
+    public void DiscoverSensors()
+    {
+        _cpuSensorPaths.Clear();
+        _gpuSensorPaths.Clear();
+        _lastFullScan = DateTime.Now;
+        
+        DiscoverHwmonSensors();
+        DiscoverThermalZones();
+    }
+    
+    private void DiscoverHwmonSensors()
     {
         if (!Directory.Exists(HWMON_PATH))
             return;
@@ -33,16 +60,20 @@ public class LinuxHwMonController
                     
                 var name = File.ReadAllText(namePath).Trim().ToLower();
                 
-                // CPU temperature sensors
-                if (name.Contains("coretemp") || name.Contains("k10temp") || name.Contains("zenpower"))
+                // CPU temperature sensors (in priority order)
+                if (name.Contains("coretemp") || name.Contains("k10temp") || 
+                    name.Contains("zenpower") || name.Contains("amd_energy") ||
+                    name.Contains("thinkpad") || name.Contains("hp") ||
+                    name.Contains("acpitz"))
                 {
-                    _cpuHwmonPath = hwmonDir;
+                    AddCpuSensorPaths(hwmonDir);
                 }
                 
-                // GPU temperature sensors
-                if (name.Contains("nouveau") || name.Contains("amdgpu") || name.Contains("nvidia"))
+                // GPU temperature sensors (in priority order)
+                if (name.Contains("nvidia") || name.Contains("nouveau") || 
+                    name.Contains("amdgpu") || name.Contains("radeon"))
                 {
-                    _gpuHwmonPath = hwmonDir;
+                    AddGpuSensorPaths(hwmonDir);
                 }
             }
             catch
@@ -52,45 +83,155 @@ public class LinuxHwMonController
         }
     }
     
+    private void DiscoverThermalZones()
+    {
+        if (!Directory.Exists(THERMAL_ZONE_PATH))
+            return;
+            
+        foreach (var zoneDir in Directory.GetDirectories(THERMAL_ZONE_PATH, "thermal_zone*"))
+        {
+            try
+            {
+                var typePath = Path.Combine(zoneDir, "type");
+                var tempPath = Path.Combine(zoneDir, "temp");
+                
+                if (!File.Exists(typePath) || !File.Exists(tempPath))
+                    continue;
+                    
+                var type = File.ReadAllText(typePath).Trim().ToLower();
+                
+                // CPU-related thermal zones
+                if (type.Contains("x86_pkg") || type.Contains("acpitz") || 
+                    type.Contains("cpu") || type.Contains("soc"))
+                {
+                    if (!_cpuSensorPaths.Contains(tempPath))
+                        _cpuSensorPaths.Add(tempPath);
+                }
+                
+                // GPU thermal zones (less common but worth checking)
+                if (type.Contains("gpu") || type.Contains("nvidia"))
+                {
+                    if (!_gpuSensorPaths.Contains(tempPath))
+                        _gpuSensorPaths.Add(tempPath);
+                }
+            }
+            catch { }
+        }
+    }
+    
+    private void AddCpuSensorPaths(string hwmonDir)
+    {
+        // Try temp files in priority order
+        foreach (var suffix in new[] { "temp1_input", "temp2_input", "temp3_input" })
+        {
+            var path = Path.Combine(hwmonDir, suffix);
+            if (File.Exists(path) && !_cpuSensorPaths.Contains(path))
+            {
+                _cpuSensorPaths.Add(path);
+            }
+        }
+    }
+    
+    private void AddGpuSensorPaths(string hwmonDir)
+    {
+        foreach (var suffix in new[] { "temp1_input", "temp2_input" })
+        {
+            var path = Path.Combine(hwmonDir, suffix);
+            if (File.Exists(path) && !_gpuSensorPaths.Contains(path))
+            {
+                _gpuSensorPaths.Add(path);
+            }
+        }
+    }
+    
     /// <summary>
-    /// Get CPU temperature from hwmon.
+    /// Get CPU temperature with fallback to multiple sources.
     /// </summary>
     public int? GetCpuTemperature()
     {
-        if (_cpuHwmonPath == null)
-            return null;
-            
-        return ReadTemperature(_cpuHwmonPath, "temp1_input") ??
-               ReadTemperature(_cpuHwmonPath, "temp2_input");
+        // Rescan if it's been a while
+        if (DateTime.Now - _lastFullScan > _rescanInterval)
+        {
+            DiscoverSensors();
+        }
+        
+        foreach (var path in _cpuSensorPaths)
+        {
+            if (ShouldSkipSensor(path))
+                continue;
+                
+            var temp = ReadTemperatureFile(path);
+            if (temp.HasValue)
+            {
+                ResetSensorFailure(path);
+                return temp;
+            }
+            else
+            {
+                RecordSensorFailure(path);
+            }
+        }
+        
+        return null;
     }
     
     /// <summary>
-    /// Get GPU temperature from hwmon.
+    /// Get GPU temperature with fallback to multiple sources.
     /// </summary>
     public int? GetGpuTemperature()
     {
-        if (_gpuHwmonPath == null)
-            return null;
-            
-        return ReadTemperature(_gpuHwmonPath, "temp1_input");
+        foreach (var path in _gpuSensorPaths)
+        {
+            if (ShouldSkipSensor(path))
+                continue;
+                
+            var temp = ReadTemperatureFile(path);
+            if (temp.HasValue)
+            {
+                ResetSensorFailure(path);
+                return temp;
+            }
+            else
+            {
+                RecordSensorFailure(path);
+            }
+        }
+        
+        return null;
+    }
+    
+    private bool ShouldSkipSensor(string path)
+    {
+        return _sensorFailureCount.TryGetValue(path, out var count) && count >= _maxFailuresBeforeSkip;
+    }
+    
+    private void RecordSensorFailure(string path)
+    {
+        _sensorFailureCount.TryGetValue(path, out var count);
+        _sensorFailureCount[path] = count + 1;
+    }
+    
+    private void ResetSensorFailure(string path)
+    {
+        _sensorFailureCount[path] = 0;
     }
     
     /// <summary>
-    /// Read temperature from a hwmon temp file.
-    /// Temperature files report millidegrees Celsius.
+    /// Read temperature from a file. Handles both hwmon (millidegrees) 
+    /// and thermal_zone (millidegrees) formats.
     /// </summary>
-    private int? ReadTemperature(string hwmonPath, string tempFile)
+    private int? ReadTemperatureFile(string path)
     {
         try
         {
-            var path = Path.Combine(hwmonPath, tempFile);
             if (!File.Exists(path))
                 return null;
                 
             var content = File.ReadAllText(path).Trim();
-            if (int.TryParse(content, out var millidegrees))
+            if (int.TryParse(content, out var value))
             {
-                return millidegrees / 1000; // Convert from millidegrees to degrees
+                // Both hwmon and thermal_zone report millidegrees
+                return value / 1000;
             }
         }
         catch

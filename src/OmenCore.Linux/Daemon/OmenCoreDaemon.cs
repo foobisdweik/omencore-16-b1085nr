@@ -14,6 +14,7 @@ namespace OmenCore.Linux.Daemon;
 /// - Signal handling (SIGTERM, SIGHUP)
 /// - PID file management
 /// - Graceful shutdown with settings restoration
+/// - Low-overhead mode on battery (v2.7.0)
 /// </summary>
 public class OmenCoreDaemon : IDisposable
 {
@@ -24,10 +25,12 @@ public class OmenCoreDaemon : IDisposable
     private readonly LinuxEcController _ec;
     private readonly LinuxHwMonController _hwmon;
     private readonly LinuxKeyboardController _keyboard;
+    private readonly LinuxBatteryController _battery;
     private readonly FanCurveEngine? _fanCurveEngine;
     private readonly CancellationTokenSource _cts = new();
     
     private bool _isRunning;
+    private bool _lowOverheadMode;
     private FileSystemWatcher? _configWatcher;
     
     public OmenCoreDaemon(OmenCoreConfig config)
@@ -36,6 +39,7 @@ public class OmenCoreDaemon : IDisposable
         _ec = new LinuxEcController();
         _hwmon = new LinuxHwMonController();
         _keyboard = new LinuxKeyboardController();
+        _battery = new LinuxBatteryController();
         
         // Initialize fan curve engine if custom curve is enabled
         if (_config.Fan.Profile == "custom" && _config.Fan.Curve.Enabled)
@@ -123,12 +127,50 @@ public class OmenCoreDaemon : IDisposable
         _cts.Cancel();
     }
     
+    /// <summary>
+    /// Get effective poll interval based on low-overhead mode.
+    /// </summary>
+    private int GetEffectivePollInterval()
+    {
+        return _lowOverheadMode 
+            ? _config.General.LowOverhead.PollIntervalMs 
+            : _config.General.PollIntervalMs;
+    }
+    
+    /// <summary>
+    /// Check and update low-overhead mode based on battery state.
+    /// </summary>
+    private void UpdateLowOverheadMode()
+    {
+        if (!_config.General.LowOverhead.EnableOnBattery)
+            return;
+            
+        var onBattery = _battery.IsOnBattery();
+        
+        if (onBattery != _lowOverheadMode)
+        {
+            _lowOverheadMode = onBattery;
+            
+            if (!_config.General.LowOverhead.ReduceLogging)
+            {
+                Log(_lowOverheadMode 
+                    ? "Switched to low-overhead mode (on battery)" 
+                    : "Switched to normal mode (on AC)");
+            }
+        }
+    }
+    
     private async Task RunMainLoopAsync()
     {
+        var logCounter = 0;
+        
         while (!_cts.Token.IsCancellationRequested)
         {
             try
             {
+                // Check battery state for low-overhead mode
+                UpdateLowOverheadMode();
+                
                 // If not using custom curve, just monitor and log
                 if (_fanCurveEngine == null)
                 {
@@ -136,14 +178,23 @@ public class OmenCoreDaemon : IDisposable
                     var gpuTemp = _ec.GetGpuTemperature() ?? _hwmon.GetGpuTemperature() ?? 0;
                     var (fan1, fan2) = _ec.GetFanSpeeds();
                     
-                    // Log periodically (every 30 seconds)
-                    if (DateTime.Now.Second % 30 == 0)
+                    // Log periodically (less often in low-overhead mode)
+                    logCounter++;
+                    var logInterval = _lowOverheadMode ? 60 : 30;
+                    var pollInterval = GetEffectivePollInterval();
+                    
+                    if (logCounter * pollInterval / 1000 >= logInterval)
                     {
-                        Log($"Status: CPU {cpuTemp}°C, GPU {gpuTemp}°C, Fans {fan1}/{fan2} RPM");
+                        if (!_lowOverheadMode || !_config.General.LowOverhead.ReduceLogging)
+                        {
+                            var batteryStr = _lowOverheadMode ? $" [Battery {_battery.GetBatteryPercentage()}%]" : "";
+                            Log($"Status: CPU {cpuTemp}°C, GPU {gpuTemp}°C, Fans {fan1}/{fan2} RPM{batteryStr}");
+                        }
+                        logCounter = 0;
                     }
                 }
                 
-                await Task.Delay(_config.General.PollIntervalMs, _cts.Token);
+                await Task.Delay(GetEffectivePollInterval(), _cts.Token);
             }
             catch (OperationCanceledException)
             {
