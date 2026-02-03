@@ -71,6 +71,13 @@
 - **Time-based Scheduling**: Schedule scenes for specific times (e.g., Night Mode at 10 PM)
 - **Per-Zone Colors**: Scenes can define different colors for each keyboard zone
 
+### Visual Polish - Gauges & Sparklines (#17)
+- **Sparkline Control**: Lightweight inline mini-chart for showing recent trends
+- **CircularGauge Control**: Semi-circular gauge for percentage values
+- **Dashboard Sparklines**: CPU, GPU, and RAM cards now show live temperature/usage sparklines
+- **Real-time Updates**: Sparklines update with last 20 samples for smooth trend visualization
+- **Color-coded**: Each component has its own accent color (CPU=Red, GPU=Blue, RAM=Purple)
+
 ---
 
 ## 🐛 Bug Fixes
@@ -168,13 +175,13 @@
 - [x] Tray quick actions (#15)
 - [x] Temperature history bug fix (v2.6.1)
 - [x] Unified RGB layer (#18)
+- [x] Visual polish - gauges/sparklines (#17)
 
 ### 🔲 Remaining High Priority
 - [ ] Logitech SDK (#19)
 - [ ] Corsair iCUE SDK (#20)
 
 ### 🔲 Remaining Medium Priority
-- [ ] Visual polish - gauges/sparklines (#17)
 - [ ] Razer Chroma SDK (#21)
 - [ ] Linux low-overhead mode (#22)
 - [ ] Linux tray integration (#23)
