@@ -6,35 +6,138 @@
              xmlns:controls="clr-namespace:OmenCore.Controls"
              mc:Ignorable="d" 
              d:DesignHeight="1200" d:DesignWidth="1000">
+    
+    <UserControl.Resources>
+        <!-- MSI Afterburner-inspired Slider Style -->
+        <Style x:Key="TuningSlider" TargetType="Slider">
+            <Setter Property="Background" Value="#1A1A2E"/>
+            <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid>
+                            <!-- Track Background with gradient -->
+                            <Border Background="#0D0D15" CornerRadius="4" Height="8" 
+                                    VerticalAlignment="Center" Margin="8,0"/>
+                            
+                            <!-- Filled portion (progress track) -->
+                            <Border Background="{TemplateBinding Foreground}" CornerRadius="4" Height="8"
+                                    VerticalAlignment="Center" Margin="8,0"
+                                    HorizontalAlignment="Left"
+                                    Width="{Binding RelativeSource={RelativeSource TemplatedParent}, 
+                                            Path=Value, 
+                                            Converter={StaticResource SliderValueToWidthConverter}}">
+                                <Border.OpacityMask>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#FFFFFFFF" Offset="0"/>
+                                        <GradientStop Color="#FFFFFFFF" Offset="0.98"/>
+                                        <GradientStop Color="#00FFFFFF" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.OpacityMask>
+                            </Border>
+                            
+                            <!-- Track with thumb -->
+                            <Track x:Name="PART_Track">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource SliderButtonStyle}" Command="Slider.DecreaseLarge"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Style>
+                                            <Style TargetType="Thumb">
+                                                <Setter Property="Width" Value="18"/>
+                                                <Setter Property="Height" Value="18"/>
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="Thumb">
+                                                            <Grid>
+                                                                <!-- Glow effect -->
+                                                                <Ellipse Fill="{StaticResource AccentBrush}" Opacity="0.3"
+                                                                         Width="24" Height="24" Margin="-3"/>
+                                                                <!-- Main thumb -->
+                                                                <Ellipse Fill="{StaticResource AccentBrush}" 
+                                                                         Stroke="#40FFFFFF" StrokeThickness="2"/>
+                                                                <!-- Inner highlight -->
+                                                                <Ellipse Fill="White" Width="6" Height="6"
+                                                                         HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Grid>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </Thumb.Style>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource SliderButtonStyle}" Command="Slider.IncreaseLarge"/>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        
+        <!-- Gauge Arc Path for monitoring displays -->
+        <Style x:Key="GaugeValue" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource MonospaceFontFamily}"/>
+            <Setter Property="FontSize" Value="24"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+        
+        <Style x:Key="GaugeLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Resources>
+    
     <ScrollViewer Style="{StaticResource SmoothScrollViewer}" 
                   Padding="0,0,12,0">
         <StackPanel Margin="20,20,20,40">
-            <!-- Header -->
-            <StackPanel Margin="0,0,0,24">
-                <TextBlock Text="CPU / GPU Tuning" Style="{StaticResource Heading1}"/>
-                <TextBlock Text="CPU undervolting, power limits, and GPU overclocking for maximum performance" 
-                           Style="{StaticResource Caption}"
-                           Opacity="0.9"/>
-            </StackPanel>
+            <!-- Header with Icon -->
+            <Grid Margin="0,0,0,24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                
+                <Border Grid.Column="0" Background="#1A1A2E" CornerRadius="12" 
+                        Padding="14" Margin="0,0,16,0">
+                    <Path Data="{StaticResource IconTune}" Fill="{StaticResource AccentBrush}" 
+                          Width="28" Height="28" Stretch="Uniform"/>
+                </Border>
+                
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="CPU / GPU Tuning" Style="{StaticResource Heading1}" Margin="0"/>
+                    <TextBlock Text="Advanced performance tuning • Undervolt • Overclock • Power Limits" 
+                               Style="{StaticResource Caption}" Opacity="0.9"/>
+                </StackPanel>
+            </Grid>
 
-            <!-- Warning Banner -->
-            <Border Background="#2D1F1F"
-                    BorderBrush="#F44336"
+            <!-- Warning Banner - Compact -->
+            <Border Background="#1A0F0F"
+                    BorderBrush="#44F44336"
                     BorderThickness="1"
                     CornerRadius="8"
-                    Padding="16"
+                    Padding="14"
                     Margin="0,0,0,20">
-                <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap">
-                    <Run Text="⚠️ ADVANCED TUNING - USE AT YOUR OWN RISK" FontWeight="Bold" Foreground="#F44336" FontSize="14"/>
-                    <LineBreak/><LineBreak/>
-                    <Run Text="These settings can affect system stability. Improper values may cause crashes, freezes, or boot failures."/>
-                    <LineBreak/>
-                    <Run Text="• Start with small changes and test stability before applying larger adjustments"/>
-                    <LineBreak/>
-                    <Run Text="• CPU undervolt settings are NOT persistent - they reset on reboot unless auto-apply is enabled"/>
-                    <LineBreak/>
-                    <Run Text="• GPU settings may require driver restart to take effect"/>
-                </TextBlock>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Path Data="{StaticResource IconWarning}" Fill="#F44336" 
+                          Width="20" Height="20" Stretch="Uniform" Margin="0,0,12,0"
+                          VerticalAlignment="Top"/>
+                    <TextBlock Grid.Column="1" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap">
+                        <Run Text="ADVANCED TUNING" FontWeight="Bold" Foreground="#F44336"/>
+                        <Run Text=" — Improper values may cause crashes or freezes. Start small, test stability. Settings reset on reboot unless auto-apply is enabled."/>
+                    </TextBlock>
+                </Grid>
             </Border>
 
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -44,319 +147,482 @@
             <TextBlock Text="CPU Tuning" FontSize="18" FontWeight="SemiBold" 
                        Foreground="{StaticResource AccentBrush}" Margin="0,0,0,16"/>
 
-            <!-- CPU Undervolt Section -->
-            <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16"
+            <!-- CPU Undervolt Section - Enhanced Design -->
+            <Border Style="{StaticResource SurfaceCard}" Padding="0" Margin="0,0,0,16"
                     Visibility="{Binding SystemControl.IsUndervoltSupported, Converter={StaticResource BoolToVisibility}, FallbackValue=Visible}">
-                <StackPanel>
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="CPU Undervolt (Voltage Offset)" FontSize="20" FontWeight="SemiBold" 
-                                   Foreground="{StaticResource TextPrimaryBrush}"/>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <TextBlock Text="Status: " FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                            <TextBlock Text="{Binding SystemControl.UndervoltStatusText}" 
-                                       FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{Binding SystemControl.UndervoltStatusColor}"
-                                       VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Grid>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
                     
-                    <TextBlock Text="Reduce CPU voltage to lower temperatures while maintaining performance. More negative = more undervolt." 
-                               FontSize="12"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               Margin="0,0,0,16" TextWrapping="Wrap"/>
-
-                    <!-- Core Voltage Offset -->
-                    <StackPanel Margin="0,0,0,16">
-                        <Grid Margin="0,0,0,8">
+                    <!-- CPU Header Bar with Live Stats -->
+                    <Border Grid.Row="0" Background="#0A0A12" Padding="20,16">
+                        <Grid>
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Core Voltage Offset:"
-                                       FontSize="14"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Grid.Column="1"
-                                       Text="{Binding SystemControl.RequestedCoreOffset, StringFormat={}{0} mV}"
-                                       FontSize="14" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentBrush}"/>
+                            
+                            <!-- CPU Vendor Logo -->
+                            <Border Grid.Column="0" Background="#12121A" CornerRadius="8" 
+                                    Padding="10" Margin="0,0,16,0" VerticalAlignment="Center">
+                                <Image Width="32" Height="32">
+                                    <Image.Style>
+                                        <Style TargetType="Image">
+                                            <Setter Property="Source" Value="pack://application:,,,/Assets/intel.png"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SystemControl.CpuVendor}" Value="AMD">
+                                                    <Setter Property="Source" Value="pack://application:,,,/Assets/amd.png"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Image.Style>
+                                </Image>
+                            </Border>
+                            
+                            <!-- Title and Status -->
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="CPU Undervolt (Voltage Offset)" FontSize="16" FontWeight="SemiBold" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="{Binding SystemControl.CpuDisplayName}" 
+                                           FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                           Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                    <TextBlock Text="Status: " FontSize="10" Foreground="{StaticResource TextMutedBrush}"/>
+                                    <TextBlock Text="{Binding SystemControl.UndervoltStatusText}" 
+                                               FontSize="10" FontWeight="SemiBold"
+                                               Foreground="{Binding SystemControl.UndervoltStatusColor}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            
+                            <!-- Live CPU Stats -->
+                            <Border Grid.Column="2" Background="#08080C" CornerRadius="8" Padding="16,10">
+                                <StackPanel Orientation="Horizontal">
+                                    <!-- Temperature -->
+                                    <StackPanel Margin="0,0,20,0" HorizontalAlignment="Center">
+                                        <Grid Width="50" Height="50">
+                                            <Ellipse Stroke="#1A1A2E" StrokeThickness="4" Fill="Transparent"/>
+                                            <Ellipse Stroke="{Binding LatestMonitoringSample.CpuTemperatureC, Converter={StaticResource TemperatureToColorConverter}, FallbackValue=#45C7FF}" 
+                                                     StrokeThickness="4" Fill="Transparent" Opacity="0.8"
+                                                     StrokeDashArray="3.14 10"/>
+                                            <TextBlock Text="{Binding LatestMonitoringSample.CpuTemperatureC, StringFormat={}{0:F0}°}"
+                                                       FontFamily="{StaticResource MonospaceFontFamily}"
+                                                       FontSize="14" FontWeight="Bold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <TextBlock Text="TEMP" FontSize="9" Foreground="{StaticResource TextMutedBrush}" 
+                                                   HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                    
+                                    <!-- Power Draw -->
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <Grid Width="50" Height="50">
+                                            <Ellipse Stroke="#1A1A2E" StrokeThickness="4" Fill="Transparent"/>
+                                            <Ellipse Stroke="#FF9800" StrokeThickness="4" Fill="Transparent" Opacity="0.6"
+                                                     StrokeDashArray="2.5 10"/>
+                                            <TextBlock Text="{Binding LatestMonitoringSample.CpuPowerWatts, StringFormat={}{0:F0}W}"
+                                                       FontFamily="{StaticResource MonospaceFontFamily}"
+                                                       FontSize="14" FontWeight="Bold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <TextBlock Text="POWER" FontSize="9" Foreground="{StaticResource TextMutedBrush}" 
+                                                   HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
                         </Grid>
-                        <Slider Value="{Binding SystemControl.RequestedCoreOffset, Mode=TwoWay}"
-                                Minimum="-200" Maximum="0"
-                                TickFrequency="5"
-                                IsSnapToTickEnabled="True"
-                                TickPlacement="BottomRight"/>
-                        <TextBlock Text="Controls voltage for CPU performance cores. Start at -50mV and work down."
-                                   FontSize="11"
+                    </Border>
+                    
+                    <!-- Controls -->
+                    <StackPanel Grid.Row="1" Margin="24">
+                        <TextBlock Text="Reduce CPU voltage to lower temperatures while maintaining performance. More negative = more undervolt." 
+                                   FontSize="12"
                                    Foreground="{StaticResource TextSecondaryBrush}"
-                                   Margin="0,4,0,0"/>
-                    </StackPanel>
+                                   Margin="0,0,0,20" TextWrapping="Wrap"/>
 
-                    <!-- Cache Voltage Offset -->
-                    <StackPanel Margin="0,0,0,16">
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Cache Voltage Offset:"
-                                       FontSize="14"
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
-                            <TextBlock Grid.Column="1"
-                                       Text="{Binding SystemControl.RequestedCacheOffset, StringFormat={}{0} mV}"
-                                       FontSize="14" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentBrush}"/>
-                        </Grid>
-                        <Slider Value="{Binding SystemControl.RequestedCacheOffset, Mode=TwoWay}"
-                                Minimum="-200" Maximum="0"
-                                TickFrequency="5"
-                                IsSnapToTickEnabled="True"
-                                TickPlacement="BottomRight"/>
-                        <TextBlock Text="Controls voltage for CPU cache (L3). Usually same or less aggressive than core."
-                                   FontSize="11"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   Margin="0,4,0,0"/>
-                    </StackPanel>
+                        <!-- Core Voltage Offset - Enhanced Slider -->
+                        <Border Background="#0A0A12" CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="80"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="CORE OFFSET" FontSize="10" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextMutedBrush}"/>
+                                    <TextBlock Text="Voltage" FontSize="9" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                </StackPanel>
+                                
+                                <Slider Grid.Column="1" 
+                                        Value="{Binding SystemControl.RequestedCoreOffset, Mode=TwoWay}"
+                                        Minimum="-200" Maximum="0"
+                                        TickFrequency="5"
+                                        IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center"
+                                        Margin="16,0"/>
+                                
+                                <Border Grid.Column="2" Background="#12121A" CornerRadius="4" 
+                                        Padding="8,4" HorizontalAlignment="Right">
+                                    <TextBlock Text="{Binding SystemControl.RequestedCoreOffset, StringFormat={}{0} mV}"
+                                               FontFamily="{StaticResource MonospaceFontFamily}"
+                                               FontSize="14" FontWeight="Bold"
+                                               Foreground="{StaticResource AccentBrush}"
+                                               HorizontalAlignment="Center"/>
+                                </Border>
+                            </Grid>
+                        </Border>
 
-                    <!-- Apply Buttons -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Content="Apply Undervolt" 
-                                Style="{StaticResource ModernButton}"
-                                Command="{Binding SystemControl.ApplyUndervoltCommand}"
-                                Padding="16,8" Margin="0,0,8,0"/>
-                        
-                        <Button Content="Reset to 0mV" 
-                                Style="{StaticResource SecondaryButton}"
-                                Command="{Binding SystemControl.ResetUndervoltCommand}"
-                                Padding="16,8"/>
+                        <!-- Cache Voltage Offset - Enhanced Slider -->
+                        <Border Background="#0A0A12" CornerRadius="8" Padding="16" Margin="0,0,0,20">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="80"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="CACHE OFFSET" FontSize="10" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextMutedBrush}"/>
+                                    <TextBlock Text="L3 Cache" FontSize="9" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                </StackPanel>
+                                
+                                <Slider Grid.Column="1" 
+                                        Value="{Binding SystemControl.RequestedCacheOffset, Mode=TwoWay}"
+                                        Minimum="-200" Maximum="0"
+                                        TickFrequency="5"
+                                        IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center"
+                                        Margin="16,0"/>
+                                
+                                <Border Grid.Column="2" Background="#12121A" CornerRadius="4" 
+                                        Padding="8,4" HorizontalAlignment="Right">
+                                    <TextBlock Text="{Binding SystemControl.RequestedCacheOffset, StringFormat={}{0} mV}"
+                                               FontFamily="{StaticResource MonospaceFontFamily}"
+                                               FontSize="14" FontWeight="Bold"
+                                               Foreground="{StaticResource AccentBlueBrush}"
+                                               HorizontalAlignment="Center"/>
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <!-- Apply Buttons -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Apply Undervolt" 
+                                    Style="{StaticResource ModernButton}"
+                                    Command="{Binding SystemControl.ApplyUndervoltCommand}"
+                                    Padding="16,8" Margin="0,0,8,0"/>
+                            
+                            <Button Content="Reset to 0mV" 
+                                    Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding SystemControl.ResetUndervoltCommand}"
+                                    Padding="16,8"/>
+                        </StackPanel>
                     </StackPanel>
-                </StackPanel>
+                </Grid>
             </Border>
 
-            <!-- CPU Power Limits (PL1/PL2) Section -->
-            <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16"
+            <!-- CPU Power Limits (PL1/PL2) Section - Enhanced Design -->
+            <Border Style="{StaticResource SurfaceCard}" Padding="0" Margin="0,0,0,16"
                     Visibility="{Binding SystemControl.CpuPowerLimitsAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"
                     ToolTip="Adjust CPU sustained (PL1) and burst (PL2) power limits. Higher values = more performance but more heat.">
-                <StackPanel>
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="CPU Power Limits (PL1/PL2)" FontSize="20" FontWeight="SemiBold" 
-                                   Foreground="{StaticResource TextPrimaryBrush}"/>
-                        <Button Grid.Column="1" Content="🔄 Refresh"
-                                Style="{StaticResource ModernButton}"
-                                Command="{Binding SystemControl.RefreshCpuPowerLimitsCommand}"
-                                Padding="8,4"/>
-                    </Grid>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
                     
-                    <Border Background="{StaticResource SurfaceDarkBrush}" 
-                            CornerRadius="8" Padding="12" Margin="0,0,0,16"
-                            BorderBrush="#2196F3" BorderThickness="1">
-                        <TextBlock FontSize="12" 
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   TextWrapping="Wrap">
-                            <Run Text="ℹ️ POWER LIMIT CONTROL" FontWeight="Bold" Foreground="#2196F3" FontSize="13"/>
-                            <LineBreak/><LineBreak/>
-                            <Run Text="• PL1 (Sustained): Long-term power limit for sustained workloads"/>
-                            <LineBreak/>
-                            <Run Text="• PL2 (Burst): Short-term turbo power limit for burst performance"/>
-                            <LineBreak/>
-                            <Run Text="• Higher limits = more performance, more heat, faster fans"/>
-                            <LineBreak/>
-                            <Run Text="• Lower limits = cooler temps, quieter fans, less performance"/>
-                        </TextBlock>
-                    </Border>
-
-                    <!-- Status -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock Grid.Column="0" Text="Status:" 
-                                   FontSize="14" 
-                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                   Margin="0,0,12,0"/>
-                        
-                        <TextBlock Grid.Column="1" 
-                                   Text="{Binding SystemControl.CpuPowerLimitsStatus}" 
-                                   FontSize="14" FontWeight="SemiBold"
-                                   Foreground="{StaticResource AccentBrush}"
-                                   TextWrapping="Wrap"/>
-                    </Grid>
-
-                    <!-- PL1 (Sustained) Slider -->
-                    <StackPanel Margin="0,0,0,16">
-                        <Grid Margin="0,0,0,8">
+                    <!-- Header -->
+                    <Border Grid.Row="0" Background="#0A0A12" Padding="20,16">
+                        <Grid>
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-
-                            <TextBlock Grid.Column="0" Text="PL1 - Sustained Power Limit:" 
-                                       FontSize="14" 
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
                             
-                            <TextBlock Grid.Column="1" 
-                                       Text="{Binding SystemControl.CpuPl1Text}" 
-                                       FontSize="14" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentBrush}"
-                                       Margin="0,0,12,0"/>
+                            <Border Grid.Column="0" Background="#12121A" CornerRadius="8" 
+                                    Padding="10" Margin="0,0,16,0" VerticalAlignment="Center">
+                                <Image Width="32" Height="32">
+                                    <Image.Style>
+                                        <Style TargetType="Image">
+                                            <Setter Property="Source" Value="pack://application:,,,/Assets/intel.png"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SystemControl.CpuVendor}" Value="AMD">
+                                                    <Setter Property="Source" Value="pack://application:,,,/Assets/amd.png"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Image.Style>
+                                </Image>
+                            </Border>
                             
-                            <TextBlock Grid.Column="2" 
-                                       Text="{Binding SystemControl.CurrentPl1Text}" 
-                                       FontSize="12"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="CPU Power Limits (PL1/PL2)" FontSize="16" FontWeight="SemiBold" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="{Binding SystemControl.CpuPowerLimitsStatus}" 
+                                           FontSize="11" Foreground="{StaticResource AccentBrush}"
+                                           Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                            
+                            <Button Grid.Column="2" Content="🔄 Refresh"
+                                    Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding SystemControl.RefreshCpuPowerLimitsCommand}"
+                                    Padding="12,6" FontSize="11"/>
                         </Grid>
-                        
-                        <Slider Minimum="{Binding SystemControl.CpuPl1Min}" Maximum="{Binding SystemControl.CpuPl1Max}" 
-                                TickFrequency="5" 
-                                TickPlacement="BottomRight"
-                                Value="{Binding SystemControl.CpuPl1Watts, Mode=TwoWay}"
-                                IsSnapToTickEnabled="True"
-                                IsEnabled="{Binding SystemControl.CpuPowerLimitsLocked, Converter={StaticResource InverseBooleanConverter}}"/>
-                        
-                        <TextBlock Text="Long-term sustained TDP. Default: 45W for most mobile CPUs." 
-                                   FontSize="11" 
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   Margin="0,4,0,0"/>
-                    </StackPanel>
-
-                    <!-- PL2 (Burst) Slider -->
-                    <StackPanel Margin="0,0,0,16">
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock Grid.Column="0" Text="PL2 - Burst Power Limit:" 
-                                       FontSize="14" 
-                                       Foreground="{StaticResource TextPrimaryBrush}"/>
-                            
-                            <TextBlock Grid.Column="1" 
-                                       Text="{Binding SystemControl.CpuPl2Text}" 
-                                       FontSize="14" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentBrush}"
-                                       Margin="0,0,12,0"/>
-                            
-                            <TextBlock Grid.Column="2" 
-                                       Text="{Binding SystemControl.CurrentPl2Text}" 
-                                       FontSize="12"
-                                       Foreground="{StaticResource TextSecondaryBrush}"/>
-                        </Grid>
-                        
-                        <Slider Minimum="{Binding SystemControl.CpuPl2Min}" Maximum="{Binding SystemControl.CpuPl2Max}" 
-                                TickFrequency="5" 
-                                TickPlacement="BottomRight"
-                                Value="{Binding SystemControl.CpuPl2Watts, Mode=TwoWay}"
-                                IsSnapToTickEnabled="True"
-                                IsEnabled="{Binding SystemControl.CpuPowerLimitsLocked, Converter={StaticResource InverseBooleanConverter}}"/>
-                        
-                        <TextBlock Text="Short-term turbo power. Should be ≥ PL1. Default: 65-115W." 
-                                   FontSize="11" 
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   Margin="0,4,0,0"/>
-                    </StackPanel>
-
-                    <!-- Locked Warning -->
-                    <Border Background="#2D1F1F"
-                            BorderBrush="#F44336"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="12"
-                            Margin="0,0,0,16"
-                            Visibility="{Binding SystemControl.CpuPowerLimitsLocked, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap">
-                            <Run Text="🔒 Power limits locked by BIOS" FontWeight="Bold" Foreground="#F44336"/>
-                            <LineBreak/>
-                            <Run Text="The MSR registers are write-locked. Power limits cannot be modified until the next reboot. Some laptops may require BIOS settings or HP's Unleashed Mode to unlock."/>
-                        </TextBlock>
                     </Border>
-
-                    <!-- Apply Buttons -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Content="Apply Power Limits" 
-                                Style="{StaticResource ModernButton}"
-                                Command="{Binding SystemControl.ApplyCpuPowerLimitsCommand}"
-                                Padding="16,8" Margin="0,0,8,0"
-                                IsEnabled="{Binding SystemControl.CpuPowerLimitsLocked, Converter={StaticResource InverseBooleanConverter}}"/>
-                        
-                        <Button Content="Reset to Defaults" 
-                                Style="{StaticResource SecondaryButton}"
-                                Command="{Binding SystemControl.ResetCpuPowerLimitsCommand}"
-                                Padding="16,8"
-                                IsEnabled="{Binding SystemControl.CpuPowerLimitsLocked, Converter={StaticResource InverseBooleanConverter}}"/>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- TCC Offset Section -->
-            <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16"
-                    Visibility="{Binding SystemControl.TccStatus.IsSupported, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}"
-                    ToolTip="Lower the CPU thermal throttling point. Useful for preventing thermal throttling in demanding workloads.">
-                <StackPanel>
-                    <TextBlock Text="TCC Offset (Thermal Throttle Point)" FontSize="20" FontWeight="SemiBold" 
-                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
-                    <TextBlock Text="Reduce the CPU's Tjmax throttling temperature. Higher offset = lower throttle point = cooler operation but less boost." 
-                               FontSize="12"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               Margin="0,0,0,16" TextWrapping="Wrap"/>
-
-                    <!-- Current TCC Offset Display -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock Grid.Column="0" Text="TCC Offset:"
-                                   FontSize="14"
-                                   Foreground="{StaticResource TextPrimaryBrush}"/>
-                        <TextBlock Grid.Column="1"
-                                   Text="{Binding SystemControl.RequestedTccOffset, StringFormat={}{0}°C}"
-                                   FontSize="14" FontWeight="SemiBold"
-                                   Foreground="{StaticResource AccentBrush}"/>
-                    </Grid>
-
-                    <Slider Value="{Binding SystemControl.RequestedTccOffset, Mode=TwoWay}"
-                            Minimum="0" Maximum="30"
-                            TickFrequency="1"
-                            IsSnapToTickEnabled="True"
-                            TickPlacement="BottomRight"
-                            Margin="0,0,0,8"/>
                     
-                    <TextBlock Text="0 = Default (100°C Tjmax). 15 = Throttle at 85°C. 30 = Throttle at 70°C."
-                               FontSize="11"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               Margin="0,0,0,16"/>
-
-                    <!-- Apply Buttons -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Content="Apply Limit" 
-                                Style="{StaticResource ModernButton}"
-                                Command="{Binding SystemControl.ApplyTccOffsetCommand}"
-                                Padding="16,8" Margin="0,0,8,0"/>
+                    <StackPanel Grid.Row="1" Margin="24">
                         
-                        <Button Content="Remove Limit" 
-                                Style="{StaticResource SecondaryButton}"
-                                Command="{Binding SystemControl.ResetTccOffsetCommand}"
-                                Padding="16,8"/>
+                        <!-- Info Box -->
+                        <Border Background="#0D1520"
+                                BorderBrush="#2196F3"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12"
+                                Margin="0,0,0,20">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Data="{StaticResource IconAbout}" Fill="#2196F3" 
+                                      Width="16" Height="16" Stretch="Uniform" 
+                                      Margin="0,0,10,0" VerticalAlignment="Top"/>
+                                <TextBlock Grid.Column="1" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap">
+                                    <Run Text="PL1" FontWeight="SemiBold" Foreground="#64B5F6"/> <Run Text="= Sustained TDP •"/>
+                                    <Run Text="PL2" FontWeight="SemiBold" Foreground="#64B5F6"/> <Run Text="= Burst power for turbo • Higher = more performance &amp; heat"/>
+                                </TextBlock>
+                            </Grid>
+                        </Border>
+
+                        <!-- PL1 (Sustained) Slider - Enhanced -->
+                        <Border Background="#0A0A12" CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="100"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="PL1 SUSTAINED" FontSize="10" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextMutedBrush}"/>
+                                    <TextBlock Text="Long-term TDP" FontSize="9" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                </StackPanel>
+                                
+                                <Slider Grid.Column="1" 
+                                        Minimum="{Binding SystemControl.CpuPl1Min}" 
+                                        Maximum="{Binding SystemControl.CpuPl1Max}" 
+                                        TickFrequency="5" 
+                                        Value="{Binding SystemControl.CpuPl1Watts, Mode=TwoWay}"
+                                        IsSnapToTickEnabled="True"
+                                        IsEnabled="{Binding SystemControl.CpuPowerLimitsLocked, Converter={StaticResource InverseBooleanConverter}}"
+                                        VerticalAlignment="Center"
+                                        Margin="16,0"/>
+                                
+                                <StackPanel Grid.Column="2" HorizontalAlignment="Right">
+                                    <Border Background="#12121A" CornerRadius="4" Padding="8,4">
+                                        <TextBlock Text="{Binding SystemControl.CpuPl1Text}"
+                                                   FontFamily="{StaticResource MonospaceFontFamily}"
+                                                   FontSize="14" FontWeight="Bold"
+                                                   Foreground="#FF9800"
+                                                   HorizontalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="{Binding SystemControl.CurrentPl1Text}" 
+                                               FontSize="9" Foreground="{StaticResource TextMutedBrush}"
+                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- PL2 (Burst) Slider - Enhanced -->
+                        <Border Background="#0A0A12" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="100"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="PL2 BURST" FontSize="10" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextMutedBrush}"/>
+                                    <TextBlock Text="Turbo Power" FontSize="9" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                </StackPanel>
+                                
+                                <Slider Grid.Column="1" 
+                                        Minimum="{Binding SystemControl.CpuPl2Min}" 
+                                        Maximum="{Binding SystemControl.CpuPl2Max}" 
+                                        TickFrequency="5" 
+                                        Value="{Binding SystemControl.CpuPl2Watts, Mode=TwoWay}"
+                                        IsSnapToTickEnabled="True"
+                                        IsEnabled="{Binding SystemControl.CpuPowerLimitsLocked, Converter={StaticResource InverseBooleanConverter}}"
+                                        VerticalAlignment="Center"
+                                        Margin="16,0"/>
+                                
+                                <StackPanel Grid.Column="2" HorizontalAlignment="Right">
+                                    <Border Background="#12121A" CornerRadius="4" Padding="8,4">
+                                        <TextBlock Text="{Binding SystemControl.CpuPl2Text}"
+                                                   FontFamily="{StaticResource MonospaceFontFamily}"
+                                                   FontSize="14" FontWeight="Bold"
+                                                   Foreground="{StaticResource AccentBrush}"
+                                                   HorizontalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="{Binding SystemControl.CurrentPl2Text}" 
+                                               FontSize="9" Foreground="{StaticResource TextMutedBrush}"
+                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Locked Warning -->
+                        <Border Background="#1A0F0F"
+                                BorderBrush="#44F44336"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12"
+                                Margin="0,0,0,16"
+                                Visibility="{Binding SystemControl.CpuPowerLimitsLocked, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="🔒" FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap">
+                                    <Run Text="Power limits locked by BIOS" FontWeight="Bold" Foreground="#F44336"/>
+                                    <Run Text=" — MSR registers are write-locked until reboot. May require BIOS settings or HP Unleashed Mode."/>
+                                </TextBlock>
+                            </Grid>
+                        </Border>
+
+                        <!-- Apply Buttons -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Apply Power Limits" 
+                                    Style="{StaticResource ModernButton}"
+                                    Command="{Binding SystemControl.ApplyCpuPowerLimitsCommand}"
+                                    Padding="16,8" Margin="0,0,8,0"
+                                    IsEnabled="{Binding SystemControl.CpuPowerLimitsLocked, Converter={StaticResource InverseBooleanConverter}}"/>
+                            
+                            <Button Content="Reset to Defaults" 
+                                    Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding SystemControl.ResetCpuPowerLimitsCommand}"
+                                    Padding="16,8"
+                                    IsEnabled="{Binding SystemControl.CpuPowerLimitsLocked, Converter={StaticResource InverseBooleanConverter}}"/>
+                        </StackPanel>
                     </StackPanel>
-                </StackPanel>
+                </Grid>
             </Border>
 
-            <!-- ═══════════════════════════════════════════════════════════════════════ -->
-            <!-- GPU SECTION -->
-            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- TCC Offset Section - Enhanced Design -->
+            <Border Style="{StaticResource SurfaceCard}" Padding="0" Margin="0,0,0,16"
+                    Visibility="{Binding SystemControl.TccStatus.IsSupported, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Header -->
+                    <Border Grid.Row="0" Background="#0A0A12" Padding="20,16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <Border Grid.Column="0" Background="#12121A" CornerRadius="8" 
+                                    Padding="10" Margin="0,0,16,0" VerticalAlignment="Center">
+                                <Image Width="32" Height="32">
+                                    <Image.Style>
+                                        <Style TargetType="Image">
+                                            <Setter Property="Source" Value="pack://application:,,,/Assets/intel.png"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SystemControl.CpuVendor}" Value="AMD">
+                                                    <Setter Property="Source" Value="pack://application:,,,/Assets/amd.png"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Image.Style>
+                                </Image>
+                            </Border>
+                            
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="TCC Offset (Thermal Throttle Point)" FontSize="16" FontWeight="SemiBold" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="Reduce CPU Tjmax throttling temperature" 
+                                           FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    
+                    <StackPanel Grid.Row="1" Margin="24">
+                        
+                        <!-- TCC Slider - Enhanced -->
+                        <Border Background="#0A0A12" CornerRadius="8" Padding="16" Margin="0,0,0,16">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="80"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="TCC OFFSET" FontSize="10" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextMutedBrush}"/>
+                                    <TextBlock Text="°C reduction" FontSize="9" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                </StackPanel>
+                                
+                                <Slider Grid.Column="1" 
+                                        Value="{Binding SystemControl.RequestedTccOffset, Mode=TwoWay}"
+                                        Minimum="0" Maximum="30"
+                                        TickFrequency="1"
+                                        IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center"
+                                        Margin="16,0"/>
+                                
+                                <Border Grid.Column="2" Background="#12121A" CornerRadius="4" 
+                                        Padding="8,4" HorizontalAlignment="Right">
+                                    <TextBlock Text="{Binding SystemControl.RequestedTccOffset, StringFormat={}{0}°C}"
+                                               FontFamily="{StaticResource MonospaceFontFamily}"
+                                               FontSize="14" FontWeight="Bold"
+                                               Foreground="#4CAF50"
+                                               HorizontalAlignment="Center"/>
+                                </Border>
+                            </Grid>
+                        </Border>
+                        
+                        <!-- Reference info -->
+                        <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,20" TextWrapping="Wrap">
+                            <Run Text="0°C" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/> <Run Text="= Default (100°C Tjmax) •"/>
+                            <Run Text="15°C" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/> <Run Text="= Throttle at 85°C •"/>
+                            <Run Text="30°C" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/> <Run Text="= Throttle at 70°C"/>
+                        </TextBlock>
+
+                        <!-- Apply Buttons -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="Apply Limit" 
+                                    Style="{StaticResource ModernButton}"
+                                    Command="{Binding SystemControl.ApplyTccOffsetCommand}"
+                                    Padding="16,8" Margin="0,0,8,0"/>
+                            
+                            <Button Content="Remove Limit" 
+                                    Style="{StaticResource SecondaryButton}"
+                                    Command="{Binding SystemControl.ResetTccOffsetCommand}"
+                                    Padding="16,8"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
             <!-- GPU SECTION -->
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -365,264 +631,354 @@
                        Foreground="{StaticResource AccentBrush}" Margin="0,24,0,16"
                        Visibility="{Binding SystemControl.GpuOcSectionVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
-            <!-- GPU Overclocking Section (Unified NVIDIA/AMD) -->
-            <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16"
+            <!-- GPU Overclocking Section - MSI Afterburner Inspired -->
+            <Border Style="{StaticResource SurfaceCard}" Padding="0" Margin="0,0,0,16"
                     Visibility="{Binding SystemControl.GpuOcSectionVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <StackPanel>
-                    <!-- GPU Header with Logo -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        
-                        <!-- GPU Vendor Logo -->
-                        <Border Grid.Column="0" Background="#1A1A2E" CornerRadius="8" 
-                                Padding="12" Margin="0,0,16,0" VerticalAlignment="Top">
-                            <Image Width="48" Height="48">
-                                <Image.Style>
-                                    <Style TargetType="Image">
-                                        <Setter Property="Source" Value="pack://application:,,,/Assets/nvidia.png"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding SystemControl.GpuVendor}" Value="AMD">
-                                                <Setter Property="Source" Value="pack://application:,,,/Assets/amd.png"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding SystemControl.GpuVendor}" Value="Intel">
-                                                <Setter Property="Source" Value="pack://application:,,,/Assets/intel.png"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Image.Style>
-                            </Image>
-                        </Border>
-                        
-                        <!-- GPU Info -->
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock FontSize="20" FontWeight="SemiBold" 
-                                       Foreground="{StaticResource TextPrimaryBrush}">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Text" Value="GPU Overclocking"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding SystemControl.IsNvidiaGpu}" Value="True">
-                                                <Setter Property="Text" Value="NVIDIA GPU Overclocking"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding SystemControl.IsAmdGpu}" Value="True">
-                                                <Setter Property="Text" Value="AMD GPU Overclocking"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                            <TextBlock Text="{Binding SystemControl.GpuDisplayName}" 
-                                       FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
-                                       Margin="0,4,0,0" TextWrapping="Wrap"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                <TextBlock Text="Driver: " FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
-                                <TextBlock Text="{Binding SystemControl.GpuDriverVersion}" 
-                                           FontSize="11" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Grid>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
                     
-                    <TextBlock Text="Adjust GPU power limits and clock offsets. Clock offsets require overclocking support from your GPU."
-                               FontSize="12"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               Margin="0,0,0,16" TextWrapping="Wrap"/>
-
-                    <!-- Active OC Display - Show current applied values prominently -->
-                    <Border Background="{StaticResource SurfaceDarkBrush}" 
-                            CornerRadius="8" Padding="16" Margin="0,0,0,16"
-                            Visibility="{Binding SystemControl.GpuNvapiAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <!-- GPU Header Bar with Live Stats -->
+                    <Border Grid.Row="0" Background="#0A0A12" Padding="20,16">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             
-                            <Border Grid.Column="0" Background="{StaticResource AccentBrush}" 
-                                    CornerRadius="6" Padding="8,4" Margin="0,0,16,0"
-                                    VerticalAlignment="Center">
-                                <TextBlock Text="ACTIVE OC" FontSize="10" FontWeight="Bold" 
-                                           Foreground="White"/>
+                            <!-- GPU Vendor Logo -->
+                            <Border Grid.Column="0" Background="#12121A" CornerRadius="8" 
+                                    Padding="10" Margin="0,0,16,0" VerticalAlignment="Center">
+                                <Image Width="40" Height="40">
+                                    <Image.Style>
+                                        <Style TargetType="Image">
+                                            <Setter Property="Source" Value="pack://application:,,,/Assets/nvidia.png"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SystemControl.GpuVendor}" Value="AMD">
+                                                    <Setter Property="Source" Value="pack://application:,,,/Assets/amd.png"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding SystemControl.GpuVendor}" Value="Intel">
+                                                    <Setter Property="Source" Value="pack://application:,,,/Assets/intel.png"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Image.Style>
+                                </Image>
                             </Border>
                             
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0">
-                                    <Run Text="Core: "/>
-                                    <Run Text="{Binding SystemControl.GpuCoreClockOffset, StringFormat={}{0:+0;-0;0} MHz}" 
-                                         Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"/>
-                                </TextBlock>
-                                <TextBlock Text="│" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,8,0"/>
-                                <TextBlock FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0">
-                                    <Run Text="Memory: "/>
-                                    <Run Text="{Binding SystemControl.GpuMemoryClockOffset, StringFormat={}{0:+0;-0;0} MHz}" 
-                                         Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"/>
-                                </TextBlock>
-                                <TextBlock Text="│" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,8,0"/>
-                                <TextBlock FontSize="13" Foreground="{StaticResource TextSecondaryBrush}">
-                                    <Run Text="Power: "/>
-                                    <Run Text="{Binding SystemControl.GpuPowerLimitPercent, StringFormat={}{0}%}" 
-                                         Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"/>
-                                </TextBlock>
+                            <!-- GPU Info -->
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SystemControl.GpuDisplayName}" 
+                                           FontSize="16" FontWeight="SemiBold" 
+                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                    <TextBlock Text="Driver " FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                                    <TextBlock Text="{Binding SystemControl.GpuDriverVersion}" 
+                                               FontSize="11" Foreground="{StaticResource AccentBlueBrush}"/>
+                                </StackPanel>
                             </StackPanel>
+                            
+                            <!-- Live Monitoring Stats (MSI Afterburner style) -->
+                            <Border Grid.Column="2" Background="#08080C" CornerRadius="8" Padding="16,10">
+                                <StackPanel Orientation="Horizontal">
+                                    <!-- Temperature Gauge -->
+                                    <StackPanel Margin="0,0,20,0" HorizontalAlignment="Center">
+                                        <Grid Width="50" Height="50">
+                                            <!-- Background ring -->
+                                            <Ellipse Stroke="#1A1A2E" StrokeThickness="4" Fill="Transparent"/>
+                                            <!-- Colored progress ring (would need converter for actual arc) -->
+                                            <Ellipse Stroke="{Binding LatestMonitoringSample.GpuTemperatureC, Converter={StaticResource TemperatureToColorConverter}, FallbackValue=#45C7FF}" 
+                                                     StrokeThickness="4" Fill="Transparent" Opacity="0.8"
+                                                     StrokeDashArray="3.14 10"/>
+                                            <!-- Temperature value -->
+                                            <TextBlock Text="{Binding LatestMonitoringSample.GpuTemperatureC, StringFormat={}{0:F0}°}"
+                                                       FontFamily="{StaticResource MonospaceFontFamily}"
+                                                       FontSize="14" FontWeight="Bold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <TextBlock Text="TEMP" FontSize="9" Foreground="{StaticResource TextMutedBrush}" 
+                                                   HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                    
+                                    <!-- Power Draw -->
+                                    <StackPanel Margin="0,0,20,0" HorizontalAlignment="Center">
+                                        <Grid Width="50" Height="50">
+                                            <Ellipse Stroke="#1A1A2E" StrokeThickness="4" Fill="Transparent"/>
+                                            <Ellipse Stroke="#FF9800" StrokeThickness="4" Fill="Transparent" Opacity="0.6"
+                                                     StrokeDashArray="2.5 10"/>
+                                            <TextBlock Text="{Binding LatestMonitoringSample.GpuPowerWatts, StringFormat={}{0:F0}W}"
+                                                       FontFamily="{StaticResource MonospaceFontFamily}"
+                                                       FontSize="14" FontWeight="Bold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Grid>
+                                        <TextBlock Text="POWER" FontSize="9" Foreground="{StaticResource TextMutedBrush}" 
+                                                   HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                    
+                                    <!-- GPU Clock -->
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <Grid Width="50" Height="50">
+                                            <Ellipse Stroke="#1A1A2E" StrokeThickness="4" Fill="Transparent"/>
+                                            <Ellipse Stroke="{StaticResource AccentBrush}" StrokeThickness="4" Fill="Transparent" Opacity="0.6"
+                                                     StrokeDashArray="2 10"/>
+                                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding LatestMonitoringSample.GpuClockMhz, StringFormat={}{0:F0}}"
+                                                           FontFamily="{StaticResource MonospaceFontFamily}"
+                                                           FontSize="12" FontWeight="Bold"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <TextBlock Text="CLOCK" FontSize="9" Foreground="{StaticResource TextMutedBrush}" 
+                                                   HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
                         </Grid>
                     </Border>
-
-                    <!-- Status -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock Grid.Column="0" Text="Status:"
-                                   FontSize="14"
-                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                   Margin="0,0,12,0"/>
-
-                        <TextBlock Grid.Column="1"
-                                   Text="{Binding SystemControl.GpuOcStatus}"
-                                   FontSize="14" FontWeight="SemiBold"
-                                   Foreground="{StaticResource AccentBrush}"
-                                   TextWrapping="Wrap"/>
-                    </Grid>
                     
-                    <!-- AMD GPU Coming Soon Message -->
-                    <Border Background="#2D1F1F"
-                            BorderBrush="#FF5722"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="12"
-                            Margin="0,0,0,16"
-                            Visibility="{Binding SystemControl.GpuAmdAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <StackPanel>
-                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap">
-                                <Run Text="🔧 AMD GPU Overclocking - Coming Soon" FontWeight="Bold" Foreground="#FF5722"/>
-                                <LineBreak/>
-                                <Run Text="AMD ADLX integration is in development. For now, use AMD Adrenalin Software for GPU tuning."/>
-                            </TextBlock>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- NVIDIA Controls -->
-                    <StackPanel Visibility="{Binding SystemControl.GpuNvapiAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <!-- Controls Section -->
+                    <StackPanel Grid.Row="1" Margin="24">
                         
-                        <!-- Clock Offsets Not Available Info Box -->
-                        <Border Background="#1F2D3D"
+                        <!-- GPU "Undervolt" Info Box -->
+                        <Border Background="#0D1520"
                                 BorderBrush="#2196F3"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="14"
+                                Margin="0,0,0,20"
+                                Visibility="{Binding SystemControl.GpuNvapiAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Data="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" 
+                                      Fill="#2196F3" Width="18" Height="18" Stretch="Uniform" 
+                                      Margin="0,0,12,0" VerticalAlignment="Top"/>
+                                <TextBlock Grid.Column="1" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap">
+                                    <Run Text="GPU UNDERVOLTING:" FontWeight="Bold" Foreground="#64B5F6"/>
+                                    <Run Text=" Modern NVIDIA GPUs auto-manage voltage. To reduce power/heat: lower the"/>
+                                    <Run Text=" Power Limit" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                                    <Run Text=" (forces lower voltage at each frequency) or use"/>
+                                    <Run Text=" negative Core Offset" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                                    <Run Text=" (reduces boost clocks → less voltage needed). For V/F curve editing, use MSI Afterburner."/>
+                                </TextBlock>
+                            </Grid>
+                        </Border>
+                        
+                        <!-- Active OC Display - Prominent status bar -->
+                        <Border Background="#0A0A12" 
+                                CornerRadius="8" Padding="16" Margin="0,0,0,20"
+                                Visibility="{Binding SystemControl.GpuNvapiAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <Border Grid.Column="0" Background="{StaticResource AccentBrush}" 
+                                        CornerRadius="4" Padding="10,5" Margin="0,0,16,0"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="ACTIVE" FontSize="10" FontWeight="Bold" 
+                                               Foreground="White" FontFamily="{StaticResource MonospaceFontFamily}"/>
+                                </Border>
+                                
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <StackPanel Margin="0,0,24,0">
+                                        <TextBlock Text="CORE" FontSize="9" Foreground="{StaticResource TextMutedBrush}"/>
+                                        <TextBlock Text="{Binding SystemControl.GpuCoreClockOffset, StringFormat={}{0:+0;-0;0} MHz}" 
+                                                   FontFamily="{StaticResource MonospaceFontFamily}"
+                                                   FontSize="16" FontWeight="Bold"
+                                                   Foreground="{StaticResource AccentBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,24,0">
+                                        <TextBlock Text="MEMORY" FontSize="9" Foreground="{StaticResource TextMutedBrush}"/>
+                                        <TextBlock Text="{Binding SystemControl.GpuMemoryClockOffset, StringFormat={}{0:+0;-0;0} MHz}" 
+                                                   FontFamily="{StaticResource MonospaceFontFamily}"
+                                                   FontSize="16" FontWeight="Bold"
+                                                   Foreground="{StaticResource AccentBlueBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock Text="POWER" FontSize="9" Foreground="{StaticResource TextMutedBrush}"/>
+                                        <TextBlock Text="{Binding SystemControl.GpuPowerLimitPercent, StringFormat={}{0}%}" 
+                                                   FontFamily="{StaticResource MonospaceFontFamily}"
+                                                   FontSize="16" FontWeight="Bold"
+                                                   Foreground="#4CAF50"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                
+                                <TextBlock Grid.Column="2" Text="{Binding SystemControl.GpuOcStatus}" 
+                                           FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                           VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                        
+                        <!-- AMD GPU Coming Soon Message -->
+                        <Border Background="#2D1F1F"
+                                BorderBrush="#FF5722"
                                 BorderThickness="1"
                                 CornerRadius="8"
                                 Padding="12"
                                 Margin="0,0,0,16"
-                                Visibility="{Binding SystemControl.GpuOcNotAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap">
-                                <Run Text="ℹ️ Clock Offsets Not Available" FontWeight="Bold" Foreground="#2196F3"/>
-                                <LineBreak/>
-                                <Run Text="Your GPU doesn't support clock offset adjustments via NVAPI. Power Limit adjustments still work below."/>
-                                <LineBreak/>
-                                <Run Text="For clock OC, use MSI Afterburner or HP Omen Hub."/>
-                            </TextBlock>
+                                Visibility="{Binding SystemControl.GpuAmdAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap">
+                                    <Run Text="🔧 AMD GPU Overclocking - Coming Soon" FontWeight="Bold" Foreground="#FF5722"/>
+                                    <LineBreak/>
+                                    <Run Text="AMD ADLX integration is in development. For now, use AMD Adrenalin Software for GPU tuning."/>
+                                </TextBlock>
+                            </StackPanel>
                         </Border>
 
-                        <!-- Power Limit -->
-                        <StackPanel Margin="0,0,0,16">
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Power Limit:"
-                                           FontSize="14"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           ToolTip="Fine-tune GPU TDP limits."/>
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding SystemControl.GpuPowerLimitText}"
-                                           FontSize="14" FontWeight="SemiBold"
-                                           Foreground="{StaticResource AccentBrush}"/>
-                            </Grid>
-                            <Slider Value="{Binding SystemControl.GpuPowerLimitPercent, Mode=TwoWay}"
-                                    Minimum="{Binding SystemControl.GpuPowerLimitMin}"
-                                    Maximum="{Binding SystemControl.GpuPowerLimitMax}"
-                                    TickFrequency="5"
-                                    IsSnapToTickEnabled="True"
-                                    TickPlacement="BottomRight"/>
-                            <TextBlock Text="100% = Default TDP. Lower reduces power/heat, higher allows more boost."
-                                       FontSize="11"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       Margin="0,4,0,0"/>
-                        </StackPanel>
-
-                        <!-- Core Clock Offset -->
-                        <StackPanel Margin="0,0,0,16"
-                                    Visibility="{Binding SystemControl.GpuOcAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Core Clock Offset:"
-                                           FontSize="14"
-                                           Foreground="{StaticResource TextPrimaryBrush}"/>
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding SystemControl.GpuCoreClockOffsetText}"
-                                           FontSize="14" FontWeight="SemiBold"
-                                           Foreground="{StaticResource AccentBrush}"/>
-                            </Grid>
-                            <Slider Value="{Binding SystemControl.GpuCoreClockOffset, Mode=TwoWay}"
-                                    Minimum="{Binding SystemControl.GpuCoreOffsetMin}"
-                                    Maximum="{Binding SystemControl.GpuCoreOffsetMax}"
-                                    TickFrequency="25"
-                                    IsSnapToTickEnabled="True"
-                                    TickPlacement="BottomRight"/>
-                            <TextBlock Text="Negative = undervolt, Positive = overclock"
-                                       FontSize="11"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       Margin="0,4,0,0"/>
-                        </StackPanel>
-
-                        <!-- Memory Clock Offset -->
-                        <StackPanel Margin="0,0,0,16"
-                                    Visibility="{Binding SystemControl.GpuOcAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Memory Clock Offset:"
-                                           FontSize="14"
-                                           Foreground="{StaticResource TextPrimaryBrush}"/>
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding SystemControl.GpuMemoryClockOffsetText}"
-                                           FontSize="14" FontWeight="SemiBold"
-                                           Foreground="{StaticResource AccentBrush}"/>
-                            </Grid>
-                            <Slider Value="{Binding SystemControl.GpuMemoryClockOffset, Mode=TwoWay}"
-                                    Minimum="{Binding SystemControl.GpuMemoryOffsetMin}"
-                                    Maximum="{Binding SystemControl.GpuMemoryOffsetMax}"
-                                    TickFrequency="50"
-                                    IsSnapToTickEnabled="True"
-                                    TickPlacement="BottomRight"/>
-                            <TextBlock Text="Negative = undervolt, Positive = overclock"
-                                       FontSize="11"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       Margin="0,4,0,0"/>
-                        </StackPanel>
-
-                        <!-- Apply Buttons -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button Content="Apply GPU Settings" 
-                                    Style="{StaticResource ModernButton}"
-                                    Command="{Binding SystemControl.ApplyGpuOcCommand}"
-                                    Padding="16,8" Margin="0,0,8,0"/>
+                        <!-- NVIDIA Controls - MSI Afterburner Style -->
+                        <StackPanel Visibility="{Binding SystemControl.GpuNvapiAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
                             
-                            <Button Content="Reset to Defaults" 
-                                    Style="{StaticResource SecondaryButton}"
-                                    Command="{Binding SystemControl.ResetGpuOcCommand}"
-                                    Padding="16,8"/>
+                            <!-- Clock Offsets Not Available Info Box -->
+                            <Border Background="#1F2D3D"
+                                    BorderBrush="#2196F3"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="12"
+                                    Margin="0,0,0,16"
+                                    Visibility="{Binding SystemControl.GpuOcNotAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap">
+                                    <Run Text="ℹ️ Clock Offsets Not Available" FontWeight="Bold" Foreground="#2196F3"/>
+                                    <LineBreak/>
+                                    <Run Text="Your GPU doesn't support clock offset adjustments via NVAPI. Power Limit adjustments still work below."/>
+                                    <LineBreak/>
+                                    <Run Text="For clock OC, use MSI Afterburner or HP Omen Hub."/>
+                                </TextBlock>
+                            </Border>
+
+                            <!-- Power Limit Slider - MSI Afterburner Style -->
+                            <Border Background="#0A0A12" CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="80"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="POWER LIMIT" FontSize="10" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextMutedBrush}"/>
+                                        <TextBlock Text="TDP %" FontSize="9" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                    </StackPanel>
+                                    
+                                    <Slider Grid.Column="1" 
+                                            Value="{Binding SystemControl.GpuPowerLimitPercent, Mode=TwoWay}"
+                                            Minimum="{Binding SystemControl.GpuPowerLimitMin}"
+                                            Maximum="{Binding SystemControl.GpuPowerLimitMax}"
+                                            TickFrequency="5"
+                                            IsSnapToTickEnabled="True"
+                                            VerticalAlignment="Center"
+                                            Margin="16,0"/>
+                                    
+                                    <Border Grid.Column="2" Background="#12121A" CornerRadius="4" 
+                                            Padding="8,4" HorizontalAlignment="Right">
+                                        <TextBlock Text="{Binding SystemControl.GpuPowerLimitPercent, StringFormat={}{0}%}"
+                                                   FontFamily="{StaticResource MonospaceFontFamily}"
+                                                   FontSize="16" FontWeight="Bold"
+                                                   Foreground="#4CAF50"
+                                                   HorizontalAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <!-- Core Clock Offset Slider -->
+                            <Border Background="#0A0A12" CornerRadius="8" Padding="16" Margin="0,0,0,12"
+                                    Visibility="{Binding SystemControl.GpuOcAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="80"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="CORE CLOCK" FontSize="10" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextMutedBrush}"/>
+                                        <TextBlock Text="MHz Offset" FontSize="9" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                    </StackPanel>
+                                    
+                                    <Slider Grid.Column="1" 
+                                            Value="{Binding SystemControl.GpuCoreClockOffset, Mode=TwoWay}"
+                                            Minimum="{Binding SystemControl.GpuCoreOffsetMin}"
+                                            Maximum="{Binding SystemControl.GpuCoreOffsetMax}"
+                                            TickFrequency="25"
+                                            IsSnapToTickEnabled="True"
+                                            VerticalAlignment="Center"
+                                            Margin="16,0"/>
+                                    
+                                    <Border Grid.Column="2" Background="#12121A" CornerRadius="4" 
+                                            Padding="8,4" HorizontalAlignment="Right">
+                                        <TextBlock Text="{Binding SystemControl.GpuCoreClockOffset, StringFormat={}{0:+0;-0;0}}"
+                                                   FontFamily="{StaticResource MonospaceFontFamily}"
+                                                   FontSize="16" FontWeight="Bold"
+                                                   Foreground="{StaticResource AccentBrush}"
+                                                   HorizontalAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <!-- Memory Clock Offset Slider -->
+                            <Border Background="#0A0A12" CornerRadius="8" Padding="16" Margin="0,0,0,20"
+                                    Visibility="{Binding SystemControl.GpuOcAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="80"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock Text="MEM CLOCK" FontSize="10" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextMutedBrush}"/>
+                                        <TextBlock Text="MHz Offset" FontSize="9" Foreground="{StaticResource TextTertiaryBrush}"/>
+                                    </StackPanel>
+                                    
+                                    <Slider Grid.Column="1" 
+                                            Value="{Binding SystemControl.GpuMemoryClockOffset, Mode=TwoWay}"
+                                            Minimum="{Binding SystemControl.GpuMemoryOffsetMin}"
+                                            Maximum="{Binding SystemControl.GpuMemoryOffsetMax}"
+                                            TickFrequency="50"
+                                            IsSnapToTickEnabled="True"
+                                            VerticalAlignment="Center"
+                                            Margin="16,0"/>
+                                    
+                                    <Border Grid.Column="2" Background="#12121A" CornerRadius="4" 
+                                            Padding="8,4" HorizontalAlignment="Right">
+                                        <TextBlock Text="{Binding SystemControl.GpuMemoryClockOffset, StringFormat={}{0:+0;-0;0}}"
+                                                   FontFamily="{StaticResource MonospaceFontFamily}"
+                                                   FontSize="16" FontWeight="Bold"
+                                                   Foreground="{StaticResource AccentBlueBrush}"
+                                                   HorizontalAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+
+                            <!-- Apply Buttons -->
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Apply GPU Settings" 
+                                        Style="{StaticResource ModernButton}"
+                                        Command="{Binding SystemControl.ApplyGpuOcCommand}"
+                                        Padding="16,8" Margin="0,0,8,0"/>
+                                
+                                <Button Content="Reset to Defaults" 
+                                        Style="{StaticResource SecondaryButton}"
+                                        Command="{Binding SystemControl.ResetGpuOcCommand}"
+                                        Padding="16,8"/>
+                            </StackPanel>
                         </StackPanel>
                     </StackPanel>
-                </StackPanel>
+                </Grid>
             </Border>
 
             <!-- No Tuning Available Message -->

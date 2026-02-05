@@ -114,6 +114,12 @@ namespace OmenCore.Hardware
         /// When enabled, acquires and holds the EC mutex exclusively for diagnostic purposes.
         /// </summary>
         public static bool EnableExclusiveEcAccessDiagnostics { get; set; } = false;
+        
+        /// <summary>
+        /// Tracks if we've already logged the EC contention warning this session.
+        /// Prevents log spam when another app (like OmenMon) holds the EC mutex.
+        /// </summary>
+        public static bool EcContentionWarningLogged { get; set; } = false;
 
         // EC mutex to prevent concurrent access
         private static readonly Mutex EcMutex = new(false, @"Global\Access_EC");

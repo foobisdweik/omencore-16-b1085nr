@@ -6,6 +6,44 @@
              xmlns:controls="clr-namespace:OmenCore.Controls"
              mc:Ignorable="d" 
              d:DesignHeight="750" d:DesignWidth="1100">
+    
+    <UserControl.Resources>
+        <!-- Fan Preset Card Style -->
+        <Style x:Key="FanPresetCard" TargetType="RadioButton">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="CardBorder" 
+                                Background="#141418" 
+                                CornerRadius="10" 
+                                Padding="12,14"
+                                BorderThickness="2"
+                                BorderBrush="Transparent"
+                                Cursor="Hand">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CardBorder" Property="Background" Value="#1A1A1E"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="CardBorder" Property="Background" Value="#1A1A1E"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        
+        <!-- Compact Settings Label -->
+        <Style x:Key="SettingsLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Resources>
+    
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -13,15 +51,35 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,20">
-            <TextBlock Text="Fan &amp; Thermal Control" Style="{StaticResource Heading1}"/>
-            <TextBlock Text="Customize fan curves with the visual editor and monitor cooling performance" 
-                       Style="{StaticResource Caption}"/>
-        </StackPanel>
+        <!-- Compact Header -->
+        <Border Grid.Row="0" Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="FAN &amp; THERMAL CONTROL" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                    <TextBlock Text="Customize fan curves and monitor cooling performance" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,2,0,0"/>
+                </StackPanel>
+                
+                <!-- Active Mode Badge -->
+                <Border Grid.Column="1" Background="#1A1A1E" CornerRadius="20" Padding="14,8" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="8" Height="8" Fill="{StaticResource AccentGreenBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding CurrentFanModeName}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                        <Border Background="#1A4CAF50" CornerRadius="4" Padding="6,2" Margin="10,0,0,0"
+                                Visibility="{Binding IsCurveActive, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="CURVE ACTIVE" FontSize="9" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
 
-        <!-- Fan Profile Selection - Unified Interface -->
-        <Border Grid.Row="1" Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,20">
+        <!-- Fan Profile Selection - Redesigned -->
+        <Border Grid.Row="1" Style="{StaticResource SurfaceCard}" Padding="20" Margin="0,0,0,16">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -29,119 +87,236 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 
-                <TextBlock Grid.Row="0"
-                           Text="FAN PROFILE" 
-                           Style="{StaticResource Label}" 
-                           Margin="0,0,0,16"/>
+                <!-- Section Header -->
+                <Border Grid.Row="0" Background="#0D0D0F" CornerRadius="8" Padding="14,10" Margin="0,0,0,16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <TextBlock Text="🌀" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="FAN PROFILES" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="2" Text="Select a preset or create custom curve" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
                 
-                <!-- Unified Preset Selection - Single Row with Cards -->
-                <Grid Grid.Row="1" Margin="0,0,0,16">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    
+                <!-- Preset Cards Grid - 6 columns -->
+                <UniformGrid Grid.Row="1" Rows="1" Columns="6" Margin="0,0,0,16">
                     <!-- Max Cooling -->
-                    <RadioButton Grid.Column="0" 
-                                 GroupName="FanPreset"
+                    <RadioButton GroupName="FanPreset"
                                  IsChecked="{Binding IsMaxSelected}"
                                  Command="{Binding ApplyMaxCoolingCommand}"
-                                 Style="{StaticResource PresetCardRadioButton}"
+                                 Style="{StaticResource FanPresetCard}"
                                  ToolTip="Forces all fans to maximum RPM. Use for heavy gaming or stress tests."
-                                 AutomationProperties.Name="Max Cooling Mode"
                                  Margin="0,0,6,0">
-                        <StackPanel HorizontalAlignment="Center">
-                            <Path Data="{StaticResource IconFire}" Fill="{StaticResource AccentBrush}" Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                            <TextBlock Text="Max" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                            <TextBlock Text="100% fans" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                        </StackPanel>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <Border Grid.Row="0" Width="40" Height="40" CornerRadius="20" Margin="0,0,0,8" HorizontalAlignment="Center">
+                                <Border.Background>
+                                    <RadialGradientBrush>
+                                        <GradientStop Color="#30FF4444" Offset="0"/>
+                                        <GradientStop Color="#00FF4444" Offset="1"/>
+                                    </RadialGradientBrush>
+                                </Border.Background>
+                                <Path Data="{StaticResource IconFire}" Fill="#FF4444" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            
+                            <TextBlock Grid.Row="1" Text="Max" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Row="2" Text="100%" FontSize="9" FontWeight="SemiBold" Foreground="#FF4444" HorizontalAlignment="Center" Margin="0,2,0,6"/>
+                            
+                            <Border Grid.Row="3" Background="#20FF4444" CornerRadius="4" Padding="6,2" HorizontalAlignment="Center"
+                                    Visibility="{Binding IsMaxSelected, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="✓" FontSize="10" FontWeight="Bold" Foreground="#FF4444"/>
+                            </Border>
+                        </Grid>
                     </RadioButton>
                     
                     <!-- Extreme -->
-                    <RadioButton Grid.Column="1" 
-                                 GroupName="FanPreset"
+                    <RadioButton GroupName="FanPreset"
                                  IsChecked="{Binding IsExtremeSelected}"
                                  Command="{Binding ApplyExtremeModeCommand}"
-                                 Style="{StaticResource PresetCardRadioButton}"
+                                 Style="{StaticResource FanPresetCard}"
                                  ToolTip="Maximum cooling for high-power systems (13900HX + 4090). Hits 100% at 75°C."
-                                 AutomationProperties.Name="Extreme Cooling Mode"
-                                 Margin="0,0,6,0">
-                        <StackPanel HorizontalAlignment="Center">
-                            <Path Data="{StaticResource IconSnowflake}" Fill="#64B5F6" Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                            <TextBlock Text="Extreme" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Max @ 75°C" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                        </StackPanel>
+                                 Margin="3,0,3,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <Border Grid.Row="0" Width="40" Height="40" CornerRadius="20" Margin="0,0,0,8" HorizontalAlignment="Center">
+                                <Border.Background>
+                                    <RadialGradientBrush>
+                                        <GradientStop Color="#3064B5F6" Offset="0"/>
+                                        <GradientStop Color="#0064B5F6" Offset="1"/>
+                                    </RadialGradientBrush>
+                                </Border.Background>
+                                <Path Data="{StaticResource IconSnowflake}" Fill="#64B5F6" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            
+                            <TextBlock Grid.Row="1" Text="Extreme" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Row="2" Text="@75°C" FontSize="9" FontWeight="SemiBold" Foreground="#64B5F6" HorizontalAlignment="Center" Margin="0,2,0,6"/>
+                            
+                            <Border Grid.Row="3" Background="#2064B5F6" CornerRadius="4" Padding="6,2" HorizontalAlignment="Center"
+                                    Visibility="{Binding IsExtremeSelected, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="✓" FontSize="10" FontWeight="Bold" Foreground="#64B5F6"/>
+                            </Border>
+                        </Grid>
                     </RadioButton>
                     
                     <!-- Gaming -->
-                    <RadioButton Grid.Column="2" 
-                                 GroupName="FanPreset"
+                    <RadioButton GroupName="FanPreset"
                                  IsChecked="{Binding IsGamingSelected}"
                                  Command="{Binding ApplyGamingModeCommand}"
-                                 Style="{StaticResource PresetCardRadioButton}"
+                                 Style="{StaticResource FanPresetCard}"
                                  ToolTip="Aggressive fan curve that ramps up quickly. Good for gaming sessions."
-                                 AutomationProperties.Name="Gaming Mode"
-                                 Margin="0,0,6,0">
-                        <StackPanel HorizontalAlignment="Center">
-                            <Path Data="{StaticResource IconGamepad}" Fill="#9C27B0" Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                            <TextBlock Text="Gaming" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Max @ 80°C" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                        </StackPanel>
+                                 Margin="3,0,3,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <Border Grid.Row="0" Width="40" Height="40" CornerRadius="20" Margin="0,0,0,8" HorizontalAlignment="Center">
+                                <Border.Background>
+                                    <RadialGradientBrush>
+                                        <GradientStop Color="#309C27B0" Offset="0"/>
+                                        <GradientStop Color="#009C27B0" Offset="1"/>
+                                    </RadialGradientBrush>
+                                </Border.Background>
+                                <Path Data="{StaticResource IconGamepad}" Fill="#9C27B0" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            
+                            <TextBlock Grid.Row="1" Text="Gaming" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Row="2" Text="@80°C" FontSize="9" FontWeight="SemiBold" Foreground="#9C27B0" HorizontalAlignment="Center" Margin="0,2,0,6"/>
+                            
+                            <Border Grid.Row="3" Background="#209C27B0" CornerRadius="4" Padding="6,2" HorizontalAlignment="Center"
+                                    Visibility="{Binding IsGamingSelected, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="✓" FontSize="10" FontWeight="Bold" Foreground="#9C27B0"/>
+                            </Border>
+                        </Grid>
                     </RadioButton>
                     
                     <!-- Auto -->
-                    <RadioButton Grid.Column="3" 
-                                 GroupName="FanPreset"
+                    <RadioButton GroupName="FanPreset"
                                  IsChecked="{Binding IsAutoSelected}"
                                  Command="{Binding ApplyAutoModeCommand}"
-                                 Style="{StaticResource PresetCardRadioButton}"
+                                 Style="{StaticResource FanPresetCard}"
                                  ToolTip="BIOS-controlled balanced curve. Recommended for everyday use."
-                                 AutomationProperties.Name="Auto Mode"
-                                 Margin="0,0,6,0">
-                        <StackPanel HorizontalAlignment="Center">
-                            <Path Data="{StaticResource IconScale}" Fill="#4CAF50" Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                            <TextBlock Text="Auto" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Balanced" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                        </StackPanel>
+                                 Margin="3,0,3,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <Border Grid.Row="0" Width="40" Height="40" CornerRadius="20" Margin="0,0,0,8" HorizontalAlignment="Center">
+                                <Border.Background>
+                                    <RadialGradientBrush>
+                                        <GradientStop Color="#304CAF50" Offset="0"/>
+                                        <GradientStop Color="#004CAF50" Offset="1"/>
+                                    </RadialGradientBrush>
+                                </Border.Background>
+                                <Path Data="{StaticResource IconScale}" Fill="#4CAF50" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            
+                            <TextBlock Grid.Row="1" Text="Auto" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Row="2" Text="BIOS" FontSize="9" FontWeight="SemiBold" Foreground="#4CAF50" HorizontalAlignment="Center" Margin="0,2,0,6"/>
+                            
+                            <Border Grid.Row="3" Background="#204CAF50" CornerRadius="4" Padding="6,2" HorizontalAlignment="Center"
+                                    Visibility="{Binding IsAutoSelected, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="✓" FontSize="10" FontWeight="Bold" Foreground="#4CAF50"/>
+                            </Border>
+                        </Grid>
                     </RadioButton>
                     
                     <!-- Silent -->
-                    <RadioButton Grid.Column="4" 
-                                 GroupName="FanPreset"
+                    <RadioButton GroupName="FanPreset"
                                  IsChecked="{Binding IsSilentSelected}"
                                  Command="{Binding ApplyQuietModeCommand}"
-                                 Style="{StaticResource PresetCardRadioButton}"
+                                 Style="{StaticResource FanPresetCard}"
                                  ToolTip="Prioritizes quiet operation. Fans stay low until temps rise significantly."
-                                 AutomationProperties.Name="Silent Mode"
-                                 Margin="0,0,6,0">
-                        <StackPanel HorizontalAlignment="Center">
-                            <Path Data="{StaticResource IconVolumeMute}" Fill="#607D8B" Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                            <TextBlock Text="Silent" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Quiet" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                        </StackPanel>
+                                 Margin="3,0,3,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <Border Grid.Row="0" Width="40" Height="40" CornerRadius="20" Margin="0,0,0,8" HorizontalAlignment="Center">
+                                <Border.Background>
+                                    <RadialGradientBrush>
+                                        <GradientStop Color="#30607D8B" Offset="0"/>
+                                        <GradientStop Color="#00607D8B" Offset="1"/>
+                                    </RadialGradientBrush>
+                                </Border.Background>
+                                <Path Data="{StaticResource IconVolumeMute}" Fill="#607D8B" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            
+                            <TextBlock Grid.Row="1" Text="Silent" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Row="2" Text="Quiet" FontSize="9" FontWeight="SemiBold" Foreground="#607D8B" HorizontalAlignment="Center" Margin="0,2,0,6"/>
+                            
+                            <Border Grid.Row="3" Background="#20607D8B" CornerRadius="4" Padding="6,2" HorizontalAlignment="Center"
+                                    Visibility="{Binding IsSilentSelected, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="✓" FontSize="10" FontWeight="Bold" Foreground="#607D8B"/>
+                            </Border>
+                        </Grid>
                     </RadioButton>
                     
                     <!-- Custom -->
-                    <RadioButton Grid.Column="5" 
-                                 GroupName="FanPreset"
+                    <RadioButton GroupName="FanPreset"
                                  IsChecked="{Binding IsCustomSelected}"
                                  Command="{Binding ApplyCustomCurveCommand}"
-                                 Style="{StaticResource PresetCardRadioButton}"
+                                 Style="{StaticResource FanPresetCard}"
                                  ToolTip="Apply your custom fan curve defined in the editor below."
-                                 AutomationProperties.Name="Custom Curve Mode">
-                        <StackPanel HorizontalAlignment="Center">
-                            <Path Data="{StaticResource IconTune}" Fill="{StaticResource TextSecondaryBrush}" Width="24" Height="24" Stretch="Uniform" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                            <TextBlock Text="Custom" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Your curve" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
-                        </StackPanel>
+                                 Margin="6,0,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <Border Grid.Row="0" Width="40" Height="40" CornerRadius="20" Margin="0,0,0,8" HorizontalAlignment="Center">
+                                <Border.Background>
+                                    <RadialGradientBrush>
+                                        <GradientStop Color="#30FF6B35" Offset="0"/>
+                                        <GradientStop Color="#00FF6B35" Offset="1"/>
+                                    </RadialGradientBrush>
+                                </Border.Background>
+                                <Path Data="{StaticResource IconTune}" Fill="#FF6B35" Width="20" Height="20" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            
+                            <TextBlock Grid.Row="1" Text="Custom" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                            <TextBlock Grid.Row="2" Text="Editor" FontSize="9" FontWeight="SemiBold" Foreground="#FF6B35" HorizontalAlignment="Center" Margin="0,2,0,6"/>
+                            
+                            <Border Grid.Row="3" Background="#20FF6B35" CornerRadius="4" Padding="6,2" HorizontalAlignment="Center"
+                                    Visibility="{Binding IsCustomSelected, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="✓" FontSize="10" FontWeight="Bold" Foreground="#FF6B35"/>
+                            </Border>
+                        </Grid>
                     </RadioButton>
-                </Grid>
+                </UniformGrid>
                 
-                <!-- Current Mode Indicator + Save Custom -->
+                <!-- Settings Row - Compact horizontal layout -->
                 <Grid Grid.Row="2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -149,111 +324,56 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     
-                    <!-- Current Mode Display - compact inline style -->
-                    <Border Grid.Column="0" 
-                            Background="{StaticResource SurfaceDarkBrush}" 
-                            CornerRadius="6" 
-                            Padding="12,8"
-                            Margin="0,0,12,0"
-                            VerticalAlignment="Top">
+                    <!-- Save Custom Preset -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <TextBox Text="{Binding CustomPresetName, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
+                                 Style="{StaticResource ModernTextBox}" 
+                                 Width="130" Height="28" FontSize="10" Padding="6,4"
+                                 VerticalContentAlignment="Center"
+                                 ToolTip="Name for your custom preset"/>
+                        <Button Command="{Binding SaveCustomPresetCommand}" 
+                                Style="{StaticResource ModernButton}" 
+                                Height="28" Padding="8,0" Margin="6,0,0,0"
+                                ToolTip="Save current curve as a custom preset">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource IconExport}" Width="10" Height="10" Fill="{StaticResource TextPrimaryBrush}" Stretch="Uniform" Margin="0,0,4,0"/>
+                                <TextBlock Text="Save" FontSize="10"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                    
+                    <!-- Advanced Settings - Compact -->
+                    <Border Grid.Column="2" Background="#0D0D0F" CornerRadius="8" Padding="12,8">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Active:" 
-                                       Style="{StaticResource Caption}" 
-                                       FontSize="12"
-                                       VerticalAlignment="Center" 
-                                       Margin="0,0,8,0"/>
-                            <TextBlock Text="{Binding CurrentFanModeName}" 
-                                       FontSize="13" 
-                                       FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentBrush}" 
-                                       VerticalAlignment="Center"/>
-                            <!-- Curve Active Indicator -->
-                            <Border Background="#1A4CAF50" 
-                                    CornerRadius="4" 
-                                    Padding="6,2" 
-                                    Margin="12,0,0,0"
-                                    Visibility="{Binding IsCurveActive, Converter={StaticResource BoolToVisibility}}">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🔄" FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                    <TextBlock Text="Curve Active" 
-                                               FontSize="10" 
-                                               Foreground="{StaticResource SuccessBrush}" 
-                                               VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Border>
+                            <!-- Immediate Apply -->
+                            <CheckBox Content="Instant apply" 
+                                      IsChecked="{Binding ImmediateApplyOnApply, Mode=TwoWay}" 
+                                      FontSize="11"
+                                      ToolTip="Bypass smoothing on Save/Apply"/>
+                            
+                            <Border Width="1" Background="#333" Margin="12,0"/>
+                            
+                            <!-- Smoothing Duration -->
+                            <TextBlock Text="Smoothing:" Style="{StaticResource SettingsLabel}" Margin="0,0,6,0"/>
+                            <TextBox Text="{Binding SmoothingDurationMs, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
+                                     Width="50" Height="24" Style="{StaticResource ModernTextBox}" FontSize="10" Padding="4,2"/>
+                            <TextBlock Text="ms" Style="{StaticResource SettingsLabel}" Margin="4,0,12,0"/>
+                            
+                            <!-- Step -->
+                            <TextBlock Text="Step:" Style="{StaticResource SettingsLabel}" Margin="0,0,6,0"/>
+                            <TextBox Text="{Binding SmoothingStepMs, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
+                                     Width="50" Height="24" Style="{StaticResource ModernTextBox}" FontSize="10" Padding="4,2"/>
+                            <TextBlock Text="ms" Style="{StaticResource SettingsLabel}" Margin="4,0,12,0"/>
+                            
+                            <Border Width="1" Background="#333" Margin="0,0,12,0"/>
+                            
+                            <!-- Independent Curves Toggle -->
+                            <CheckBox Content="Independent CPU/GPU" 
+                                      IsChecked="{Binding IndependentCurvesEnabled, Mode=TwoWay}" 
+                                      FontSize="11"
+                                      ToolTip="Control each fan based on its respective component temperature"/>
                         </StackPanel>
                     </Border>
-                    
-                    <!-- Spacer -->
-                    <Border Grid.Column="1"/>
-                    
-                    <!-- Save Custom Preset + Fan Transition Settings -->
-                    <StackPanel Grid.Column="2" Orientation="Vertical">
-                        <!-- Save Custom Preset Row -->
-                        <StackPanel Orientation="Horizontal">
-                            <TextBox Text="{Binding CustomPresetName, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" 
-                                     Style="{StaticResource ModernTextBox}" 
-                                     Width="140"
-                                     Height="36"
-                                     FontSize="12"
-                                     Padding="10,8"
-                                     VerticalContentAlignment="Center"
-                                     ToolTip="Name for your custom preset"/>
-                            <Button Command="{Binding SaveCustomPresetCommand}" 
-                                    Style="{StaticResource ModernButton}" 
-                                    Height="36"
-                                    Padding="12,0"
-                                    Margin="8,0,0,0"
-                                    ToolTip="Save current curve as a custom preset">
-                                <StackPanel Orientation="Horizontal">
-                                    <Path Data="{StaticResource IconExport}" Width="12" Height="12" Fill="{StaticResource TextPrimaryBrush}" Stretch="Uniform" Margin="0,0,6,0"/>
-                                    <TextBlock Text="Save" FontSize="12" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-
-                        <!-- Fan Transition Settings -->
-                        <CheckBox Content="Immediate apply on Save/Apply" 
-                                  IsChecked="{Binding ImmediateApplyOnApply, Mode=TwoWay}" 
-                                  Margin="0,12,0,0"
-                                  ToolTip="When enabled, saving or applying presets will immediately apply the fan changes, bypassing smoothing/hysteresis."/>
-                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="Smoothing duration (ms):" VerticalAlignment="Center" Style="{StaticResource Caption}" Width="160" Margin="0,0,8,0"/>
-                            <TextBox Text="{Binding SmoothingDurationMs, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" Width="80" Style="{StaticResource ModernTextBox}"/>
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="Smoothing step (ms):" VerticalAlignment="Center" Style="{StaticResource Caption}" Width="160" Margin="0,0,8,0"/>
-                            <TextBox Text="{Binding SmoothingStepMs, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" Width="80" Style="{StaticResource ModernTextBox}"/>
-                        </StackPanel>
-                        
-                        <!-- Independent CPU/GPU Curves Toggle -->
-                        <Border Background="{StaticResource SurfaceDarkBrush}"
-                                CornerRadius="6"
-                                Padding="12"
-                                Margin="0,12,0,0">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Text="Independent CPU/GPU Curves" 
-                                               FontSize="12" 
-                                               FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextPrimaryBrush}"/>
-                                    <TextBlock Text="Control each fan based on its respective component temperature" 
-                                               Style="{StaticResource Caption}" 
-                                               FontSize="10"
-                                               TextWrapping="Wrap"
-                                               Margin="0,2,8,0"/>
-                                </StackPanel>
-                                <CheckBox Grid.Column="1" 
-                                          IsChecked="{Binding IndependentCurvesEnabled, Mode=TwoWay}" 
-                                          VerticalAlignment="Center"
-                                          ToolTip="When enabled, you can set separate fan curves for CPU and GPU based on their individual temperatures"/>
-                            </Grid>
-                        </Border>
-                    </StackPanel>
                 </Grid>
             </Grid>
         </Border>

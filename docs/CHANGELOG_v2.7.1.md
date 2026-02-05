@@ -7,6 +7,33 @@
 
 ## ✨ New Features
 
+### General Tab Complete Redesign
+- **Modern Profile Cards**: Quick profile selection now features glowing icon backgrounds, color-coded feature tags, and prominent active badges
+- **Profile Color Themes**: Each profile has a distinct color identity:
+  - Performance: Orange (#FF6B35) with "Max Power" and "High Fans" tags
+  - Balanced: Cyan (#00D4FF) with "Default" and "Auto Fans" tags  
+  - Quiet: Green (#00FF88) with "Power Save" and "Low Fans" tags
+  - Custom: Purple (#A855F7) with "Manual" and "OMEN Tab" tags
+- **Status Badge Header**: Current profile and fan mode shown in compact badge at top right
+- **Enhanced System Stats**: CPU, GPU, and System cards redesigned with:
+  - Dark header bars with emoji icons and temperature badges
+  - Temperature badges use dynamic color based on heat level
+  - Larger, more prominent power (W) and fan (RPM) displays with monospace font
+  - Cleaner progress bar styling with rounded corners
+
+### Fan Control View Redesign (OMEN Tab)
+- **Modern Preset Cards**: Fan presets now feature glowing icon backgrounds with color-coded themes:
+  - Max: Red (#FF4444) - 100% fans
+  - Extreme: Ice Blue (#64B5F6) - @75°C max
+  - Gaming: Purple (#9C27B0) - @80°C max
+  - Auto: Green (#4CAF50) - BIOS controlled
+  - Silent: Gray (#607D8B) - Quiet operation
+  - Custom: Orange (#FF6B35) - User curve
+- **Compact Header**: Streamlined header with active mode badge showing current profile and "CURVE ACTIVE" indicator
+- **Dark Section Headers**: "🌀 FAN PROFILES" header with dark background and helpful subtitle
+- **Horizontal Settings Bar**: All settings (instant apply, smoothing, independent curves) consolidated into single compact horizontal bar
+- **Consistent Styling**: Matches the visual polish of the General tab redesign
+
 ### UI/UX Redesign - Tab Reorganization
 - **New "OMEN" Tab**: Renamed "Advanced" to "OMEN" - now contains HP OMEN-specific features only:
   - Performance Modes (Quiet/Balanced/Performance)
@@ -104,6 +131,30 @@
 - **Fixed Image Paths**: GPU vendor logos (NVIDIA/AMD/Intel) now use full pack URIs to ensure proper loading
 - **Affected**: Sidebar GPU list and Tuning tab GPU section
 
+### Tuning View Complete Redesign (MSI Afterburner-Inspired)
+- **Live Monitoring Gauges**: CPU/GPU sections now show real-time temperature, power draw, and clock speeds in circular gauge style
+- **MSI Afterburner-Style Sliders**: Redesigned slider layout with label column, wide slider track, and monospace value display
+- **CPU Vendor Logos**: CPU tuning sections (Undervolt, Power Limits, TCC Offset) now show Intel/AMD logo based on detected CPU
+- **GPU Vendor Logos**: GPU section shows NVIDIA/AMD/Intel logo based on detected GPU vendor
+- **Active Status Bar**: Prominent "ACTIVE" badge showing current Core/Memory offsets and Power Limit
+- **GPU Undervolt Info Panel**: New blue info box explaining how to achieve undervolt effect with power limit + negative offsets
+- **Compact Warning Banner**: Single-line warning instead of verbose multi-line text
+- **Enhanced Dark Theme**: Uses consistent dark backgrounds (#0A0A12, #12121A) for slider rows and value boxes
+- **CPU Name Display**: CPU Undervolt section now shows full CPU name (e.g., "13th Gen Intel(R) Core(TM) i9-13900HX")
+
+### OpenRGB Connection Stability
+- **Fixed Race Condition**: OpenRGB connection timeout now uses proper CancellationToken instead of Task.WhenAny
+- **No More Unobserved Exceptions**: Failed connection attempts are properly cleaned up
+- **Improved Error Handling**: Connection failures are caught and logged without crashing
+
+### Unobserved Task Exception Handler
+- **Smarter Filtering**: Non-fatal errors (SocketException, IOException, TimeoutException) no longer show fatal dialog
+- **Prevents False Crashes**: Background connection failures don't trigger "fatal error" dialogs
+
+### Dynamic Version Loading
+- **System Tray Version**: Tray icon tooltip now loads version from VERSION.txt instead of hardcoded value
+- **Automatic Updates**: Version display will update when VERSION.txt changes
+
 ### Desktop Detection Fix (Critical)
 - **Non-HP Desktops No Longer Blocked**: Fixed issue where OmenCore would immediately close on any desktop PC, not just OMEN desktops
 - **Improved Detection Logic**: Desktop blocking now only triggers for confirmed HP OMEN desktop systems (25L, 30L, 35L, 40L, 45L, Obelisk)
@@ -133,7 +184,7 @@
 - **Symptoms Fixed**: Max profile going back to low RPM, Gaming/Extreme profiles stuck at low RPM
 
 ### Previous v2.7.0 Bug (Now Fixed)
-The v2.7.0 desktop detection was overly aggressive:
+The v2.7.0 desktop detection was overly aggressive:f:\Omen\src\OmenCoreApp\bin\Debug\net8.0-windows10.0.19041.0\win-x64\OmenCore.exe
 - It checked chassis type for ALL systems, not just HP OMEN
 - Chassis types 3, 4, 5, 6, 7, 13, 15 (desktop types) triggered immediate app shutdown
 - Users on non-HP desktop PCs reported the app closing immediately on launch
@@ -250,3 +301,50 @@ This release includes significant GPU tuning improvements:
 4. **Linux Users**: See [INSTALL.md](../INSTALL.md) for updated installation instructions
 
 If you were affected by the immediate shutdown issue on a non-HP desktop PC, this update should resolve it.
+
+---
+
+## 🐛 Additional Bug Fixes (Post-Release)
+
+### Bloatware Manager Fixes
+- **Fixed Non-Functional UI**: Added missing `BloatwareManagerViewModel` property to MainViewModel that was causing the entire Bloatware Manager tab to be non-functional
+- **Fixed Overlapping States**: "Scanning..." and "No bloatware detected" states no longer appear simultaneously - uses proper MultiDataTrigger
+- **Fixed ListView Display**: Items in the bloatware list no longer show as "OmenCoreServices.BloatwareManager.BloatwareApp" - GridViewRowPresenter now properly renders columns
+
+### Expanded Protection List
+- **Driver Protection**: NVIDIA, Intel, and AMD display/chipset drivers are now protected from removal
+- **Runtime Protection**: Visual C++ Redistributables, .NET Framework/Runtime, DirectX are protected
+- **Windows Essentials**: Store, Xbox Gaming Overlay, Realtek Audio, Windows Defender scheduled tasks protected
+- **Gaming Support**: Xbox services and Game Bar preserved for games that depend on them
+
+### EC Contention Warning Throttling
+- **Reduced Log Spam**: EC contention warnings (when OMEN Gaming Hub interferes with fan control) now only appear once per session instead of repeatedly flooding logs
+- **Cleaner User Experience**: Users are notified of the issue without being overwhelmed with repeated warnings
+
+### Model Database Updates
+- **OMEN Max 16 (Product ID: 8D41)**: Added to the model capability database with full 2025 flagship capabilities (RTX 5080, Intel Core Ultra 9 275HX, MUX switch, 4-zone RGB)
+
+### GPU Power Boost UI Enhancement
+- **More Pronounced Active State**: GPU Boost "ACTIVE" indicator now features a glowing badge, larger icon, and "+15W EXTRA POWER" display
+
+---
+
+## 📦 SHA256 Checksums
+
+Verify your download integrity:
+
+| File | SHA256 |
+|------|--------|
+| `OmenCoreSetup-2.7.1.exe` | `2C8E27FE15F84DCA6F68427D13983F40D589B8B9C9BE6358921D4A90905D1BE3` |
+| `OmenCore-2.7.1-win-x64.zip` | `5F938BA48F4CC4B6FE97FF0F5F0AB32971B543BDE518A560524F60A6E48755A6` |
+| `OmenCore-2.7.1-linux-x64.zip` | `570F84153D626015A24FCD19575226B19317A879BC2A4D5DD2566C3877F7BD8A` |
+
+**To verify on Windows (PowerShell):**
+```powershell
+Get-FileHash -Algorithm SHA256 OmenCoreSetup-2.7.1.exe
+```
+
+**To verify on Linux:**
+```bash
+sha256sum OmenCore-2.7.1-linux-x64.zip
+```

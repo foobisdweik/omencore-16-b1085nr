@@ -244,6 +244,20 @@ namespace OmenCore.ViewModels
             }
         }
         
+        private BloatwareManagerViewModel? _bloatwareManager;
+        public BloatwareManagerViewModel? BloatwareManager
+        {
+            get
+            {
+                if (_bloatwareManager == null)
+                {
+                    _bloatwareManager = new BloatwareManagerViewModel(_logging);
+                    OnPropertyChanged(nameof(BloatwareManager));
+                }
+                return _bloatwareManager;
+            }
+        }
+        
         private readonly AsyncRelayCommand _applyUndervoltCommand;
         private readonly AsyncRelayCommand _resetUndervoltCommand;
         private readonly AsyncRelayCommand _refreshUndervoltCommand;

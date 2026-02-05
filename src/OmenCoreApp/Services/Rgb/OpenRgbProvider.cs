@@ -82,15 +82,19 @@ namespace OmenCore.Services.Rgb
                 _client.ReceiveTimeout = 5000;
                 _client.SendTimeout = 5000;
                 
-                // Try to connect with timeout
-                var connectTask = _client.ConnectAsync(_host, _port);
-                if (await Task.WhenAny(connectTask, Task.Delay(2000)) != connectTask)
+                // Try to connect with timeout using CancellationToken
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(2));
+                try
+                {
+                    await _client.ConnectAsync(_host, _port, cts.Token);
+                }
+                catch (OperationCanceledException)
                 {
                     _logging.Debug("[OpenRGB] Connection timeout - OpenRGB server not available");
+                    _client?.Dispose();
+                    _client = null;
                     return;
                 }
-                
-                await connectTask; // Ensure any exception is thrown
                 
                 _stream = _client.GetStream();
                 _isConnected = true;
@@ -102,6 +106,15 @@ namespace OmenCore.Services.Rgb
             {
                 _logging.Debug("[OpenRGB] OpenRGB server not running or not accessible");
                 _isConnected = false;
+                _client?.Dispose();
+                _client = null;
+            }
+            catch (Exception ex)
+            {
+                _logging.Debug($"[OpenRGB] Connection failed: {ex.Message}");
+                _isConnected = false;
+                _client?.Dispose();
+                _client = null;
             }
         }
         

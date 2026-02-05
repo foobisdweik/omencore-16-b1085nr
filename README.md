@@ -1156,7 +1156,7 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 - **Latest Release**: https://github.com/theantipopau/omencore/releases/latest
 - **Issue Tracker**: https://github.com/theantipopau/omencore/issues
 - **Discussions**: https://github.com/theantipopau/omencore/discussions
-- **Discord Server**: https://discord.gg/HSrSgmM4
+- **Discord Server**: https://discord.gg/AMwVGGyn
 - **Subreddit**: https://reddit.com/r/omencore
 - **Donate (PayPal)**: https://www.paypal.com/donate/?business=XH8CKYF8T7EBU&no_recurring=0&item_name=Thank+you+for+your+generous+donation%2C+this+will+allow+me+to+continue+developing+my+programs.&currency_code=AUD
 

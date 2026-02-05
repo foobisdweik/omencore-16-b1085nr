@@ -876,8 +876,26 @@ namespace OmenCore
 
         private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
         {
+            // Log all unobserved task exceptions
             Logging.Error("Unobserved task exception", e.Exception);
+            
+            // Mark as observed to prevent crash
             e.SetObserved();
+            
+            // Only show fatal dialog for truly fatal errors, not connection failures
+            var innerException = e.Exception?.InnerException;
+            if (innerException is System.Net.Sockets.SocketException ||
+                innerException is System.IO.IOException ||
+                innerException is System.TimeoutException ||
+                innerException is OperationCanceledException ||
+                innerException is TaskCanceledException)
+            {
+                // These are non-fatal connection/IO errors - just log them
+                Logging.Warn($"Non-fatal async error (suppressed): {innerException.Message}");
+                return;
+            }
+            
+            // Show dialog for other serious errors
             ShowFatalDialog(e.Exception, false);
         }
 

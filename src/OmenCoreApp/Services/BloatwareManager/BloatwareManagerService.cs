@@ -608,6 +608,10 @@ namespace OmenCore.Services.BloatwareManager
 
         private static bool IsKnownBloatware(string name, out BloatwareCategory category, out string description, out RemovalRisk risk)
         {
+            // ═══════════════════════════════════════════════════════════════════════════════════
+            // PROTECTED APPS - NEVER flag these as bloatware
+            // ═══════════════════════════════════════════════════════════════════════════════════
+            
             // Exclude OmenCore from bloatware detection - we're not bloatware!
             if (name.Contains("OmenCore", StringComparison.OrdinalIgnoreCase))
             {
@@ -617,8 +621,7 @@ namespace OmenCore.Services.BloatwareManager
                 return false;
             }
             
-            // CRITICAL: Exclude HP Support Assistant - it's needed for driver updates
-            // v2.7.1: Fixed false positive where HPSupportAssistant was flagged as bloatware
+            // HP Support Assistant - needed for driver updates and BIOS updates
             if (name.Contains("HPSupportAssistant", StringComparison.OrdinalIgnoreCase) ||
                 name.Contains("HP Support Assistant", StringComparison.OrdinalIgnoreCase) ||
                 name.Equals("AD2F1837.HPSupportAssistant", StringComparison.OrdinalIgnoreCase))
@@ -628,6 +631,134 @@ namespace OmenCore.Services.BloatwareManager
                 risk = RemovalRisk.Unknown;
                 return false;
             }
+            
+            // NVIDIA drivers and essential components - NEVER remove
+            if (name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) &&
+                (name.Contains("Driver", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Graphics", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("PhysX", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("FrameView", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Control Panel", StringComparison.OrdinalIgnoreCase)))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // Intel drivers and essential components - NEVER remove
+            if (name.Contains("Intel", StringComparison.OrdinalIgnoreCase) &&
+                (name.Contains("Driver", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Graphics", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Management Engine", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Chipset", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Rapid Storage", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Thunderbolt", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("WiFi", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Wireless", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Bluetooth", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Network", StringComparison.OrdinalIgnoreCase)))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // AMD drivers - NEVER remove
+            if (name.Contains("AMD", StringComparison.OrdinalIgnoreCase) &&
+                (name.Contains("Driver", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Software", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Radeon", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Chipset", StringComparison.OrdinalIgnoreCase)))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // Realtek audio/network drivers - NEVER remove
+            if (name.Contains("Realtek", StringComparison.OrdinalIgnoreCase))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // Microsoft Visual C++ Redistributables - NEVER remove (games need these)
+            if (name.Contains("Microsoft Visual C++", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("VC_Redist", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("vcredist", StringComparison.OrdinalIgnoreCase))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // .NET Framework/Runtime - NEVER remove (apps need these)
+            if (name.Contains(".NET", StringComparison.OrdinalIgnoreCase) &&
+                (name.Contains("Runtime", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Framework", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Desktop", StringComparison.OrdinalIgnoreCase)))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // DirectX - NEVER remove
+            if (name.Contains("DirectX", StringComparison.OrdinalIgnoreCase))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // Windows Store and critical Windows components - NEVER remove
+            if (name.Equals("Microsoft.WindowsStore", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("Microsoft.StorePurchaseApp", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.NET", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.VCLibs", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.UI.Xaml", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.Windows.Photos", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.WindowsCalculator", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.WindowsCamera", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.WindowsTerminal", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.WindowsNotepad", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.Paint", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.ScreenSketch", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.WebpImageExtension", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.HEIFImageExtension", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.HEVCVideoExtension", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Microsoft.DesktopAppInstaller", StringComparison.OrdinalIgnoreCase))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // Xbox Gaming Overlay - NEVER remove (needed for Game Bar, FPS counter, screenshots)
+            if (name.Contains("Microsoft.Xbox", StringComparison.OrdinalIgnoreCase) &&
+                (name.Contains("GamingOverlay", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("GameOverlay", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("GameBar", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Identity", StringComparison.OrdinalIgnoreCase)))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+
+            // ═══════════════════════════════════════════════════════════════════════════════════
+            // BLOATWARE DETECTION - Safe to flag/remove
+            // ═══════════════════════════════════════════════════════════════════════════════════
 
             // HP Bloatware
             if (name.Contains("HP Sure", StringComparison.OrdinalIgnoreCase))
@@ -806,6 +937,10 @@ namespace OmenCore.Services.BloatwareManager
 
         private static bool IsKnownBloatwareStartup(string name, string value, out BloatwareCategory category, out string description, out RemovalRisk risk)
         {
+            // ═══════════════════════════════════════════════════════════════════════════════════
+            // PROTECTED STARTUP ITEMS - NEVER flag these
+            // ═══════════════════════════════════════════════════════════════════════════════════
+            
             // Exclude OmenCore from bloatware detection
             if (name.Contains("OmenCore", StringComparison.OrdinalIgnoreCase) ||
                 value.Contains("OmenCore", StringComparison.OrdinalIgnoreCase))
@@ -815,6 +950,62 @@ namespace OmenCore.Services.BloatwareManager
                 risk = RemovalRisk.Unknown;
                 return false;
             }
+            
+            // NVIDIA - essential for GPU functionality
+            if (name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
+                value.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // Intel - essential for Intel hardware
+            if ((name.Contains("Intel", StringComparison.OrdinalIgnoreCase) ||
+                 value.Contains("Intel", StringComparison.OrdinalIgnoreCase)) &&
+                !name.Contains("Intel Driver", StringComparison.OrdinalIgnoreCase))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // AMD - essential for AMD hardware
+            if (name.Contains("AMD", StringComparison.OrdinalIgnoreCase) ||
+                value.Contains("AMD", StringComparison.OrdinalIgnoreCase))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // Realtek - essential for audio/network
+            if (name.Contains("Realtek", StringComparison.OrdinalIgnoreCase) ||
+                value.Contains("Realtek", StringComparison.OrdinalIgnoreCase))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // Windows Security/Defender - NEVER disable
+            if (name.Contains("Windows Security", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Windows Defender", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("SecurityHealth", StringComparison.OrdinalIgnoreCase))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+
+            // ═══════════════════════════════════════════════════════════════════════════════════
+            // BLOATWARE STARTUP DETECTION
+            // ═══════════════════════════════════════════════════════════════════════════════════
 
             if (name.Contains("OneDrive", StringComparison.OrdinalIgnoreCase))
             {
@@ -865,6 +1056,10 @@ namespace OmenCore.Services.BloatwareManager
 
         private static bool IsKnownBloatwareTask(string taskName, out BloatwareCategory category, out string description, out RemovalRisk risk)
         {
+            // ═══════════════════════════════════════════════════════════════════════════════════
+            // PROTECTED SCHEDULED TASKS - NEVER flag these
+            // ═══════════════════════════════════════════════════════════════════════════════════
+            
             // Exclude OmenCore from bloatware detection
             if (taskName.Contains("OmenCore", StringComparison.OrdinalIgnoreCase))
             {
@@ -873,6 +1068,52 @@ namespace OmenCore.Services.BloatwareManager
                 risk = RemovalRisk.Unknown;
                 return false;
             }
+            
+            // Windows Defender/Security tasks - NEVER disable
+            if (taskName.Contains("Windows Defender", StringComparison.OrdinalIgnoreCase) ||
+                taskName.Contains("Antimalware", StringComparison.OrdinalIgnoreCase) ||
+                taskName.Contains("MpSigStub", StringComparison.OrdinalIgnoreCase))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // Windows Update tasks - NEVER disable
+            if (taskName.Contains("WindowsUpdate", StringComparison.OrdinalIgnoreCase) ||
+                taskName.Contains("UpdateOrchestrator", StringComparison.OrdinalIgnoreCase) ||
+                taskName.Contains("SoftwareProtection", StringComparison.OrdinalIgnoreCase))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // Disk cleanup/maintenance - NEVER disable
+            if (taskName.Contains("DiskCleanup", StringComparison.OrdinalIgnoreCase) ||
+                taskName.Contains("Defrag", StringComparison.OrdinalIgnoreCase) ||
+                taskName.Contains("SystemRestore", StringComparison.OrdinalIgnoreCase))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+            
+            // NVIDIA tasks - NEVER disable
+            if (taskName.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase))
+            {
+                category = BloatwareCategory.Unknown;
+                description = "";
+                risk = RemovalRisk.Unknown;
+                return false;
+            }
+
+            // ═══════════════════════════════════════════════════════════════════════════════════
+            // BLOATWARE TASK DETECTION
+            // ═══════════════════════════════════════════════════════════════════════════════════
 
             if (taskName.Contains("HP", StringComparison.OrdinalIgnoreCase) &&
                 !taskName.Contains("OmenCore", StringComparison.OrdinalIgnoreCase))

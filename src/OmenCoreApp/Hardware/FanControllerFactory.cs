@@ -427,8 +427,12 @@ namespace OmenCore.Hardware
                         _logging?.Debug($"EC alt register read failed (attempt {attempt}): {ex.Message}");
                         if (ex is TimeoutException || ex.Message.Contains("mutex", StringComparison.OrdinalIgnoreCase))
                         {
-                            // Log contention event
-                            _logging?.Warn($"EC contention detected during alt read (attempt {attempt}): {ex.Message}");
+                            // Log contention event only once per session to avoid log spam
+                            if (!PawnIOEcAccess.EcContentionWarningLogged)
+                            {
+                                PawnIOEcAccess.EcContentionWarningLogged = true;
+                                _logging?.Warn($"EC contention detected: {ex.Message}. This warning will only appear once per session.");
+                            }
                         }
                     }
 
@@ -460,7 +464,19 @@ namespace OmenCore.Hardware
                 }
                 catch (Exception ex)
                 {
-                    _logging?.Warn($"EC Read attempt {attempt} failed: {ex.Message}");
+                    // Only log EC read failures once per session if it's a mutex/contention issue
+                    if (ex is TimeoutException || ex.Message.Contains("mutex", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!PawnIOEcAccess.EcContentionWarningLogged)
+                        {
+                            PawnIOEcAccess.EcContentionWarningLogged = true;
+                            _logging?.Warn($"EC Read failed due to contention: {ex.Message}. This warning will only appear once per session.");
+                        }
+                    }
+                    else
+                    {
+                        _logging?.Warn($"EC Read attempt {attempt} failed: {ex.Message}");
+                    }
                 }
 
                 // Backoff with jitter

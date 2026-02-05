@@ -76,7 +76,19 @@ namespace OmenCore.Services
                 }
                 catch (Exception ex)
                 {
-                    _logging.Warn($"⚠️ Could not apply EC power limits: {ex.Message}");
+                    // Only log EC power limits failure once per session if it's contention
+                    if (ex.Message.Contains("mutex", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!Hardware.PawnIOEcAccess.EcContentionWarningLogged)
+                        {
+                            Hardware.PawnIOEcAccess.EcContentionWarningLogged = true;
+                            _logging.Warn($"⚠️ Could not apply EC power limits due to contention: {ex.Message}. This warning will only appear once per session.");
+                        }
+                    }
+                    else
+                    {
+                        _logging.Warn($"⚠️ Could not apply EC power limits: {ex.Message}");
+                    }
                 }
             }
             else

@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.IO;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
@@ -26,6 +27,7 @@ namespace OmenCore.Utils
         private readonly Action _shutdownApp;
         private readonly ImageSource? _baseIconSource;
         private readonly DisplayService _displayService;
+        private readonly string _appVersion;
         private QuickPopupWindow? _quickPopup;
         private MenuItem? _cpuTempMenuItem;
         private MenuItem? _gpuTempMenuItem;
@@ -87,6 +89,7 @@ namespace OmenCore.Utils
             _shutdownApp = shutdownApp;
             _displayService = new DisplayService(App.Logging);
             _configService = configService;
+            _appVersion = LoadAppVersion();
 
             _baseIconSource = LoadBaseIcon();
             _trayIcon.IconSource = _baseIconSource;
@@ -101,6 +104,29 @@ namespace OmenCore.Utils
             _updateTimer.Start();
 
             UpdateTrayDisplay(null, EventArgs.Empty);
+        }
+
+        private static string LoadAppVersion()
+        {
+            try
+            {
+                var versionFile = Path.Combine(AppContext.BaseDirectory, "VERSION.txt");
+                if (File.Exists(versionFile))
+                {
+                    var lines = File.ReadAllLines(versionFile);
+                    foreach (var line in lines)
+                    {
+                        var version = line.Trim();
+                        if (!string.IsNullOrEmpty(version))
+                            return version;
+                    }
+                }
+            }
+            catch { }
+            
+            // Fallback to assembly version
+            var asm = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            return asm != null ? $"{asm.Major}.{asm.Minor}.{asm.Build}" : "2.7.1";
         }
 
         private void InitializeContextMenu()
@@ -532,7 +558,7 @@ namespace OmenCore.Utils
                 var gpuPower = _latestSample.GpuPowerWatts;
                 var gpuPowerDisplay = gpuPower > 0 ? $" · {gpuPower:F0}W" : "";
                 
-                _trayIcon.ToolTipText = $"🎮 OmenCore v2.7.0\n" +
+                _trayIcon.ToolTipText = $"🎮 OmenCore v{_appVersion}\n" +
                                        $"━━━━━━━━━━━━━━━━━━\n" +
                                        $"🔥 CPU: {cpuTemp:F0}°C @ {cpuLoad:F0}%\n" +
                                        $"🎯 GPU: {gpuTemp:F0}°C @ {gpuLoad:F0}%{gpuPowerDisplay}\n" +

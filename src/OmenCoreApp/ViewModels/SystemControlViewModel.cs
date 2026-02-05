@@ -271,6 +271,23 @@ namespace OmenCore.ViewModels
             _ => "Close or disable the external application, then restart OmenCore."
         };
 
+        // CPU Vendor Properties (for UI display)
+        private string _cpuVendor = "Intel";
+        public string CpuVendor
+        {
+            get => _cpuVendor;
+            private set { _cpuVendor = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsIntelCpu)); OnPropertyChanged(nameof(IsAmdCpu)); }
+        }
+        
+        private string _cpuDisplayName = "CPU";
+        public string CpuDisplayName
+        {
+            get => _cpuDisplayName;
+            private set { _cpuDisplayName = value; OnPropertyChanged(); }
+        }
+        
+        public bool IsIntelCpu => CpuVendor == "Intel";
+        
         // AMD Power Control Properties
         private bool _isAmdCpu;
         public bool IsAmdCpu
@@ -1015,7 +1032,10 @@ namespace OmenCore.ViewModels
             RefreshCpuPowerLimitsCommand = new RelayCommand(_ => RefreshCpuPowerLimits());
             
             // Detect AMD CPU
-            IsAmdCpu = Hardware.CpuUndervoltProviderFactory.DetectedVendor == Hardware.CpuUndervoltProviderFactory.CpuVendor.AMD;
+            var cpuVendorEnum = Hardware.CpuUndervoltProviderFactory.DetectedVendor;
+            IsAmdCpu = cpuVendorEnum == Hardware.CpuUndervoltProviderFactory.CpuVendor.AMD;
+            CpuVendor = cpuVendorEnum == Hardware.CpuUndervoltProviderFactory.CpuVendor.AMD ? "AMD" : "Intel";
+            CpuDisplayName = Hardware.CpuUndervoltProviderFactory.CpuName;
             
             // Restore AMD power limits if applicable
             if (IsAmdCpu)

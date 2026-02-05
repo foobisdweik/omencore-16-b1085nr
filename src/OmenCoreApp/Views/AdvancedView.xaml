@@ -9,87 +9,240 @@
              xmlns:sys="clr-namespace:System;assembly=mscorlib"
              mc:Ignorable="d" 
              d:DesignHeight="800" d:DesignWidth="1000">
+    
+    <UserControl.Resources>
+        <!-- Performance Mode Card Style -->
+        <Style x:Key="PerformanceModeCard" TargetType="RadioButton">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="CardBorder" 
+                                Background="#141418" 
+                                CornerRadius="12" 
+                                Padding="20,24"
+                                BorderThickness="2"
+                                BorderBrush="Transparent"
+                                Cursor="Hand">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CardBorder" Property="Background" Value="#1A1A1E"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="CardBorder" Property="Background" Value="#1A1A1E"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+    
     <ScrollViewer Style="{StaticResource SmoothScrollViewer}" 
                   Padding="0,0,12,0">
         <StackPanel Margin="20,20,20,40">
-            <!-- Header -->
-            <StackPanel Margin="0,0,0,24">
-                <TextBlock Text="OMEN Controls" Style="{StaticResource Heading1}"/>
-                <TextBlock Text="HP OMEN-specific features: Performance modes, fan curves, GPU switching, and power boost" 
-                           Style="{StaticResource Caption}"
-                           Opacity="0.9"/>
-            </StackPanel>
-
-            <!-- Performance Mode Section -->
-            <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,20">
-                <StackPanel>
-                    <TextBlock Text="Performance Mode" FontSize="20" FontWeight="SemiBold" 
-                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
-                    <TextBlock Text="Select system power and cooling profile" 
-                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,16"/>
+            <!-- Compact Header -->
+            <Border Margin="0,0,0,20">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
                     
-                    <!-- Mode Selection Buttons -->
-                    <UniformGrid Rows="1" Margin="0,0,0,16">
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="OMEN CONTROLS" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <TextBlock Text="HP OMEN-specific features: Performance modes, fan curves, GPU switching" FontSize="11" Foreground="{StaticResource TextTertiaryBrush}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    
+                    <!-- Active Mode Badge -->
+                    <Border Grid.Column="1" Background="#1A1A1E" CornerRadius="20" Padding="14,8" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="8" Height="8" Fill="{StaticResource AccentGreenBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding SystemControl.CurrentPerformanceModeIndicator}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Performance Mode Section - Redesigned -->
+            <Border Style="{StaticResource SurfaceCard}" Padding="20" Margin="0,0,0,20">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Section Header -->
+                    <Border Grid.Row="0" Background="#0D0D0F" CornerRadius="8" Padding="14,10" Margin="0,0,0,16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <TextBlock Text="⚡" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="PERFORMANCE MODE" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="2" Text="System power and cooling profile" FontSize="10" Foreground="{StaticResource TextTertiaryBrush}" VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- Mode Selection Cards -->
+                    <UniformGrid Grid.Row="1" Rows="1" Columns="3">
+                        <!-- Quiet Mode -->
                         <RadioButton x:Name="QuietModeRadio"
                                      GroupName="PerformanceMode"
                                      IsChecked="{Binding SystemControl.IsQuietMode, Mode=OneWay}"
                                      Command="{Binding SystemControl.SelectPerformanceModeCommand}"
                                      CommandParameter="Quiet"
-                                     Style="{StaticResource PerformanceModeRadioStyle}"
+                                     Style="{StaticResource PerformanceModeCard}"
                                      Margin="0,0,8,0">
-                            <StackPanel>
-                                <TextBlock Text="🌙" FontSize="24" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                <TextBlock Text="Quiet" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="Silent operation" FontSize="11" Opacity="0.7" HorizontalAlignment="Center"/>
-                            </StackPanel>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                
+                                <!-- Icon with Glow -->
+                                <Border Grid.Row="0" Width="56" Height="56" CornerRadius="28" Margin="0,0,0,12" HorizontalAlignment="Center">
+                                    <Border.Background>
+                                        <RadialGradientBrush>
+                                            <GradientStop Color="#3000FF88" Offset="0"/>
+                                            <GradientStop Color="#0000FF88" Offset="1"/>
+                                        </RadialGradientBrush>
+                                    </Border.Background>
+                                    <TextBlock Text="🌙" FontSize="28" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                
+                                <TextBlock Grid.Row="1" Text="Quiet" FontSize="16" FontWeight="Bold" 
+                                           Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock Grid.Row="2" Text="SILENT OPERATION" FontSize="9" FontWeight="SemiBold" Foreground="#00FF88" 
+                                           HorizontalAlignment="Center" Margin="0,4,0,10"/>
+                                
+                                <!-- Feature Tags -->
+                                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,10">
+                                    <Border Background="#2000FF88" CornerRadius="4" Padding="8,4" Margin="0,0,4,0">
+                                        <TextBlock Text="Low Power" FontSize="9" Foreground="#00FF88"/>
+                                    </Border>
+                                    <Border Background="#2000FF88" CornerRadius="4" Padding="8,4">
+                                        <TextBlock Text="Silent Fans" FontSize="9" Foreground="#00FF88"/>
+                                    </Border>
+                                </StackPanel>
+                                
+                                <!-- Active Badge -->
+                                <Border Grid.Row="4" Background="{StaticResource AccentBrush}" CornerRadius="6" Padding="16,6" 
+                                        HorizontalAlignment="Center"
+                                        Visibility="{Binding SystemControl.IsQuietMode, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="✓ ACTIVE" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                </Border>
+                            </Grid>
                         </RadioButton>
                         
+                        <!-- Balanced Mode -->
                         <RadioButton x:Name="BalancedModeRadio"
                                      GroupName="PerformanceMode"
                                      IsChecked="{Binding SystemControl.IsBalancedMode, Mode=OneWay}"
                                      Command="{Binding SystemControl.SelectPerformanceModeCommand}"
                                      CommandParameter="Balanced"
-                                     Style="{StaticResource PerformanceModeRadioStyle}"
+                                     Style="{StaticResource PerformanceModeCard}"
                                      Margin="4,0,4,0">
-                            <StackPanel>
-                                <TextBlock Text="⚖️" FontSize="24" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                <TextBlock Text="Balanced" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="Optimal balance" FontSize="11" Opacity="0.7" HorizontalAlignment="Center"/>
-                            </StackPanel>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                
+                                <Border Grid.Row="0" Width="56" Height="56" CornerRadius="28" Margin="0,0,0,12" HorizontalAlignment="Center">
+                                    <Border.Background>
+                                        <RadialGradientBrush>
+                                            <GradientStop Color="#3000D4FF" Offset="0"/>
+                                            <GradientStop Color="#0000D4FF" Offset="1"/>
+                                        </RadialGradientBrush>
+                                    </Border.Background>
+                                    <TextBlock Text="⚖️" FontSize="28" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                
+                                <TextBlock Grid.Row="1" Text="Balanced" FontSize="16" FontWeight="Bold" 
+                                           Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock Grid.Row="2" Text="RECOMMENDED" FontSize="9" FontWeight="SemiBold" Foreground="#00D4FF" 
+                                           HorizontalAlignment="Center" Margin="0,4,0,10"/>
+                                
+                                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,10">
+                                    <Border Background="#2000D4FF" CornerRadius="4" Padding="8,4" Margin="0,0,4,0">
+                                        <TextBlock Text="Auto Power" FontSize="9" Foreground="#00D4FF"/>
+                                    </Border>
+                                    <Border Background="#2000D4FF" CornerRadius="4" Padding="8,4">
+                                        <TextBlock Text="Smart Fans" FontSize="9" Foreground="#00D4FF"/>
+                                    </Border>
+                                </StackPanel>
+                                
+                                <Border Grid.Row="4" Background="{StaticResource AccentBrush}" CornerRadius="6" Padding="16,6" 
+                                        HorizontalAlignment="Center"
+                                        Visibility="{Binding SystemControl.IsBalancedMode, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="✓ ACTIVE" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                </Border>
+                            </Grid>
                         </RadioButton>
                         
+                        <!-- Performance Mode -->
                         <RadioButton x:Name="PerformanceModeRadio"
                                      GroupName="PerformanceMode"
                                      IsChecked="{Binding SystemControl.IsPerformanceMode, Mode=OneWay}"
                                      Command="{Binding SystemControl.SelectPerformanceModeCommand}"
                                      CommandParameter="Performance"
-                                     Style="{StaticResource PerformanceModeRadioStyle}"
+                                     Style="{StaticResource PerformanceModeCard}"
                                      Margin="8,0,0,0">
-                            <StackPanel>
-                                <TextBlock Text="🚀" FontSize="24" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                <TextBlock Text="Performance" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                                <TextBlock Text="Maximum power" FontSize="11" Opacity="0.7" HorizontalAlignment="Center"/>
-                            </StackPanel>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                
+                                <Border Grid.Row="0" Width="56" Height="56" CornerRadius="28" Margin="0,0,0,12" HorizontalAlignment="Center">
+                                    <Border.Background>
+                                        <RadialGradientBrush>
+                                            <GradientStop Color="#30FF6B35" Offset="0"/>
+                                            <GradientStop Color="#00FF6B35" Offset="1"/>
+                                        </RadialGradientBrush>
+                                    </Border.Background>
+                                    <TextBlock Text="🚀" FontSize="28" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                
+                                <TextBlock Grid.Row="1" Text="Performance" FontSize="16" FontWeight="Bold" 
+                                           Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock Grid.Row="2" Text="MAXIMUM POWER" FontSize="9" FontWeight="SemiBold" Foreground="#FF6B35" 
+                                           HorizontalAlignment="Center" Margin="0,4,0,10"/>
+                                
+                                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,10">
+                                    <Border Background="#20FF6B35" CornerRadius="4" Padding="8,4" Margin="0,0,4,0">
+                                        <TextBlock Text="Max Power" FontSize="9" Foreground="#FF6B35"/>
+                                    </Border>
+                                    <Border Background="#20FF6B35" CornerRadius="4" Padding="8,4">
+                                        <TextBlock Text="High Fans" FontSize="9" Foreground="#FF6B35"/>
+                                    </Border>
+                                </StackPanel>
+                                
+                                <Border Grid.Row="4" Background="{StaticResource AccentBrush}" CornerRadius="6" Padding="16,6" 
+                                        HorizontalAlignment="Center"
+                                        Visibility="{Binding SystemControl.IsPerformanceMode, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="✓ ACTIVE" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                </Border>
+                            </Grid>
                         </RadioButton>
                     </UniformGrid>
-                    
-                    <!-- Current Mode Status -->
-                    <Border Background="{StaticResource SurfaceDarkBrush}" CornerRadius="8" Padding="12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Active Mode:" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" 
-                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Grid.Column="1" 
-                                       Text="{Binding SystemControl.CurrentPerformanceModeIndicator}" 
-                                       FontSize="14" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentBrush}"
-                                       VerticalAlignment="Center"/>
-                        </Grid>
-                    </Border>
-                </StackPanel>
+                </Grid>
             </Border>
 
             <!-- Fan Curve Editor Section -->
@@ -99,32 +252,87 @@
 
             <!-- GPU Power Boost Section -->
             <Border Style="{StaticResource SurfaceCard}" Padding="24" Margin="0,0,0,16">
-                <StackPanel>
-                    <TextBlock Text="GPU Power Boost (TGP/Dynamic Boost)" FontSize="20" FontWeight="SemiBold" 
-                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
+                <Grid>
+                    <!-- Active Badge - Top Right Corner -->
+                    <Border HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Margin="0,-8,-8,0"
+                            Background="#00D4FF"
+                            CornerRadius="0,8,0,8"
+                            Padding="12,6"
+                            Visibility="{Binding SystemControl.GpuPowerBoostActive, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Visible}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚡" FontSize="12" Foreground="#0D1117" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="BOOST ACTIVE" FontSize="11" FontWeight="Bold" Foreground="#0D1117"/>
+                        </StackPanel>
+                    </Border>
                     
-                    <TextBlock Text="Control GPU Total Graphics Power (TGP) and Dynamic Boost (PPAB). Higher settings enable more GPU wattage. Extended option is for RTX 5080 and newer GPUs that may support +25W boost." 
-                               FontSize="12" 
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               Margin="0,0,0,16" TextWrapping="Wrap"/>
-
-                    <!-- Current Status -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock Grid.Column="0" Text="Status:" 
-                                   FontSize="14" 
-                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                   Margin="0,0,12,0"/>
+                    <StackPanel>
+                        <TextBlock Text="GPU Power Boost (TGP/Dynamic Boost)" FontSize="20" FontWeight="SemiBold" 
+                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"/>
                         
-                        <TextBlock Grid.Column="1" 
-                                   Text="{Binding SystemControl.GpuPowerBoostStatus}" 
-                                   FontSize="14" FontWeight="SemiBold"
-                                   Foreground="{StaticResource AccentBrush}"/>
-                    </Grid>
+                        <TextBlock Text="Control GPU Total Graphics Power (TGP) and Dynamic Boost (PPAB). Higher settings enable more GPU wattage. Extended option is for RTX 5080 and newer GPUs that may support +25W boost." 
+                                   FontSize="12" 
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,0,0,16" TextWrapping="Wrap"/>
+
+                        <!-- Current Status - Prominent Indicator -->
+                        <Border CornerRadius="10"
+                                Padding="16,14"
+                                Margin="0,0,0,16">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#1A00D4FF"/>
+                                    <Setter Property="BorderBrush" Value="#4000D4FF"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                </Style>
+                            </Border.Style>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Glowing Status Icon with Pulse Effect -->
+                                <Border Grid.Column="0" Width="48" Height="48" CornerRadius="24"
+                                        Margin="0,0,16,0">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#3000D4FF" Offset="0"/>
+                                            <GradientStop Color="#1000D4FF" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="#00D4FF" BlurRadius="15" ShadowDepth="0" Opacity="0.5"/>
+                                    </Border.Effect>
+                                    <TextBlock Text="⚡" FontSize="24" 
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="CURRENT POWER MODE" 
+                                               FontSize="10" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock Text="{Binding SystemControl.GpuPowerBoostStatus}" 
+                                               FontSize="18" FontWeight="Bold"
+                                               Foreground="#00D4FF"/>
+                                </StackPanel>
+
+                                <!-- Wattage Indicator -->
+                                <Border Grid.Column="2" VerticalAlignment="Center"
+                                        Background="#2000D4FF" CornerRadius="6" Padding="12,8"
+                                        Visibility="{Binding SystemControl.GpuPowerBoostActive, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Visible}">
+                                    <StackPanel>
+                                        <TextBlock Text="EXTRA POWER" FontSize="9" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   HorizontalAlignment="Center" Margin="0,0,0,2"/>
+                                        <TextBlock Text="+15W" FontSize="20" FontWeight="Bold"
+                                                   Foreground="#00FF88" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Border>
 
                     <!-- Power Level Selection -->
                     <Grid Margin="0,0,0,16" 
@@ -152,7 +360,8 @@
                                 Command="{Binding SystemControl.ApplyGpuPowerBoostCommand}"
                                 Padding="16,8"/>
                     </Grid>
-                </StackPanel>
+                    </StackPanel>
+                </Grid>
             </Border>
 
             <!-- GPU Switching Section -->

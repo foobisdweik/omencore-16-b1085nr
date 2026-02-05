@@ -314,6 +314,38 @@ namespace OmenCore.Hardware
             });
             
             // ═══════════════════════════════════════════════════════════════════════════════════
+            // OMEN MAX Series (2025+ flagship models)
+            // ═══════════════════════════════════════════════════════════════════════════════════
+            
+            // OMEN MAX 16 (2025) - ah0xxx series - Intel Core Ultra 9 275HX + RTX 5080
+            // GitHub Issue #61: Model not in database
+            AddModel(new ModelCapabilities
+            {
+                ProductId = "8D41",
+                ModelName = "OMEN MAX 16 (2025) ah0xxx Intel",
+                ModelNamePattern = "16-ah0", // For model name matching "OMEN MAX Gaming Laptop 16-ah0xxx"
+                ModelYear = 2025,
+                Family = OmenModelFamily.OMEN2024Plus,
+                SupportsFanControlWmi = true,
+                SupportsFanControlEc = true,
+                SupportsFanCurves = true,
+                SupportsIndependentFanCurves = true,
+                SupportsRpmReadback = true,
+                FanZoneCount = 2,
+                SupportsPerformanceModes = true,
+                PerformanceModes = new[] { "Default", "Performance", "Cool" },
+                HasMuxSwitch = true, // Advanced Optimus / MUX switch available
+                SupportsGpuPowerBoost = true, // RTX 5080 supports extended +25W boost
+                SupportsAdvancedOptimus = true,
+                HasKeyboardBacklight = true,
+                HasFourZoneRgb = true, // 4-zone RGB keyboard
+                SupportsUndervolt = true, // Intel Core Ultra 9 275HX
+                SupportsOverboost = true,
+                UserVerified = true,
+                Notes = "OMEN MAX Gaming Laptop 16-ah0xxx (2025) - Intel Core Ultra 9 275HX + RTX 5080. V2 fan commands forced."
+            });
+            
+            // ═══════════════════════════════════════════════════════════════════════════════════
             // OMEN 17 Series (17.3" laptops)
             // ═══════════════════════════════════════════════════════════════════════════════════
             
